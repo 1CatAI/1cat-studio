@@ -119,11 +119,13 @@ export const Markdown = memo(function Markdown({
   streaming = false,
   onPreview,
   animationSep = "char",
+  urlTransform = safeMarkdownUrl,
 }: {
   text: string;
   streaming?: boolean;
   onPreview?: (index: number) => void;
   animationSep?: "char" | "word";
+  urlTransform?: (url: string) => string | undefined;
 }) {
   const [tailAnimating, setTailAnimating] = useState(streaming);
   useEffect(() => {
@@ -180,6 +182,22 @@ export const Markdown = memo(function Markdown({
     [],
   );
   const animate = (streaming || tailAnimating) && animated && !reduced;
+  const resolvedRehype = useMemo(() => {
+    if (urlTransform === safeMarkdownUrl) return rehype;
+    type Node = { properties?: Record<string, unknown>; children?: Node[] };
+    const resolveUrls = () => (tree: Node) => {
+      function visit(node: Node) {
+        for (const key of ["href", "src"]) {
+          const value = node.properties?.[key];
+          if (typeof value === "string") node.properties![key] = urlTransform(value);
+        }
+        node.children?.forEach(visit);
+      }
+      visit(tree);
+    };
+    // Relative repository URLs must be resolved before the hardening plugin.
+    return [defaultRehypePlugins.raw, defaultRehypePlugins.sanitize, resolveUrls, defaultRehypePlugins.harden, graphemePlugin];
+  }, [urlTransform]);
   const context = useMemo(
     () => ({
       lookup,
@@ -195,13 +213,13 @@ export const Markdown = memo(function Markdown({
       <Streamdown
         BlockComponent={PreviewBlock}
         plugins={plugins}
-        rehypePlugins={rehype}
+        rehypePlugins={resolvedRehype}
         mode="streaming"
         parseIncompleteMarkdown={streaming}
         isAnimating={streaming}
         animated={false}
         shikiTheme={shikiTheme}
-        urlTransform={safeMarkdownUrl}
+        urlTransform={urlTransform}
         components={links}
       >
         {text}

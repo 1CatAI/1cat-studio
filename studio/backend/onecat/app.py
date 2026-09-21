@@ -510,6 +510,12 @@ def create_app() -> FastAPI:
                 502, "Model registry could not be reached: " + str(error)[:300]
             ) from error
 
+    @admin.get("/models/card")
+    def model_card(catalog_id: str, refresh: bool = False):
+        from .model_cards import read
+
+        return read(catalog_id, refresh)
+
     @admin.post("/models/import")
     def model_import(payload: dict):
         return models.inspect_model(str(payload.get("path", "")))

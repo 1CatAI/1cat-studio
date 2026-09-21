@@ -1,7 +1,7 @@
 import { Segments } from "./motion";
 import { Phase } from "./motion";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Download, ExternalLink, Play, Search, Settings2 } from "lucide-react";
 import { Input } from "@/onecat/ui";
@@ -10,6 +10,7 @@ import { useBrowserState } from "./browser-state";
 import { useQuery, mutation, api, type Profile, type Job, type Engine, type Model } from "./api";
 import { Action, Empty, ErrorNotice, bytes, useText } from "./common";
 import { DownloadRate } from "./download-rate";
+import { ModelCard, ModelIdentity } from "./model-card";
 
 type Support = {
   id: string;
@@ -71,6 +72,13 @@ export function SupportedModels({
   const [query, setQuery] = useBrowserState("onecat:models-search:" + downloadedOnly, ""),
     [family, setFamily] = useBrowserState("onecat:models-family:" + downloadedOnly, "");
   const [scope, setScope] = useBrowserState("onecat:models-scope", "machine");
+  const [publisher, setPublisher] = useBrowserState("onecat:models-publisher:" + downloadedOnly, "");
+  const [selected, setSelected] = useState<Support | null>(null);
+  const detailTrigger = useRef<HTMLElement | null>(null);
+  function openDetails(item: Support, button: HTMLButtonElement) {
+    detailTrigger.current = button;
+    setSelected(item);
+  }
   const all = data?.items || [];
   // The task endpoint includes transfer timestamps and avoids rescanning GPUs.
   const hasDownload = all.some(
@@ -84,13 +92,13 @@ export function SupportedModels({
   );
   const machineMatches = (item: Support) => item.downloadable && item.reasons.every(reason => reason.startsWith("需要运行环境 / Requires runtime:"));
   const machineCount = all.filter(machineMatches).length;
-  const readyCount = all.filter(item => item.downloadable && item.compatible).length;
   const filtered = all.filter(
     (item) =>
       (!downloadedOnly || !!item.model_id) &&
       (downloadedOnly || scope === "all" || machineMatches(item)) &&
       (!family || item.family === family) &&
-      [item.name, item.family, item.quantization, ...item.features]
+      (!publisher || item.catalog_id?.split("/")[0] === publisher) &&
+      [item.name, item.catalog_id, item.family, item.quantization, ...item.features]
         .join(" ")
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -129,8 +137,8 @@ export function SupportedModels({
           <h2>{downloadedOnly ? t("已下载 · 随时启动", "Downloaded · Ready to launch") : t("为这台机器选择模型", "Find a model for this machine")}</h2>
           <p className="oc-muted">
             {t(
-              `支持 ${all.filter((item) => item.downloadable).length} 个可下载配置 · 本机硬件匹配 ${machineCount} 个 · 环境也已匹配 ${readyCount} 个`,
-              `${all.filter((item) => item.downloadable).length} downloadable configurations · ${machineCount} hardware matches · ${readyCount} runtime matches`,
+              `${all.filter((item) => item.downloadable).length} 个版本 · ${machineCount} 个适合本机`,
+              `${all.filter((item) => item.downloadable).length} versions · ${machineCount} hardware matches`,
             )}
           </p>
         </div>
@@ -145,8 +153,8 @@ export function SupportedModels({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t(
-            "搜索模型、量化或能力…",
-            "Search models, quantization or features…",
+            "搜索模型、发布者或量化…",
+            "Search models, publishers or quantization…",
           )}
         />
         <select
@@ -158,6 +166,10 @@ export function SupportedModels({
           {[...new Set(all.map((item) => item.family))].map((value) => (
             <option key={value}>{value}</option>
           ))}
+        </select>
+        <select aria-label={t("模型发布者", "Model publisher")} value={publisher} onChange={event => setPublisher(event.target.value)}>
+          <option value="">{t("全部发布者", "All publishers")}</option>
+          {[...new Set(all.flatMap(item => item.catalog_id ? [item.catalog_id.split("/")[0]] : []))].sort().map(owner => <option key={owner}>{owner}</option>)}
         </select>
       </div>
       <ErrorNotice error={error} />
@@ -189,17 +201,14 @@ export function SupportedModels({
                     : t("可下载", "Download available")}
                 </span>
               </div>
-              <h2>{item.name}</h2>
+              <h2><button className="oc-model-name-button" onClick={event => openDetails(item, event.currentTarget)}>{item.name}</button></h2>
+              <ModelIdentity repo={item.catalog_id!} onOpen={button => openDetails(item, button)} />
               <div className="oc-support-features">
                 {item.features.map((feature) => (
                   <span key={feature}>{translate(feature)}</span>
                 ))}
               </div>
-              <p className="oc-model-fit">{ready ? t("当前模型已就绪", "Your model is ready") : item.compatible
-                ? item.recommendations.length
-                  ? t("可启动，配置低于验证值", "Launchable; below the verified configuration")
-                  : t("环境与硬件已匹配", "Runtime and hardware match")
-                : needsRuntime ? t("需准备运行环境", "Runtime setup needed") : t("需要其他硬件或部署配置", "Different hardware or deployment required")}</p>
+              {!item.compatible && !ready && <p className="oc-model-fit">{needsRuntime ? t("需准备运行环境", "Runtime setup needed") : t("需要其他硬件或部署配置", "Different hardware or deployment required")}</p>}
               {!!item.recommendations.length && !ready && (
                 <p className="oc-status-warn">
                   {item.recommendations.map(reasonText).join(" · ")}
@@ -249,7 +258,7 @@ export function SupportedModels({
                   </Link>
                 )}
               </details>
-              <div className="oc-download-stage"><Phase phase={downloading ? job?.cancel_requested ? "cancelling" : job?.stage || "downloading" : item.model_id ? "downloaded" : item.job?.state || "available"} className="oc-download-phase">
+              {(downloading || item.job?.state === "failed" || item.job?.state === "cancelled") && <div className="oc-download-stage"><Phase phase={downloading ? job?.cancel_requested ? "cancelling" : job?.stage || "downloading" : item.model_id ? "downloaded" : item.job?.state || "available"} className="oc-download-phase">
               {downloading && (
                 <div className="oc-model-download" role="status">
                   <span>
@@ -279,8 +288,8 @@ export function SupportedModels({
                   {item.job.error}
                 </p>
               )}
-              {!downloading && <span className="oc-muted">{item.model_id ? t("权重已就绪，可使用下方启动入口", "Weights ready. Use the launch action below.") : item.job?.state === "cancelled" ? t("下载已取消，可重新下载", "Download cancelled. You can download again.") : t("自带推荐启动配置", "Recommended launch settings included")}</span>}
-              </Phase></div>
+              {!downloading && item.job?.state === "cancelled" && <span className="oc-muted">{t("下载已取消", "Download cancelled")}</span>}
+              </Phase></div>}
               <div className="oc-support-footer">
                 <span className="oc-muted">
                   {item.bytes != null
@@ -332,8 +341,8 @@ export function SupportedModels({
           <Empty title={scope === "machine" && !downloadedOnly && machineCount === 0 ? t("当前硬件暂未匹配已验证配置", "No verified configuration matches this hardware yet") : t("没有符合筛选条件的配置", "No configurations match these filters")}
             description={scope === "machine" && !downloadedOnly && machineCount === 0 ? t("模型目录仍可浏览和下载。查看全部配置可了解所需显存、显卡数量和运行环境。", "You can still browse and download models. View all configurations for memory, GPU and runtime requirements.") : t("试试清除搜索或切换模型系列。", "Try clearing search or changing the family filter.")} />
           <div className="oc-actions">
-            {!downloadedOnly && scope === "machine" && <Button variant="outline" onClick={() => { setScope("all"); setQuery(""); setFamily(""); }}>{t("查看全部支持配置", "View all supported configurations")}</Button>}
-            {(query || family) && <Button variant="ghost" onClick={() => { setQuery(""); setFamily(""); }}>{t("清除筛选", "Clear filters")}</Button>}
+            {!downloadedOnly && scope === "machine" && <Button variant="outline" onClick={() => { setScope("all"); setQuery(""); setFamily(""); setPublisher(""); }}>{t("查看全部支持配置", "View all supported configurations")}</Button>}
+            {(query || family || publisher) && <Button variant="ghost" onClick={() => { setQuery(""); setFamily(""); setPublisher(""); }}>{t("清除筛选", "Clear filters")}</Button>}
           </div>
         </div>
       )}
@@ -372,12 +381,7 @@ export function SupportedModels({
           ))}
         </details>
       )}
-      <p className="oc-muted oc-spaced">
-        {t(
-          "模型可以先下载。环境与硬件满足要求后，使用默认参数启动，也可以编辑预设。下载完成不会自动切换当前模型。",
-          "Download weights first, then start with default settings when runtime and hardware requirements are met, or edit the profile. Downloading does not switch the current model.",
-        )}
-      </p>
+      {selected?.catalog_id && <ModelCard key={selected.catalog_id} repo={selected.catalog_id} name={selected.name} quantization={selected.quantization} size={selected.bytes} returnFocusRef={detailTrigger} onClose={() => setSelected(null)} />}
     </section>
   );
 }
