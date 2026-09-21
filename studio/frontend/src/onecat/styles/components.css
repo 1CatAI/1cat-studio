@@ -69,6 +69,45 @@
   line-height: 1.6;
   color: var(--muted-foreground);
 }
+.oc-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.oc-field-label button {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  color: var(--muted-foreground);
+}
+.oc-memory-limit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 38px;
+}
+.oc-memory-limit input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--primary);
+}
+.oc-memory-limit output {
+  min-width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.oc-default-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.oc-profile-advanced > summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 14px;
+}
 .oc-field input,
 .oc-field textarea,
 .oc-field select {
@@ -190,8 +229,8 @@ select.oc-select {
 .oc-login .oc-field {
   margin: 8px 0;
 }
-.oc-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-.oc-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.oc-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+.oc-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
 .oc-page select,
 .oc-dialog select {
   min-height: 40px;
@@ -231,6 +270,7 @@ select.oc-select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .oc-dialog-body .oc-panel {
   border: 0;

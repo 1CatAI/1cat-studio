@@ -82,7 +82,7 @@ def run():
     assert rejected.status==409
     page.locator('.oc-chat-composer').get_by_role('button',name='选择已下载模型',exact=True).click()
     dialog=page.get_by_role('dialog');expect(dialog).to_have_count(1);expect(dialog).to_contain_text('alpha');expect(dialog).to_contain_text('beta')
-    dialog.locator('.oc-model-choice > button').filter(has_text='beta').click();expect(dialog).to_contain_text('模型已就绪')
+    dialog.locator('.oc-model-choice').filter(has_text='beta').get_by_role('button',name='使用',exact=True).click();expect(dialog).to_contain_text('模型已就绪')
     page.screenshot(path=str(OUT/'01-downloaded-model-picker.png'),full_page=True);page.keyboard.press('Escape')
     expect(page.locator('.oc-chat-composer').get_by_role('button',name='选择已下载模型',exact=True)).to_be_focused()
     assert context.request.get(BASE+'/api/inference/status').json()['profile_id']=='beta'
@@ -97,7 +97,7 @@ def run():
     composer=page.get_by_label('Agent 任务',exact=True)
     agent_think=page.locator('.oc-agent-composer').get_by_role('button',name='深度思考',exact=True)
     expect(agent_think).to_be_enabled();agent_think.click()
-    composer.fill('/model ');composer.press('Enter');expect(page.get_by_role('dialog')).to_have_count(1);expect(page.get_by_role('dialog')).to_contain_text('选择已下载模型');page.keyboard.press('Escape')
+    composer.fill('/model ');composer.press('Enter');expect(page.get_by_role('dialog')).to_have_count(1);expect(page.get_by_role('dialog')).to_contain_text('选择模型');page.keyboard.press('Escape')
     expect(composer).to_be_focused()
     # Hold only the submission response, navigate away, then complete it. The task
     # keeps running but the browser must not return to that task or erase a draft.

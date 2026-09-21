@@ -730,12 +730,6 @@ export function ChatPage() {
               </Button>
             </div>
           </form>
-          <p className="oc-composer-caption">
-            {t(
-              "解码速度按真实 token 与服务器计时计算；详细功耗与性能记录见「服务」。",
-              "Decode uses actual tokens and server timing. Power and performance history are available in Service.",
-            )}
-          </p>
         </div>
         <Modal
           open={manageOpen}

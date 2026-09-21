@@ -552,6 +552,19 @@ def create_app() -> FastAPI:
         models.remove(id, remove_files)
         return {"ok": True}
 
+    @admin.put("/models/{id}/default-profile")
+    def set_model_default_profile(id: str, payload: dict):
+        from .model_controls import choices
+
+        model = next((item for item in choices()["items"] if item["id"] == id), None)
+        if not model:
+            raise HTTPException(404, "Model not found")
+        profile_id = payload.get("profile_id")
+        if not any(p["id"] == profile_id for p in model["profiles"]):
+            raise HTTPException(409, "Profile does not match this model")
+        db.patch("models", id, {"default_profile_id": profile_id})
+        return {"ok": True}
+
     @admin.get("/profiles")
     def profiles():
         return {"items": db.all_records("profiles")}

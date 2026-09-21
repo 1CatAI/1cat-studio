@@ -50,6 +50,7 @@ def inspect_model(path: str, source: str = "local", repo_id: str | None = None) 
     info = {
         "verified": bool(existing and existing.get("verified")),
         "catalog_id": existing.get("catalog_id") if existing else None,
+        "default_profile_id": existing.get("default_profile_id") if existing else None,
         "id": existing["id"] if existing else db.uid(),
         "name": folder.name,
         "path": str(folder),

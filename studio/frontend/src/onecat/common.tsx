@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/onecat/ui";
-import { AlertCircle, LoaderCircle, Check, Copy, X } from "lucide-react";
+import { AlertCircle, Info, LoaderCircle, Check, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { refreshData, copyText } from "./api";
 import { TooltipIconButton } from "@/onecat/ui";
@@ -163,11 +163,11 @@ export function Field({
   }
   return (
     <div className="oc-field">
-      <Label id={id + "-label"} htmlFor={id}>
-        {label}
-      </Label>
+      <div className="oc-field-label">
+        <Label id={id + "-label"} htmlFor={id}>{label}</Label>
+        {hint && <TooltipIconButton type="button" tooltip={hint} aria-label={label + " · ?"}><Info size={14} /></TooltipIconButton>}
+      </div>
       {Children.map(children, bind)}
-      {hint && <small>{hint}</small>}
     </div>
   );
 }
@@ -331,7 +331,7 @@ export function Modal({
       }}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description || title}</DialogDescription>
+          <DialogDescription className={description ? undefined : "sr-only"}>{description || title}</DialogDescription>
         </DialogHeader>
         {footer ? <><div className="oc-dialog-body">{children}</div><div className="oc-dialog-footer">{footer}</div></> : children}
       </DialogContent>

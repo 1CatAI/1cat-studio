@@ -102,10 +102,6 @@ export function PerformancePage() {
   return (
     <Page
       title={t("性能与能效", "Performance & efficiency")}
-      description={t(
-        "查看真实功率与速率，用相同工作负载寻找适合本机的档位。",
-        "Compare measured power and throughput under an identical workload.",
-      )}
       action={
         <Button
           onClick={() => {

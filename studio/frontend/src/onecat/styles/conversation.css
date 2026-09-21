@@ -137,10 +137,6 @@
   .oc-composer-bottom > .oc-muted {
     font-size: 11px;
   }
-  .oc-composer-caption {
-    font-size: 10px;
-    line-height: 1.5;
-  }
 }
 @container workspace (max-width:900px) {
   .oc-preview-panel:not(.oc-preview-full) {

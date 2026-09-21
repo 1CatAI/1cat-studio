@@ -111,10 +111,6 @@ export function SettingsPage() {
   return (
     <Page
       title={t("设置", "Settings")}
-      description={t(
-        "运行环境、访问方式与数据维护。",
-        "Runtime environments, access settings, and maintenance.",
-      )}
 
     >
       <nav className="oc-settings-nav" aria-label={t("设置分类", "Settings sections")}>

@@ -39,10 +39,6 @@ export function SetupPage() {
   return (
     <Page
       title={t("开始使用 1Cat Studio", "Set up 1Cat Studio")}
-      description={t(
-        "准备环境、导入模型，然后开始本地推理。",
-        "Prepare your runtime, add a model, and start local inference.",
-      )}
     >
       <ErrorNotice error={error} />
       <GPUControls showWhen="incomplete" />

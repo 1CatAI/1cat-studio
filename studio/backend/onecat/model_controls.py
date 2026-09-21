@@ -83,6 +83,7 @@ def choices(agent: bool = False) -> dict:
         ]
         matching.sort(
             key=lambda p: (
+                p["id"] != model.get("default_profile_id"),
                 p["id"] != state.get("profile_id"),
                 p.get("source") != "catalog-default",
                 p["name"],
@@ -114,6 +115,7 @@ def choices(agent: bool = False) -> dict:
             {
                 "id": model["id"],
                 "name": model["name"],
+                "default_profile_id": model.get("default_profile_id"),
                 "bytes": model.get("bytes"),
                 "active": bool(
                     active_profile.get("model_path")

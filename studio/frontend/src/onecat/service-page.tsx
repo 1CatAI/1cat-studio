@@ -72,10 +72,6 @@ export function ServicePage() {
   return (
     <Page
       title={t("服务", "Service")}
-      description={t(
-        "实例状态、API 调用、后台任务与运行日志。",
-        "Engine status, API traffic, background tasks, and runtime logs.",
-      )}
     >
       <ErrorNotice error={error} />
       <div className="oc-panel">

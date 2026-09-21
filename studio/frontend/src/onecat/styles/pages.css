@@ -811,12 +811,6 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
-.oc-composer-caption {
-  font-size: 11px;
-  text-align: center;
-  color: var(--muted-foreground);
-  margin-top: 6px;
-}
 .oc-scroll-bottom {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -874,9 +868,6 @@
   }
   .oc-composer-area {
     padding: 0 12px 12px;
-  }
-  .oc-composer-caption {
-    font-size: 10px;
   }
   .oc-live-strip {
     flex-wrap: wrap;
@@ -1488,38 +1479,10 @@
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
-.oc-draft-hint {
-  font-size: 12px;
-  max-width: 240px;
-}
 .oc-profile-gpus {
   padding: 8px 12px;
   background: var(--muted);
   border-radius: 10px;
-}
-.oc-profile-gpus > summary {
-  color: var(--foreground);
-}
-.oc-profile-gpus > summary span {
-  float: right;
-  font-size: 12px;
-}
-.oc-profile-summary {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border-left: 2px solid var(--primary);
-}
-.oc-profile-summary strong {
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-.oc-profile-summary span {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  line-height: 1.6;
 }
 .oc-profile-change {
   padding: 10px 12px;
@@ -1725,9 +1688,6 @@
   }
 }
 @container workspace (max-width: 720px) {
-  .oc-draft-hint {
-    max-width: none;
-  }
   .oc-support-card {
     padding: 18px;
   }

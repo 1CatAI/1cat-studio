@@ -5,17 +5,14 @@
 .oc-model-search { display:flex; align-items:center; gap:8px; margin:4px 0; }
 .oc-model-search input { min-width:0; }
 .oc-model-choices { display:grid; gap:8px; max-height:52vh; overflow:auto; }
-.oc-model-choice { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
-.oc-model-choice > button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; text-align:left; }
-.oc-model-choice > button > span { display:grid; min-width:0; gap:4px; overflow-wrap:anywhere; }
+.oc-model-choice { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+.oc-model-choice-name { display:grid; flex:1; min-width:0; gap:4px; overflow-wrap:anywhere; }
+.oc-model-choice-actions { display:flex; flex-shrink:0; gap:4px; }
 .oc-model-choice small { color:var(--muted-foreground); font-size:12px; }
-.oc-model-choice > button:disabled { opacity:.65; cursor:not-allowed; }
-.oc-model-choice > button:not(:disabled):hover { background:var(--accent); }
-.oc-model-choice details { padding:0 12px 10px; font-size:12px; }
-.oc-model-choice select { max-width:100%; margin-top:8px; }
 .oc-model-job { display:flex; align-items:center; gap:8px; min-height:40px; margin-bottom:12px; }
 .oc-model-job button { margin-left:auto; }
 .oc-thinking-control { display:flex; flex-shrink:0; align-items:center; gap:5px; padding:6px 8px; border-radius:12px; color:var(--muted-foreground); font-size:12px; transition:background 160ms,color 160ms; }
 .oc-thinking-control[aria-pressed=true] { background:color-mix(in srgb, var(--primary) 14%, transparent); color:var(--foreground); }
 .oc-thinking-control:disabled { opacity:.55; cursor:default; }
 @media (max-width:420px) { .oc-agent-permission span { display:none; } .oc-agent-permission { padding-inline:4px; gap:3px; } .oc-agent-compose-actions .oc-thinking-control { padding-inline:5px; } .oc-agent-compose-actions .oc-thinking-control span { display:none; } }
+@media (max-width:420px) { .oc-model-choice { flex-wrap:wrap; gap:8px; } .oc-model-choice-name { flex-basis:100%; } .oc-model-choice-actions { margin-left:auto; } }

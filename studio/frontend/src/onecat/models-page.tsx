@@ -50,7 +50,7 @@ import {
   saveFile,
 } from "./common";
 
-function newProfile(model: Model, runtimeId: string): Profile {
+export function newProfile(model: Model, runtimeId: string): Profile {
   return {
     name: modelLabel(model.name),
     catalog_id: model.catalog_id || null,
@@ -90,18 +90,29 @@ function newProfile(model: Model, runtimeId: string): Profile {
 export function ProfileEditor({
   initial,
   onClose,
+  modelId,
+  savedProfiles,
+  onChooseProfile,
+  onLaunch,
+  agent = false,
 }: {
   initial: Profile;
   onClose: () => void;
+  modelId?: string;
+  savedProfiles?: Profile[];
+  onChooseProfile?: (profile: Profile) => void;
+  onLaunch?: (job: import("./api").Job) => void;
+  agent?: boolean;
 }) {
   const t = useText();
-  const draftKey = "onecat:profile-draft:" + (initial.id || initial.model_path || "new");
+  const draftKey = (modelId ? "onecat:model-settings:" : "onecat:profile-draft:") + (initial.id || initial.model_path || "new");
   const [p, setP] = useBrowserState<Profile>(draftKey + ":profile", initial),
     [extras, setExtras] = useBrowserState(draftKey + ":extras", JSON.stringify(initial.extra_args, null, 2)),
     [sampling, setSampling] = useBrowserState(draftKey + ":sampling", JSON.stringify(initial.default_sampling, null, 2)),
     [hardware, setHardware] = useBrowserState(draftKey + ":hardware", initial.hardware_profile ? JSON.stringify(initial.hardware_profile, null, 2) : ""),
     [spec, setSpec] = useBrowserState(draftKey + ":spec", initial.speculative_config ? JSON.stringify(initial.speculative_config, null, 2) : "");
   const [saving, setSaving] = useState(false);
+  const [remember, setRemember] = useState(true);
   const { data: gpus } = useQuery<{ gpus: GPU[] }>("/api/gpu");
   const { data: activeEngine } = useQuery<Engine>("/api/inference/status");
   const { data: runtimes } = useQuery<{ items: Runtime[] }>("/api/runtimes");
@@ -201,7 +212,12 @@ export function ProfileEditor({
         extra_args: JSON.parse(extras), default_sampling: JSON.parse(sampling),
         hardware_profile: hardware.trim() ? JSON.parse(hardware) : null,
       });
-      if (launch) await mutation("/api/inference/load", { profile_id: profile.id });
+      if (modelId && remember) await mutation(`/api/models/${modelId}/default-profile`, { profile_id: profile.id }, "PUT");
+      if (launch) {
+        const job = await mutation<import("./api").Job>(modelId ? "/api/inference/load-model" : "/api/inference/load",
+          { profile_id: profile.id, ...(modelId ? { model_id: modelId, agent } : {}) });
+        onLaunch?.(job);
+      }
       for (const suffix of ["profile", "extras", "sampling", "hardware", "spec"])
         sessionStorage.removeItem(draftKey + ":" + suffix);
       onClose();
@@ -210,14 +226,13 @@ export function ProfileEditor({
   return (
     <Modal
       footer={<>
-        <span className="oc-muted">{t("跟随 GPU 功耗设置 · 模型启动不会覆盖已选档位", "Follows GPU power settings · Launch preserves your selected policies")}</span>
-        <span className="oc-muted oc-draft-hint">{t("草稿自动暂存 · 保存后下次启动生效", "Draft saved locally · Apply on next launch")}</span>
+        {modelId && <label className="oc-default-profile"><Checkbox checked={remember} onCheckedChange={v => setRemember(v === true)} />{t("设为默认", "Set as default")}</label>}
         <div className="oc-actions">
           <Button variant="outline" onClick={onClose}>{t("取消", "Cancel")}</Button>
           <Action variant="outline" disabled={!canSave} run={() => saveProfile(false)}
-            success={t("启动预设已保存", "Launch profile saved")}>{t("保存预设", "Save profile")}</Action>
+            success={t("已保存", "Saved")}>{t("保存", "Save")}</Action>
           <Action disabled={!canSave} run={() => saveProfile(true)}>
-            <Play />{t("保存并启动", "Save and start")}
+            <Play />{activeProfile ? t("重新加载", "Reload") : t("加载模型", "Load model")}
           </Action>
         </div>
       </>}
@@ -225,17 +240,23 @@ export function ProfileEditor({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={t("模型启动预设", "Model launch profile")}
-      description={t(
-        "模型参数在下次启动时生效。",
-        "Model settings take effect at the next launch.",
-      )}
+      title={modelId ? modelLabel(initial) : t("模型运行设置", "Model settings")}
     >
       {!!changed.length && <p className="oc-profile-change" role="status">{t("重启后应用", "Apply on restart")}: {changed.map(([label, before, after]) => `${label} ${before} → ${after}`).join(" · ")}</p>}
       <div className="oc-form-grid">
-        <Field label={t("预设名称", "Profile name")}>
+        <NumberField
+          label={t("最大上下文 tokens", "Context limit (tokens)")}
+          value={p.max_model_len}
+          onChange={(v) => set("max_model_len", v)}
+          min={512}
+        />
+      </div>
+      <details className="oc-profile-advanced" open={p.gpu_uuids.length === 0 ? true : undefined}>
+        <summary>{t("高级设置", "Advanced settings")}</summary>
+      <div className="oc-form-grid">
+        {!modelId && <Field label={t("方案名称", "Configuration name")}>
           <Input value={p.name} onChange={(e) => set("name", e.target.value)} />
-        </Field>
+        </Field>}
         <Field label={t("运行环境", "Runtime")}>
           <select
             value={p.runtime_id}
@@ -251,7 +272,7 @@ export function ProfileEditor({
             ))}
           </select>
         </Field>
-        <Field label={t("模型目录", "Model directory")}>
+        {!modelId && <Field label={t("模型目录", "Model directory")}>
           <select
             value={p.model_path}
             onChange={(e) => {
@@ -278,17 +299,11 @@ export function ProfileEditor({
                 </option>
               ))}
           </select>
-        </Field>
+        </Field>}
       </div>
-      <details className="oc-profile-gpus" open={p.gpu_uuids.length === 0 ? true : undefined}>
-        <summary>{t("运行设备", "Devices")} · {p.gpu_uuids.length} GPU · TP{p.tensor_parallel_size}
-          <span className="oc-muted">{t("调整 GPU", "Change GPUs")}</span>
-        </summary>
+      <div className="oc-profile-gpus">
       <Field
-        label={t(
-          "使用的 GPU · TP 自动对应卡数",
-          "GPUs · TP follows selected device count",
-        )}
+        label={t("运行显卡", "GPUs")}
       >
         <div className="oc-gpu-choices">
           {gpus?.gpus.map((d) => (
@@ -323,18 +338,15 @@ export function ProfileEditor({
           ))}
         </div>
       </Field>
-      </details>
-      <div className="oc-form-grid">
-        <NumberField
-          label={t("最大上下文 tokens", "Context limit (tokens)")}
-          value={p.max_model_len}
-          onChange={(v) => set("max_model_len", v)}
-          min={512}
-        />
-        <div className="oc-profile-summary">
-          <strong>{p.max_model_len >= 1024 ? (p.max_model_len / 1024).toLocaleString() + "K" : p.max_model_len}</strong>
-          <span>{t("总上下文，包含输入、思考和输出；启动时核对实际容量。", "Total context includes input, reasoning and output; capacity is checked at startup.")}</span>
-        </div>
+        <Field label={t("显存使用上限", "GPU memory limit")}>
+          <div className="oc-memory-limit">
+            <input type="range" min={10} max={98} step={1}
+              value={Math.round(p.gpu_memory_utilization * 100)}
+              aria-valuetext={`${Math.round(p.gpu_memory_utilization * 100)}%`}
+              onChange={e => set("gpu_memory_utilization", Number(e.target.value) / 100)} />
+            <output>{Math.round(p.gpu_memory_utilization * 100)}%</output>
+          </div>
+        </Field>
       </div>
       <ErrorNotice error={capError} />
       {capError && <Button variant="outline" onClick={() => setCapRevision(value => value + 1)}>{t("重新检查模型能力", "Retry capability check")}</Button>}
@@ -354,7 +366,7 @@ export function ProfileEditor({
               value={
                 defaults.max_tokens == null ? "" : Number(defaults.max_tokens)
               }
-              placeholder={t("自动：跟随模型", "Auto: follow model")}
+              placeholder={t("自动", "Auto")}
               onChange={(e) =>
                 samplingField(
                   "max_tokens",
@@ -510,41 +522,8 @@ export function ProfileEditor({
             {t("图片理解", "Image understanding")}
           </label>
         </div>
-        <p className="oc-muted">
-          {caps
-            ? [
-                caps.tool_parser
-                  ? t("工具调用可用", "Tool calling available")
-                  : caps.tool_reason,
-                caps.vision
-                  ? t("图片理解可用", "Image understanding available")
-                  : caps.vision_reason,
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : t("正在检查模型能力…", "Checking model capabilities…")}
-        </p>
-        {!!Object.keys(caps?.recommended || {}).length && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setP((prev) => ({
-                ...prev,
-                ...caps?.recommended,
-                tensor_parallel_size: prev.tensor_parallel_size,
-              }));
-              if (caps?.recommended.extra_args)
-                setExtras(JSON.stringify(caps.recommended.extra_args, null, 2));
-            }}
-          >
-            {t("填入已验证的推荐参数", "Use verified recommended settings")}
-          </Button>
-        )}
       </div>
-      <details>
-        <summary>
-          {t("高级配置：精度、批量与启动参数", "Advanced: precision, batching and launch arguments")}
-        </summary>
+
         <div className="oc-form-grid">
         <Field label={t("API 模型名称", "API model name")}>
           <Input
@@ -564,14 +543,7 @@ export function ProfileEditor({
           onChange={(v) => set("max_num_seqs", v)}
           min={1}
         />
-        <NumberField
-          label={t("显存使用比例", "GPU memory utilization")}
-          value={p.gpu_memory_utilization}
-          onChange={(v) => set("gpu_memory_utilization", v)}
-          min={0.1}
-          max={0.98}
-          step={0.01}
-        />
+
         <Field label={t("计算精度", "Compute precision")}>
           <select
             value={p.dtype}
@@ -606,8 +578,8 @@ export function ProfileEditor({
           </Field>
           <Field
             label={t(
-              "量化后端（留空自动识别）",
-              "Quantization backend (empty = auto)",
+              "量化后端",
+              "Quantization backend",
             )}
           >
             <Input
@@ -634,8 +606,8 @@ export function ProfileEditor({
       </div>
         <Field
           label={t(
-            "推测解码配置（JSON，留空关闭）",
-            "Speculative decoding (JSON; empty = disabled)",
+            "推测解码配置（JSON）",
+            "Speculative decoding (JSON)",
           )}
           hint={t(
             "由当前模型与运行版本决定支持范围；开启后需单独验证能效。",
@@ -673,8 +645,8 @@ export function ProfileEditor({
         </Field>
         <Field
           label={t(
-            "启动时应用的硬件档位（JSON，留空保持现状）",
-            "Hardware setting on launch (JSON; empty preserves current settings)",
+            "启动硬件设置（JSON）",
+            "Launch hardware settings (JSON)",
           )}
           hint={t(
             "使用 power_limit_w、graphics_clock_mhz、reset_clocks；需先配置控制助手。",
@@ -687,6 +659,12 @@ export function ProfileEditor({
             rows={3}
           />
         </Field>
+        {!!savedProfiles?.length && onChooseProfile && <Field label={t("已保存方案", "Saved configurations")}>
+          <select value={initial.id || ""} onChange={event => {
+            const selected = savedProfiles.find(profile => profile.id === event.target.value);
+            if (selected) onChooseProfile(selected);
+          }}>{savedProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>
+        </Field>}
       </details>
     </Modal>
   );
@@ -709,10 +687,6 @@ export function ModelsPage() {
   return (
     <Page
       title={t("模型库", "Model library")}
-      description={t(
-        "下载模型，保存启动预设，在同一个界面管理。",
-        "Download models and manage reusable launch profiles.",
-      )}
       action={
         <Button variant="outline" onClick={() => setImportOpen(true)}>
           <FolderInput />
