@@ -117,6 +117,14 @@ PYTHONPATH=studio/backend .venv/bin/python -m onecat --host 127.0.0.1 --port 888
 
 默认数据目录为 `~/.local/share/onecat-studio`，可通过 `ONECAT_STUDIO_HOME` 环境变量或 `--state-dir` 参数修改。源码目录与数据目录分开保存。
 
+日常调整界面时，可以在另一个终端运行：
+
+```bash
+npm run watch:onecat --prefix studio/frontend
+```
+
+修改前端源码后会自动重新构建，等待终端显示构建完成，再刷新 Studio 页面即可看到变化，无需重新打包或重启模型。修改 Python 后端后，重启 Studio 管理进程以加载新代码；保持相同的数据目录。前端类型检查单独运行 `npm run typecheck:onecat --prefix studio/frontend`。修改代码预览运行时或许可证文件后，重新启动构建监听。
+
 如果 Studio 运行在服务器上，先建立 SSH 转发，再打开本机浏览器。将下例的端口、用户名和地址替换为实际值：
 
 ```bash

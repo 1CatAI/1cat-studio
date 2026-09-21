@@ -11,6 +11,7 @@
     "dev": "node scripts/build-onecat-preview.mjs && vite --config vite.onecat.config.ts",
     "build": "npm run build:onecat",
     "build:onecat": "node scripts/build-onecat-preview.mjs && tsc -p tsconfig.onecat.json && vite build --config vite.onecat.config.ts",
+    "watch:onecat": "node scripts/build-onecat-preview.mjs && vite build --watch --config vite.onecat.config.ts",
     "typecheck:onecat": "tsc -p tsconfig.onecat.json --pretty false",
     "test": "node --experimental-strip-types --test tests/onecat-*.test.ts"
   },

@@ -304,13 +304,20 @@
   align-items: center;
   gap: 15px;
   flex-shrink: 0;
-  padding: 14px 30px;
+  padding: 4px 24px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 .oc-chat-toolbar > div {
   display: flex;
-  gap: 14px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.oc-chat-toolbar > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .oc-conversation-shell {
   position: relative;
@@ -327,14 +334,14 @@
   max-width: 850px;
   margin: 0 auto;
   text-align: left;
-  padding: 0 30px 24px;
+  padding: 0 24px 16px;
 }
 .oc-chat-welcome h1 {
-  font-size: clamp(40px, 5cqw, 68px);
+  font-size: clamp(32px, 4cqw, 48px);
   line-height: 1.1;
   letter-spacing: -0.055em;
   font-weight: 650;
-  margin: 22px 0 18px;
+  margin: 16px 0 12px;
 }
 .oc-chat-welcome p {
   font-size: 15px;
@@ -756,15 +763,15 @@
 .oc-composer-area {
   max-width: 900px;
   width: 100%;
-  padding: 0 30px 17px;
+  padding: 0 24px 12px;
   margin: 0 auto;
   position: relative;
   flex-shrink: 0;
 }
 .oc-chat-composer {
-  padding: 14px 16px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: 20px;
   background: var(--card);
   box-shadow: var(--oc-shadow-float);
   transition:
@@ -775,10 +782,12 @@
   border: 0;
   box-shadow: none !important;
   resize: none;
-  min-height: 56px;
-  max-height: 200px;
+  field-sizing: content;
+  min-height: 36px;
+  max-height: min(160px, 20dvh);
+  overflow-y: auto;
   font-size: 16px;
-  padding: 16px 18px;
+  padding: 6px 8px;
   line-height: 24px;
   background: transparent !important;
   border-radius: 12px;
@@ -790,7 +799,7 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  padding-top: 8px;
+  padding-top: 4px;
 }
 .oc-composer-bottom > button:last-child {
   margin-left: auto;
@@ -806,7 +815,7 @@
   font-size: 11px;
   text-align: center;
   color: var(--muted-foreground);
-  margin-top: 9px;
+  margin-top: 6px;
 }
 .oc-scroll-bottom {
   position: absolute;
