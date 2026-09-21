@@ -1,0 +1,94 @@
+1Cat Studio Community Source License 1.0
+SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
+
+Copyright (c) 2026 1CatAI and the respective 1Cat Studio contributors.
+
+1. Scope and acceptance
+
+This license applies to the original 1Cat Studio application files distributed
+with this license (the Software), including modifications and substantial parts
+of those files, unless a file or its accompanying notice identifies another
+license. It does not replace the licenses of third-party components,
+model weights, generated outputs, or versions previously licensed under other
+terms. You accept these terms by exercising rights granted by this license.
+
+2. Permission
+
+Subject to sections 3 and 4, you may use, reproduce, study, modify and distribute
+the Software, in source or executable form, without a license fee, including
+for personal use and internal business operations. You may privately change
+names, branding and interfaces. A customer may independently install the
+Software on hardware they own. These permissions apply worldwide for the term
+of applicable copyright, subject to section 7.
+
+3. Activities requiring separate written permission
+
+The permissions in section 2 do not authorize either of the following:
+
+(a) Hardware-bundled sales: selling or offering hardware with the Software
+preinstalled, included in an image, or otherwise supplied as part of the sale.
+This includes installation or delivery arranged by the hardware seller or a
+partner as part of that sale, even if the Software is described as free or is
+not separately priced.
+
+(b) Rebranded software sales: selling, licensing for a fee, or offering for
+commercial consideration copies of the Software or a product incorporating
+substantial parts of it as your own software product, including under a
+substituted product name, trademark, logo or product identity. Renaming,
+repackaging, changing the interface, combining it with other software, or
+modifying it does not remove this restriction.
+
+The copyright holders may separately authorize these activities in writing.
+A separate commercial agreement governs only the rights it expressly grants.
+You may request such permission through the project contact channel at
+https://github.com/1CatAI/1cat-studio.
+
+These restrictions do not, by themselves, prohibit internal business use,
+selling generated outputs, providing a hosted service, or charging for training,
+support or installation requested independently by an existing hardware owner.
+Those activities must not form part of a transaction described in (a) or (b).
+
+4. Redistribution and notices
+
+Permitted redistribution must include this license and applicable copyright
+and third-party notices. Clearly identify your modifications and do not
+misrepresent authorship or imply endorsement by 1CatAI. Do not remove these
+conditions from copies of the covered Software. Third-party components remain
+available under their own licenses; no restriction in this license reduces
+rights granted directly by their copyright holders.
+
+5. Trademarks and other rights
+
+No trademark rights, endorsement, patent license, or rights in model weights
+are granted by this license. Ordinary identification of the Software and its
+origin is allowed subject to applicable trademark law. Statutory rights and
+exceptions, including fair use where applicable, are not restricted.
+
+6. Warranty and liability
+
+To the extent permitted by law, the Software is provided as is, without
+warranty of any kind. The copyright holders and contributors are not liable
+for claims, damages or other liability arising from the Software or its use.
+Nothing excludes rights or liabilities that cannot legally be excluded.
+
+7. Termination and reinstatement
+
+Rights under this license terminate upon a material violation. For a first
+violation, they are automatically reinstated if you cure the violation within
+30 days after receiving written notice and take reasonable steps to remedy
+its consequences. Further reinstatement requires written permission. Properly
+licensed downstream recipients do not lose their rights merely because your
+rights terminate.
+
+8. Versions and interpretation
+
+Only this version applies unless the relevant copyright holders grant you a
+later version or a separate license. Changing this license in a later release
+does not withdraw permissions already granted for earlier copies. This is a
+source-available license with restrictions on particular commercial
+distribution, not an OSI-approved open-source license.
+
+The English text above is authoritative. Summary in Chinese (not additional
+terms): 允许个人及企业内部使用、学习、修改和符合条件的再分发；未经书面商业
+授权，不得随硬件预装或捆绑销售，也不得换皮后作为自有软件产品销售。
+第三方组件继续适用其各自许可证，旧版本已授予的许可权利不受追溯变更。

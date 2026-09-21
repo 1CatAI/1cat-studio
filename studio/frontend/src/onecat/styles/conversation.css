@@ -1,0 +1,215 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+/* Empty conversation: one left-aligned group, with the same live composer DOM. */
+.oc-chat-empty,
+.oc-agent-empty {
+  overflow: auto;
+}
+.oc-chat-empty .oc-conversation-shell {
+  flex: none;
+  min-height: 0;
+  margin-top: clamp(24px, 6vh, 72px);
+}
+.oc-chat-empty .oc-conversation {
+  height: auto;
+  overflow: visible;
+  padding: 0;
+}
+.oc-chat-empty .oc-conversation-content {
+  min-height: 0;
+}
+.oc-chat-empty .oc-chat-welcome {
+  max-width: 900px;
+}
+.oc-chat-empty .oc-composer-area {
+  padding-bottom: 32px;
+}
+.oc-chat-welcome h1 > span,
+.oc-agent-welcome h1 > span {
+  display: block;
+  margin-top: 14px;
+  color: var(--oc-display-accent);
+  font-size: 0.68em;
+  letter-spacing: -0.025em;
+}
+.oc-chat-empty .oc-chat-toolbar {
+  min-height: 48px;
+}
+.oc-chat-suggestions {
+  justify-content: flex-start;
+}
+.oc-chat-suggestions button {
+  min-width: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+}
+.oc-chat-composer:focus-within,
+.oc-agent-composer:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
+  box-shadow:
+    var(--oc-shadow-float),
+    0 0 0 3px color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.oc-chat-composer textarea {
+  font-size: 16px;
+}
+.oc-agent-empty .oc-agent-scroll {
+  flex: none;
+  overflow: visible;
+  margin-top: clamp(24px, 5vh, 60px);
+}
+.oc-agent-empty .oc-agent-content {
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+.oc-agent-empty .oc-agent-bottom {
+  padding-bottom: 32px;
+}
+.oc-preview-full {
+  border-radius: 0;
+}
+@container workspace (max-width:759px) {
+  .oc-chat-empty .oc-conversation-shell,
+  .oc-agent-empty .oc-agent-scroll {
+    margin-top: 12px;
+  }
+  .oc-chat-welcome {
+    padding: 0 20px 18px;
+  }
+  .oc-chat-welcome h1 {
+    font-size: 38px;
+  }
+  .oc-agent-welcome h1 {
+    font-size: 38px;
+  }
+  .oc-chat-welcome p,
+  .oc-agent-welcome p {
+    font-size: 14px;
+  }
+  .oc-composer-area {
+    padding-inline: 20px;
+  }
+  .oc-agent-examples {
+    gap: 6px;
+  }
+  .oc-agent-examples button {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+  .oc-chat-toolbar {
+    gap: 8px;
+    padding-inline: 16px;
+    flex-wrap: wrap;
+  }
+  .oc-chat-toolbar > div {
+    gap: 6px;
+    min-width: 0;
+  }
+  .oc-chat-toolbar > div:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .oc-agent-usage {
+    white-space: normal;
+  }
+}
+@container workspace (max-width:400px) {
+  .oc-chat-welcome {
+    padding-inline: 16px;
+  }
+  .oc-chat-welcome h1 {
+    font-size: 38px;
+  }
+  .oc-agent-welcome h1 {
+    font-size: 34px;
+  }
+  .oc-composer-area {
+    padding-inline: 12px;
+  }
+  .oc-agent-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .oc-composer-bottom {
+    gap: 8px;
+  }
+  .oc-composer-bottom > .oc-muted {
+    font-size: 11px;
+  }
+  .oc-composer-caption {
+    font-size: 10px;
+    line-height: 1.5;
+  }
+}
+@container workspace (max-width:900px) {
+  .oc-preview-panel:not(.oc-preview-full) {
+    position: relative;
+    width: 100% !important;
+    min-width: 0;
+    margin-left: 0;
+    height: 50%;
+    flex: 0 0 50%;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+  }
+}
+@container workspace (max-width:759px) {
+  .oc-agent-bottom {
+    padding: 8px 16px 16px;
+  }
+}
+
+/* Override the inherited heading font at its own cascade layer. */
+@layer base {
+  .oc-chat-welcome h1,
+  .oc-agent-welcome h1 {
+    font-family: var(--font-sans) !important;
+    font-weight: 700 !important;
+  }
+}
+
+/* A pinned history and wide preview can leave a narrow conversation pane. */
+.oc-chat-page {
+  container: conversation / inline-size;
+}
+@container conversation (max-width:650px) {
+  .oc-chat-toolbar {
+    gap: 8px;
+    padding-inline: 14px;
+    flex-wrap: wrap;
+  }
+  .oc-chat-toolbar > div {
+    gap: 6px;
+    min-width: 0;
+  }
+  .oc-chat-toolbar > div:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .oc-live-decode small {
+    display: none;
+  }
+  .oc-live-decode {
+    flex: 1;
+    min-width: 0;
+  }
+  .oc-stream-footer-layer {
+    left: 12px;
+    right: 12px;
+  }
+  .oc-stream-actions {
+    width: 100%;
+  }
+  .oc-composer-area {
+    padding-inline: 12px;
+  }
+  .oc-composer-bottom {
+    gap: 8px;
+  }
+  .oc-composer-bottom > .oc-muted {
+    font-size: 11px;
+  }
+}

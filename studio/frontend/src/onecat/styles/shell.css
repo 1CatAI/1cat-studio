@@ -1,0 +1,573 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+.oc-shell {
+  display: flex;
+  height: 100dvh;
+  overflow: hidden;
+}
+.oc-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--background);
+  container: workspace / inline-size;
+}
+.oc-main {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  outline: none;
+}
+.oc-rail {
+  width: 80px;
+  flex: 0 0 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 12px 20px;
+  gap: 20px;
+  z-index: 25;
+}
+.oc-rail-brand {
+  width: 44px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+}
+.oc-brand-logo {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  user-select: none;
+}
+.dark .oc-brand-logo {
+  filter: invert(1);
+  mix-blend-mode: screen;
+}
+.oc-nav-capsule {
+  display: flex;
+  flex-direction: column;
+  width: 56px;
+  gap: 8px;
+  padding: 8px;
+  margin-top: 16px;
+  border-radius: 32px;
+  background: var(--sidebar);
+  box-shadow: var(--oc-shadow-float);
+}
+.oc-rail-link {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  color: #b8bcae;
+  transition:
+    color var(--oc-motion-fast),
+    background-color var(--oc-motion-fast),
+    scale var(--oc-motion-fast);
+}
+.oc-rail-link > svg,
+.oc-rail-link > span:not(.oc-nav-highlight) {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.oc-rail-link:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 9%);
+}
+.oc-rail-link[aria-current="page"] {
+  color: var(--sidebar-accent-foreground);
+}
+.oc-rail-link:active {
+  scale: 0.96;
+}
+.oc-nav-highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sidebar-accent);
+  pointer-events: none;
+  z-index: 0;
+}
+.oc-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color var(--oc-motion-fast),
+    color var(--oc-motion-fast),
+    scale var(--oc-motion-fast);
+}
+.oc-icon-button:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.oc-icon-button:active {
+  scale: 0.95;
+}
+.oc-icon-button[aria-pressed="true"],
+.oc-history-trigger[aria-expanded="true"] {
+  color: var(--oc-accent-text);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+}
+.oc-rail-bottom {
+  margin-top: auto;
+}
+.oc-account-trigger {
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--oc-shadow-control);
+}
+.oc-shell :is(a, button, select):focus-visible,
+.oc-history-panel :is(a, button):focus-visible,
+.oc-mobile-drawer :is(a, button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.oc-app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  min-height: 88px;
+  padding: 18px 32px;
+  flex-shrink: 0;
+}
+.oc-conversation-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.oc-header-model {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.oc-header-model select {
+  border: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 280px;
+  font-size: 14px;
+  padding: 8px 2px;
+  background: transparent;
+  text-overflow: ellipsis;
+  border-radius: 8px;
+}
+.oc-header-tag {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+.oc-header-model:has(select) .oc-header-tag {
+  display: none;
+}
+.oc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.oc-status-dot.ready {
+  background: var(--oc-success);
+}
+.oc-header-stats {
+  display: flex;
+  justify-self: end;
+  align-items: center;
+  gap: 14px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.oc-conversation-modes.oc-segments {
+  justify-self: center;
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 0;
+  min-width: 216px;
+  background: color-mix(in srgb, var(--card) 50%, var(--background));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--card) 50%, transparent);
+}
+.oc-conversation-modes.oc-segments > button {
+  border-radius: 999px;
+  width: 104px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.oc-conversation-modes.oc-segments > button[aria-selected="true"] {
+  color: var(--foreground);
+}
+.oc-conversation-modes .oc-segment-highlight {
+  background: var(--card);
+  box-shadow: var(--oc-shadow-control);
+}
+.oc-mobile-menu {
+  display: none;
+}
+.oc-history-panel {
+  width: 304px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  outline: none;
+}
+.oc-history-pinned {
+  flex: 0 0 304px;
+  margin: 16px 0;
+  border-radius: 20px;
+  box-shadow: var(--oc-shadow-control);
+  animation: oc-history-enter var(--oc-motion-panel) var(--oc-motion-ease);
+}
+.oc-history-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px 12px 20px;
+}
+.oc-history-top strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.oc-history-top > div {
+  display: flex;
+  gap: 2px;
+}
+.oc-history-content {
+  padding: 4px 12px 16px;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+.oc-history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.oc-history-search {
+  height: 38px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+}
+.oc-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.oc-history-group {
+  padding: 16px 10px 6px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.oc-history-item {
+  display: flex;
+  align-items: center;
+  position: relative;
+  border-radius: 10px;
+}
+.oc-history-link {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  padding: 11px 34px 11px 10px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.oc-history-link > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.oc-history-copy small { display: block; font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.oc-history-link[aria-current="page"],
+.oc-history-link:hover {
+  background: var(--secondary);
+}
+.oc-history-link[aria-current="page"] {
+  color: var(--oc-accent-text);
+}
+.oc-history-panel .oc-thread-pin {
+  position: absolute;
+  right: 2px;
+  opacity: 0;
+}
+.oc-history-item:hover .oc-thread-pin,
+.oc-history-item:focus-within .oc-thread-pin,
+.oc-history-panel .oc-thread-pin.is-pinned {
+  opacity: 1;
+}
+.oc-import-chat {
+  justify-content: flex-start;
+  font-size: 12px;
+  margin-top: 16px;
+  color: var(--muted-foreground);
+}
+.oc-history-empty {
+  padding: 20px 10px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.oc-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(12 16 10 / 28%);
+  backdrop-filter: blur(2px);
+}
+.oc-history-overlay {
+  position: fixed;
+  left: 80px;
+  top: 16px;
+  bottom: 16px;
+  z-index: 71;
+  max-width: calc(100vw - 96px);
+  border-radius: 20px;
+  box-shadow: var(--oc-shadow-dialog);
+}
+.oc-history-overlay[data-state="open"],
+.oc-mobile-drawer[data-state="open"] {
+  animation: oc-history-enter var(--oc-motion-panel) var(--oc-motion-ease);
+}
+.oc-history-overlay[data-state="closed"],
+.oc-mobile-drawer[data-state="closed"] {
+  animation: oc-history-leave var(--oc-motion-panel) var(--oc-motion-ease);
+}
+.oc-drawer-overlay[data-state="open"] {
+  animation: oc-overlay-enter var(--oc-motion-panel) var(--oc-motion-ease);
+}
+.oc-drawer-overlay[data-state="closed"] {
+  animation: oc-overlay-leave var(--oc-motion-panel) var(--oc-motion-ease);
+}
+.oc-account-menu {
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--popover);
+  box-shadow: var(--oc-shadow-dialog);
+  z-index: 90;
+  color: var(--popover-foreground);
+  animation: oc-history-enter var(--oc-motion-fast) var(--oc-motion-ease);
+}
+.oc-account-menu [role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+}
+.oc-account-menu [data-highlighted] {
+  background: var(--secondary);
+}
+.oc-account-menu [data-disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.oc-account-menu [role="separator"] {
+  margin: 6px;
+  border-top: 1px solid var(--border);
+}
+.oc-mobile-drawer {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: 304px;
+  max-width: calc(100vw - 24px);
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: var(--oc-shadow-dialog);
+  outline: none;
+}
+.oc-mobile-drawer header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.oc-mobile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oc-mobile-nav .oc-rail-link {
+  color: var(--foreground);
+  width: 100%;
+  border-radius: 12px;
+  justify-content: flex-start;
+  gap: 16px;
+  height: 48px;
+  padding: 0 14px;
+}
+.oc-mobile-nav .oc-rail-link[aria-current="page"] {
+  color: var(--primary-foreground);
+}
+.oc-mobile-history {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.oc-mobile-drawer footer {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding-top: 20px;
+}
+.oc-mobile-drawer footer a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+@container workspace (max-width:759px) {
+  .oc-app-header {
+    gap: 12px 16px;
+    padding: 14px 20px;
+    min-height: 70px;
+  }
+  .oc-conversation-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .oc-conversation-modes {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .oc-header-stats {
+    gap: 8px;
+  }
+  .oc-header-model select {
+    font-size: 13px;
+  }
+}
+@container workspace (max-width:400px) {
+  .oc-app-header {
+    padding: 12px;
+    gap: 10px;
+  }
+  .oc-header-stats > span:last-child {
+    display: none;
+  }
+  .oc-header-model {
+    gap: 6px;
+  }
+}
+@media (max-width: 639px) {
+  .oc-rail {
+    display: none;
+  }
+  .oc-mobile-menu {
+    display: inline-flex;
+  }
+  .oc-history-overlay {
+    left: 12px;
+    top: 12px;
+    bottom: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .oc-history-panel .oc-thread-pin {
+    opacity: 1;
+  }
+}
+@keyframes oc-history-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes oc-history-leave {
+  to {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+@keyframes oc-overlay-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes oc-overlay-leave {
+  to {
+    opacity: 0;
+  }
+}
+:root[data-ui-motion="off"] :is(.oc-rail-link, .oc-icon-button):active {
+  scale: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.oc-rail-link, .oc-icon-button):active {
+    scale: 1;
+  }
+}

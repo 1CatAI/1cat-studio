@@ -1,0 +1,104 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+/* Onecat entrypoint only. Portals inherit the same theme as the workspace. */
+:root {
+  --background: #f5f5f2;
+  --foreground: #191918;
+  --card: #ffffff;
+  --card-foreground: #191918;
+  --popover: #ffffff;
+  --popover-foreground: #191918;
+  --primary: #fc6136;
+  --primary-foreground: #191918;
+  --secondary: #eaeae5;
+  --secondary-foreground: #31332d;
+  --muted: #edeee8;
+  --muted-foreground: #676b60;
+  --accent: #eaeae5;
+  --accent-foreground: #191918;
+  --border: #dddfd6;
+  --input: #d1d4ca;
+  --ring: #ad3c1b;
+  --destructive: #b82f35;
+  --destructive-foreground: #ffffff;
+  --oc-accent-text: #ad3c1b;
+  --oc-display-accent: #df4c26;
+  --oc-success: #257345;
+  --oc-warning: #8c6516;
+  --oc-input-color: #276c9d;
+  --oc-cache-color: #85651c;
+  --chart-1: #ba4727;
+  --chart-2: #276c9d;
+  --chart-3: #85651c;
+  --chart-4: #257345;
+  --chart-5: #8060a3;
+  --sidebar: #191b18;
+  --sidebar-foreground: #f3f4ee;
+  --sidebar-primary: #fc6136;
+  --sidebar-accent: #fc6136;
+  --sidebar-accent-foreground: #191918;
+  --radius: 0.75rem;
+  --oc-shadow-control:
+    0 2px 5px rgb(27 31 21 / 5%), 0 1px 2px rgb(27 31 21 / 3%);
+  --oc-shadow-float:
+    0 12px 36px -12px rgb(27 31 21 / 17%), 0 2px 6px rgb(27 31 21 / 4%);
+  --oc-shadow-dialog:
+    0 24px 80px -20px rgb(17 21 12 / 25%), 0 4px 16px rgb(17 21 12 / 8%);
+  --oc-motion-fast: 160ms;
+  --oc-motion-state: 200ms;
+  --oc-motion-panel: 220ms;
+  --oc-motion-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.dark {
+  --background: #181a17;
+  --foreground: #f3f4ee;
+  --card: #232620;
+  --card-foreground: #f3f4ee;
+  --popover: #282c25;
+  --popover-foreground: #f3f4ee;
+  --primary: #ff845c;
+  --primary-foreground: #191918;
+  --secondary: #2d3129;
+  --secondary-foreground: #e0e3d8;
+  --muted: #272b23;
+  --muted-foreground: #afb5a5;
+  --accent: #32362d;
+  --accent-foreground: #f3f4ee;
+  --border: #363c30;
+  --input: #454d3d;
+  --ring: #ff845c;
+  --destructive: #ff8d8d;
+  --destructive-foreground: #301013;
+  --oc-accent-text: #ff9a79;
+  --oc-display-accent: #ff845c;
+  --oc-success: #8dcfa4;
+  --oc-warning: #e7c17b;
+  --oc-input-color: #8dbedb;
+  --oc-cache-color: #ddc17b;
+  --chart-1: #ff9a79;
+  --chart-2: #8dbedb;
+  --chart-3: #ddc17b;
+  --chart-4: #8dcfa4;
+  --chart-5: #c5a5ea;
+  --sidebar: #0d100d;
+  --sidebar-foreground: #f3f4ee;
+  --sidebar-primary: #ff845c;
+  --sidebar-accent: #ff845c;
+  --sidebar-accent-foreground: #191918;
+  --oc-shadow-control: 0 2px 5px rgb(0 0 0 / 14%);
+  --oc-shadow-float:
+    0 12px 36px -12px rgb(0 0 0 / 38%), 0 2px 6px rgb(0 0 0 / 15%);
+  --oc-shadow-dialog:
+    0 24px 80px -20px rgb(0 0 0 / 60%), 0 4px 16px rgb(0 0 0 / 24%);
+}
+:root[data-ui-motion="off"] {
+  --oc-motion-fast: 0ms;
+  --oc-motion-state: 0ms;
+  --oc-motion-panel: 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --oc-motion-fast: 0ms;
+    --oc-motion-state: 0ms;
+    --oc-motion-panel: 0ms;
+  }
+}

@@ -1,0 +1,33 @@
+name: Studio
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    env:
+      ONECAT_AUTO_GPU_ACTIONS: "0"
+      CUDA_VISIBLE_DEVICES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio/frontend/package-lock.json
+      - run: python -m pip install --require-hashes -r studio/requirements.lock
+      - run: python -m pip install pytest pytest-asyncio
+      - run: python studio/scripts/prepare-agent.py
+      - run: python studio/scripts/check-source.py
+      - run: python -m pytest -q studio/backend/onecat_tests
+      - run: npm ci
+        working-directory: studio/frontend
+      - run: npm test
+        working-directory: studio/frontend
+      - run: npm run build:onecat
+        working-directory: studio/frontend

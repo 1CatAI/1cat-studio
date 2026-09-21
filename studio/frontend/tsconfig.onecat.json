@@ -1,0 +1,6 @@
+{
+ "extends":"./tsconfig.app.json",
+ "compilerOptions":{"tsBuildInfoFile":"./node_modules/.tmp/tsconfig.onecat.tsbuildinfo"},
+ "include":["src/onecat","src/vite-env.d.ts"],
+ "exclude":["src/app","src/main.tsx"]
+}

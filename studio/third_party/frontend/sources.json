@@ -1,0 +1,20 @@
+{
+  "react-remove-scroll-bar": {
+    "version": "2.3.8",
+    "source": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE",
+    "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+    "note": "Canonical repository license supplements npm package missing its license file."
+  },
+  "remark-math": {
+    "version": "6.0.0",
+    "source": "https://raw.githubusercontent.com/remarkjs/remark-math/76c14978ff6805011b8c56727c54104a511b9055/license",
+    "sha256": "b4c9077a6fe03b40387623026f4de8c05ad819f1f86e7e0ad3230976bbf3fd90",
+    "note": "Canonical repository license supplements npm package missing its license file."
+  },
+  "victory-vendor": {
+    "version": "37.3.6",
+    "source": "https://raw.githubusercontent.com/FormidableLabs/victory/75549cf8c67e3ea220f862eb7f530c36d540d41c/LICENSE.txt",
+    "sha256": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4",
+    "note": "Canonical repository license supplements npm package missing its license file."
+  }
+}

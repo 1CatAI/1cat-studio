@@ -1,0 +1,903 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+.oc-creative-page {
+	height: 100%;
+	min-height: 480px;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: var(--background);
+}
+.oc-canvas-header {
+	height: 64px;
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 20px;
+	border-bottom: 1px solid var(--border);
+	gap: 12px;
+}
+.oc-canvas-header > div {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.oc-canvas-header input {
+	width: 220px;
+	font-size: 15px;
+	background: transparent;
+	border-color: transparent;
+	padding: 4px 8px;
+}
+.oc-canvas-header input:focus {
+	border-color: var(--border);
+}
+.oc-canvas-header small {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	min-width: 55px;
+}
+.oc-canvas-body {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+.oc-canvas-stage {
+	display: flex;
+	flex-direction: column;
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+.oc-canvas-viewport {
+	flex: 1;
+	min-height: 0;
+	height: auto;
+	touch-action: none;
+	outline: none;
+}
+.oc-canvas-viewport:focus-visible {
+	box-shadow: inset 0 0 0 2px
+		color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.oc-canvas-eyebrow {
+	font-size: 10px;
+	letter-spacing: .13em;
+	font-weight: 600;
+	color: var(--oc-accent-text);
+}
+.oc-canvas-welcome {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	padding: 40px;
+	text-align: center;
+	gap: 18px;
+}
+.oc-canvas-welcome h1 {
+	font-size: clamp(24px, 3vw, 36px);
+	font-weight: 600;
+	letter-spacing: -.035em;
+}
+.oc-canvas-welcome p {
+	max-width: 480px;
+	font-size: 14px;
+	line-height: 1.9;
+	color: var(--muted-foreground);
+}
+.oc-canvas-welcome-mark {
+	display: grid;
+	place-items: center;
+	width: 68px;
+	height: 68px;
+	border-radius: 22px;
+	background: color-mix(in srgb, var(--primary) 10%, var(--background));
+	color: var(--oc-accent-text);
+	margin-bottom: 6px;
+}
+.oc-canvas-starters {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 12px;
+	margin: 12px 0;
+}
+.oc-canvas-starters button {
+	height: 62px;
+	min-width: 170px;
+	border-radius: 18px;
+	gap: 12px;
+}
+.oc-canvas-empty {
+	position: absolute;
+	top: 40%;
+	left: 50%;
+	transform: translate(-50%, -40%);
+	width: 340px;
+	max-width: 85%;
+	display: flex;
+	align-items: center;
+	flex-direction: column;
+	gap: 14px;
+	text-align: center;
+	pointer-events: auto;
+	color: var(--muted-foreground);
+}
+.oc-canvas-empty > svg {
+	color: var(--oc-accent-text);
+}
+.oc-canvas-empty h2 {
+	font-size: 21px;
+	color: var(--foreground);
+	font-weight: 600;
+	letter-spacing: -.03em;
+}
+.oc-canvas-empty p {
+	font-size: 13px;
+	line-height: 1.8;
+	max-width: 270px;
+}
+.oc-canvas-empty > div {
+	display: flex;
+	gap: 10px;
+	margin-top: 10px;
+}
+.oc-canvas-toolbar,
+.oc-canvas-bottom-tools {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 6px;
+	background: color-mix(in srgb, var(--background) 96%, var(--muted));
+	border: 1px solid var(--border);
+	border-radius: 15px;
+	box-shadow: var(--oc-shadow-control);
+	z-index: 3;
+}
+.oc-canvas-toolbar {
+	position: relative;
+	align-self: flex-start;
+	flex: none;
+	margin: 12px 18px;
+	max-width: calc(100% - 36px);
+	flex-wrap: wrap;
+}
+.oc-canvas-toolbar > span,
+.oc-canvas-bottom-tools > span {
+	width: 1px;
+	height: 19px;
+	background: var(--border);
+	margin: 0 4px;
+}
+.oc-canvas-toolbar button {
+	font-size: 12px;
+	gap: 6px;
+}
+.oc-canvas-toolbar [aria-pressed="true"] {
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	color: var(--oc-accent-text);
+}
+.oc-canvas-bottom-tools {
+	left: 18px;
+	bottom: 18px;
+}
+.oc-canvas-bottom-tools small {
+	font-size: 11px;
+	min-width: 38px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+.oc-canvas-node {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 280px;
+	background: var(--background);
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	box-shadow: var(--oc-shadow-float);
+	overflow: hidden;
+	contain: layout style;
+	transition: border-color var(--oc-motion-state);
+}
+.oc-canvas-node.selected {
+	border-color: var(--oc-accent-text);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 13%, transparent), 0
+		6px 24px #0000000a;
+}
+.oc-canvas-node header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 43px;
+	padding: 0 14px;
+	border-bottom: 1px solid var(--border);
+	cursor: grab;
+	color: var(--muted-foreground);
+	touch-action: none;
+}
+.oc-canvas-node header button {
+	font-size: 12px;
+	text-align: left;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	cursor: inherit;
+	color: var(--foreground);
+	background: transparent;
+	border: 0;
+	padding: 0;
+}
+.oc-canvas-node-content {
+	height: 155px;
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+.oc-canvas-node-content > p {
+	padding: 16px;
+	font-size: 13px;
+	line-height: 1.8;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--muted-foreground);
+	user-select: text;
+}
+.oc-canvas-node-content img,
+.oc-canvas-node-content video {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	display: block;
+	background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.oc-canvas-node-content audio {
+	width: calc(100% - 20px);
+	margin: 48px 10px;
+}
+.oc-canvas-node-eyebrow {
+	display: block;
+	margin: 15px 16px -6px;
+	font-size: 10px;
+	color: var(--oc-accent-text);
+}
+.oc-canvas-node footer {
+	height: 39px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+	border-top: 1px solid var(--border);
+	gap: 8px;
+}
+.oc-canvas-node footer small {
+	font-size: 10px;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--muted-foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.oc-canvas-node footer button {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--oc-accent-text);
+	font-size: 11px;
+	white-space: nowrap;
+}
+.oc-canvas-node footer button.active {
+	font-weight: 700;
+	text-decoration: underline;
+}
+.oc-canvas-edges {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1px;
+	height: 1px;
+	overflow: visible;
+	pointer-events: none;
+}
+.oc-canvas-edges path {
+	fill: none;
+	stroke: color-mix(in srgb, var(--primary) 28%, var(--border));
+	stroke-width: 2;
+}
+.oc-canvas-edges path.selected {
+	stroke: var(--primary);
+}
+.oc-canvas-connection-hint {
+	position: absolute;
+	top: 75px;
+	left: 18px;
+	right: 18px;
+	margin: auto;
+	max-width: 430px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	background: var(--background);
+	border-radius: 14px;
+	font-size: 12px;
+	color: var(--oc-accent-text);
+	z-index: 4;
+}
+.oc-canvas-inspector {
+	width: 324px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--border);
+	background: var(--background);
+	z-index: 5;
+	min-height: 0;
+}
+.oc-canvas-inspector > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 22px 20px 16px;
+	flex: none;
+	border-bottom: 1px solid var(--border);
+}
+.oc-canvas-inspector h2 {
+	font-size: 16px;
+	font-weight: 600;
+	margin-top: 5px;
+	max-width: 230px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.oc-canvas-inspector-content {
+	padding: 20px;
+	overflow: auto;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	overscroll-behavior: contain;
+}
+.oc-canvas-inspector .oc-field {
+	gap: 8px;
+}
+.oc-canvas-inspector .oc-field label {
+	font-size: 12px;
+}
+.oc-canvas-inspector :is(input, textarea, select) {
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--muted);
+	color: var(--foreground);
+	font-size: 12px;
+	padding: 9px 11px;
+	outline-color: var(--oc-accent-text);
+}
+.oc-canvas-inspector textarea {
+	min-height: 114px;
+	max-height: 260px;
+	resize: vertical;
+	line-height: 1.8;
+}
+.oc-canvas-inspector small {
+	font-size: 11px;
+	line-height: 1.65;
+	color: var(--muted-foreground);
+}
+.oc-canvas-inspector details summary {
+	font-size: 12px;
+	color: var(--muted-foreground);
+	cursor: pointer;
+}
+.oc-canvas-inspector details .oc-field {
+	margin-top: 14px;
+}
+.oc-canvas-text-button {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--oc-accent-text);
+	font-size: 12px;
+	text-align: left;
+	margin-top: -10px;
+}
+.oc-canvas-notice {
+	font-size: 11px;
+	line-height: 1.8;
+	border-left: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+	padding-left: 10px;
+	color: var(--muted-foreground);
+}
+.oc-canvas-input-list {
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+}
+.oc-canvas-input-list h3 {
+	font-size: 12px;
+	font-weight: 500;
+}
+.oc-canvas-input-list > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 2px 4px 2px 10px;
+	font-size: 11px;
+}
+.oc-canvas-input-list > div > span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oc-canvas-input-list select {
+	background: transparent;
+}
+.oc-canvas-node-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: auto;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+}
+.oc-canvas-node-actions button {
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+.oc-creative-lifecycle { display: grid; gap: 8px; min-width: 0; width: 100%; }
+.oc-creative-stage { display: flex; align-items: center; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.oc-creative-stage > span { margin-left: auto; color: var(--muted-foreground); }
+.oc-creative-detail { color: var(--muted-foreground); overflow-wrap: anywhere; max-height: 60px; overflow: auto; }
+.oc-creative-lifecycle > [role="alert"] { max-height: 110px; overflow: auto; font-size: 12px; padding: 10px; overflow-wrap: anywhere; }
+.oc-creative-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.oc-creative-controls button { font-size: 12px; min-height: 36px; }
+.oc-creative-log { max-height: 55vh; white-space: pre-wrap; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
+.oc-canvas-generate-footer {
+	padding: 14px 20px 18px;
+	border-top: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	flex: none;
+}
+.oc-canvas-generate-footer > button,
+.oc-canvas-generate-footer .oc-action-wrap > button {
+	width: 100%;
+	height: 40px;
+}
+.oc-canvas-generate-footer > small:first-child {
+	font-variant-numeric: tabular-nums;
+}
+.oc-canvas-generate-footer > small:last-child {
+	font-size: 10px;
+	line-height: 1.7;
+}
+.oc-canvas-asset-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.oc-canvas-asset-detail img {
+	max-height: 220px;
+	object-fit: contain;
+	border-radius: 12px;
+}
+.oc-canvas-asset-detail a {
+	display: flex;
+	gap: 6px;
+	justify-content: center;
+	align-items: center;
+	font-size: 12px;
+	color: var(--oc-accent-text);
+}
+.oc-canvas-full-asset {
+	display: block;
+	width: 100%;
+	max-height: 65dvh;
+	object-fit: contain;
+}
+.oc-canvas-task-tray {
+	position: absolute;
+	right: 18px;
+	bottom: 18px;
+	z-index: 6;
+	width: 320px;
+	max-width: calc(100% - 36px);
+	background: var(--background);
+	border: 1px solid var(--border);
+	border-radius: 15px;
+	box-shadow: var(--oc-shadow-float);
+	overflow: hidden;
+}
+.oc-canvas-task-toggle {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	gap: 9px;
+	padding: 13px 15px;
+	font-size: 12px;
+}
+.oc-canvas-task-toggle > span {
+	margin-left: auto;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+.oc-canvas-task-toggle > .lucide-chevron-up {
+	transition: transform var(--oc-motion-state);
+}
+.oc-canvas-task-tray.open .oc-canvas-task-toggle > .lucide-chevron-up {
+	transform: rotate(180deg);
+}
+.oc-canvas-task-list {
+	max-height: 310px;
+	overflow: auto;
+	border-top: 1px solid var(--border);
+}
+.oc-canvas-task-list article {
+	padding: 16px;
+	border-bottom: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+}
+.oc-canvas-task-list article:last-child {
+	border: 0;
+}
+.oc-canvas-task-list header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 12px;
+}
+.oc-canvas-task-list header > button {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 180px;
+	text-align: left;
+	font-weight: 500;
+}
+.oc-canvas-task-list p {
+	font-size: 11px;
+	line-height: 1.7;
+	max-height: 56px;
+	overflow: auto;
+	color: var(--muted-foreground);
+	overflow-wrap: anywhere;
+}
+.oc-canvas-task-list small {
+	font-size: 10px;
+	color: var(--muted-foreground);
+}
+.oc-canvas-task-stats {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	flex-wrap: wrap;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+.oc-canvas-task-list .oc-actions {
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.oc-canvas-task-list .oc-actions :is(button, a) {
+	font-size: 11px;
+}
+.oc-canvas-task-list a {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--oc-accent-text);
+}
+.oc-canvas-inline-error {
+	color: var(--destructive) !important;
+	max-height: 100px !important;
+}
+.oc-canvas-save-error,
+.oc-canvas-draft {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 6px 20px;
+	flex: none;
+	border-bottom: 1px solid var(--border);
+	font-size: 12px;
+}
+.oc-canvas-save-error .oc-error {
+	margin: 0;
+	flex: 1;
+}
+.oc-canvas-projects {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 20px;
+}
+.oc-canvas-projects button {
+	justify-content: flex-start;
+	height: 50px;
+}
+.oc-canvas-projects small {
+	margin-left: auto;
+	color: var(--muted-foreground);
+}
+.oc-canvas-service-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 20px 0;
+}
+.oc-canvas-service-list[hidden] { display: none; }
+.oc-canvas-service-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 14px;
+	gap: 12px;
+}
+.oc-canvas-service-row > div:first-child {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+.oc-canvas-service-row strong,
+.oc-canvas-component strong {
+	font-size: 13px;
+}
+.oc-canvas-service-row small,
+.oc-canvas-component small {
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+.oc-canvas-service-row .oc-error {
+	width: 100%;
+}
+.oc-canvas-service-form {
+	padding: 20px 0;
+	margin: 16px 0;
+	border-block: 1px solid var(--border);
+}
+.oc-canvas-service-form h3 {
+	font-size: 15px;
+	font-weight: 600;
+	margin-bottom: 20px;
+}
+.oc-canvas-service-form .oc-actions {
+	margin-top: 18px;
+}
+.oc-canvas-service-form .oc-muted {
+	margin: 14px 0;
+	font-size: 12px;
+	line-height: 1.8;
+}
+.oc-canvas-gpu-picker {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 8px;
+	grid-column: 1 / -1;
+}
+.oc-canvas-gpu-picker legend {
+	font-size: 12px;
+	margin-bottom: 10px;
+}
+.oc-canvas-gpu-picker label {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	font-size: 11px;
+}
+.oc-canvas-gpu-picker small {
+	color: var(--muted-foreground);
+	font-size: 10px;
+}
+.oc-canvas-components {
+	margin-top: 24px;
+}
+.oc-canvas-components > summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+	font-size: 13px;
+}
+.oc-canvas-components > .oc-muted {
+	margin: 14px 0;
+	font-size: 12px;
+	line-height: 1.8;
+}
+.oc-canvas-component {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 16px 0;
+	border-bottom: 1px solid var(--border);
+}
+.oc-canvas-component > div:first-child {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.oc-canvas-component > a {
+	font-size: 11px;
+	color: var(--oc-accent-text);
+}
+.oc-canvas-component .oc-error {
+	width: 100%;
+}
+@container workspace (max-width: 1100px) {
+	.oc-canvas-inspector {
+		width: 290px;
+	}
+	.oc-canvas-task-tray {
+		bottom: 72px;
+		width: 290px;
+	}
+	.oc-canvas-header input {
+		width: 160px;
+	}
+}
+@container workspace (max-width: 760px) {
+	.oc-canvas-header {
+		padding: 10px 12px;
+		height: 56px;
+	}
+	.oc-canvas-header input {
+		width: 120px;
+	}
+	.oc-canvas-header small {
+		display: none;
+	}
+	.oc-canvas-header > button {
+		font-size: 11px;
+		padding-inline: 10px;
+	}
+	.oc-canvas-toolbar {
+		top: 10px;
+		left: 10px;
+		gap: 0;
+		padding: 4px;
+	}
+	.oc-canvas-toolbar button {
+		padding: 7px;
+		font-size: 11px;
+	}
+	.oc-canvas-inspector {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: auto;
+		height: 48%;
+		max-height: 450px;
+		min-height: 260px;
+		border: 1px solid var(--border);
+		border-radius: 20px 20px 0 0;
+		box-shadow: 0 -4px 20px #0000000a;
+		transition: height var(--oc-motion-state) var(--oc-motion-ease);
+	}
+	.oc-canvas-inspector:has(.oc-creation-progress[data-state="running"]),
+	.oc-canvas-inspector:has(.oc-creation-progress[data-state="queued"]) {
+		height: 78%;
+	}
+	.oc-canvas-inspector > header {
+		padding: 10px 16px;
+	}
+	.oc-canvas-inspector h2 {
+		font-size: 13px;
+		margin-top: 2px;
+	}
+	.oc-canvas-inspector-content {
+		padding: 14px 16px;
+		gap: 14px;
+	}
+	.oc-canvas-generate-footer {
+		padding: 10px 16px;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		align-items: center;
+	}
+	.oc-canvas-generate-footer > small:last-child {
+		display: none;
+	}
+	.oc-canvas-generate-footer > .oc-creation-progress,
+	.oc-canvas-generate-footer > details {
+		grid-column: 1 / -1;
+	}
+	.oc-canvas-task-tray {
+		right: 10px;
+		bottom: 64px;
+		width: 260px;
+	}
+	.oc-canvas-bottom-tools {
+		left: 10px;
+		bottom: 10px;
+	}
+	.oc-canvas-body:has(.oc-canvas-inspector) .oc-canvas-stage {
+	display: flex;
+	flex-direction: column;
+		margin-bottom: 260px;
+	}
+	.oc-canvas-body:has(.oc-canvas-inspector) .oc-canvas-task-tray {
+		display: none;
+	}
+	.oc-canvas-starters {
+		flex-direction: column;
+		width: 100%;
+	}
+	.oc-canvas-gpu-picker {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.oc-canvas-welcome {
+		padding: 24px;
+	}
+	.oc-canvas-welcome p {
+		font-size: 12px;
+	}
+	.oc-canvas-connection-hint {
+		font-size: 11px;
+		left: 10px;
+		right: 10px;
+	}
+	.oc-canvas-empty {
+		top: 46%;
+	}
+	.oc-canvas-empty h2 {
+		font-size: 18px;
+	}
+}
+
+@container workspace (max-width: 760px) {
+	.oc-canvas-body {
+		flex-direction: column;
+	}
+	.oc-canvas-inspector {
+		position: relative;
+		flex: none;
+		min-height: 280px;
+		height: 48%;
+	}
+	.oc-canvas-body:has(.oc-canvas-inspector) .oc-canvas-stage {
+	display: flex;
+	flex-direction: column;
+		margin-bottom: 0;
+	}
+}
+
+.oc-h3-presets { margin: 16px 0 24px; }
+.oc-h3-preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; margin-top: 14px; }
+.oc-h3-preset { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; }
+.oc-h3-preset p, .oc-h3-preset > span { font-size: 13px; margin: 0; }
+.oc-h3-preset .oc-actions { margin-top: auto; }

@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+/* Theme → workspace → reusable components → page behavior. */
+@import "./styles/tokens.css";
+@import "./styles/shell.css";
+@import "./styles/components.css";
+@import "./styles/pages.css";
+@import "./styles/conversation.css";
