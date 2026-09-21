@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "audited_at": "2026-09-07",
+  "audited_at": "2026-09-22",
   "entries": [
     {
       "id": "QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4",
@@ -124,6 +124,131 @@
       "vision": true,
       "vision_reason": "已验证单图问答；支持 PNG、JPEG 和 WebP / Single-image prompting validated; PNG, JPEG and WebP supported",
       "max_images": 1,
+      "draft_repo_id": "incoai/Qwen3.8-27B-DFlash2",
+      "accelerators": [
+        "dflash"
+      ],
+      "recommended": {
+        "dtype": "half",
+        "tensor_parallel_size": 4,
+        "kv_cache_dtype": "fp8_e5m2",
+        "attention_backend": "FLASH_ATTN_V100",
+        "max_model_len": 262144,
+        "max_num_batched_tokens": 4096,
+        "max_num_seqs": 4,
+        "gpu_memory_utilization": 0.92,
+        "extra_args": [
+          "--trust-remote-code",
+          "--mamba-cache-mode",
+          "align",
+          "--reasoning-parser",
+          "qwen3"
+        ]
+      }
+    },
+    {
+      "id": "unsloth/Qwen3.8-27B-NVFP4",
+      "repo_id": "unsloth/Qwen3.8-27B-NVFP4",
+      "name": "Qwen3.8-27B · NVFP4",
+      "family": "Qwen3.8",
+      "role": "target",
+      "revision": "master",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 2179,
+          "sha256": "6e0d4a1b0ac7a815d39ab2aedbb6e5695c9688b440104c0976bc06cb7fd079bf"
+        },
+        {
+          "path": "README.md",
+          "bytes": 6746,
+          "sha256": "a319a7af9a6fcb1d2c30e487d2c05bc012bba92a41cac04c09bf23beaee9ba9a"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 9993,
+          "sha256": "12827f24b742ea4e80cdc12dbcf9622227056b9f797252a3149263d4f9aaadce"
+        },
+        {
+          "path": "config.json",
+          "bytes": 22564,
+          "sha256": "1b3c71868d1299e52df6fc907deb202d5132b1ef0f72aae0ef6d15185dd53a5c"
+        },
+        {
+          "path": "configuration.json",
+          "bytes": 64,
+          "sha256": "625c81a3527ce4f7a739854b431f380a987dc4af5e07e099b568e50e2e3b248c"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 214,
+          "sha256": "d0d0ed2e37cdfafef4a5067d5ea2407b05f4fb50526e47c008a5b235d50240fb"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 22568192096,
+          "sha256": "c473512c70eace07e2256fe9fd76596ac03e3295bee7d54cfb72676416afcc05"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 164371,
+          "sha256": "429430e1b9e65b2cb98eff8cd10a06e70a09cee89c48487a3914684aeb6df57f"
+        },
+        {
+          "path": "model_mtp.safetensors",
+          "bytes": 849400392,
+          "sha256": "1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 19989325,
+          "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 1047,
+          "sha256": "529f30018c36dca5387c99b5edf368287f386f2c32d3790aa7141956bc5119fa"
+        },
+        {
+          "path": "video_preprocessor_config.json",
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 6722759,
+          "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+        }
+      ],
+      "architecture": "Qwen3_5ForConditionalGeneration",
+      "quantization": "NVFP4 / FP8",
+      "runtime_versions": [
+        "1.5.0"
+      ],
+      "gpu": {
+        "compute_capability": [
+          7,
+          0
+        ],
+        "count": 4,
+        "memory_mib": 32000,
+        "tp": 4,
+        "pp": 1
+      },
+      "evidence": [
+        "https://github.com/1CatAI/1Cat-vLLM/blob/v1.5.0/docs/design/sm70_qwen38_nvfp4_decode.md",
+        "https://github.com/1CatAI/1Cat-vLLM/pull/422",
+        "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.0"
+      ],
+      "tool_parser": "qwen3_coder",
+      "vision": false,
+      "vision_reason": "此版本尚未验证图片输入 / Image input has not been validated for this checkpoint",
+      "max_images": 0,
       "draft_repo_id": "incoai/Qwen3.8-27B-DFlash2",
       "accelerators": [
         "dflash"
@@ -2802,6 +2927,26 @@
         "DFlash2"
       ],
       "note": "具体运行环境和并行配置见验证记录 / See evidence for exact runtime and topology."
+    },
+    {
+      "id": "unsloth/Qwen3.8-27B-NVFP4",
+      "name": "Qwen3.8-27B · NVFP4",
+      "family": "Qwen3.8",
+      "quantization": "NVFP4 / FP8",
+      "level": "validated",
+      "catalog_id": "unsloth/Qwen3.8-27B-NVFP4",
+      "evidence": [
+        "https://github.com/1CatAI/1Cat-vLLM/blob/v1.5.0/docs/design/sm70_qwen38_nvfp4_decode.md",
+        "https://github.com/1CatAI/1Cat-vLLM/pull/422",
+        "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.0"
+      ],
+      "runtime": "1.5.0",
+      "hardware": "4 × V100 32 GB · TP4 / PP1",
+      "features": [
+        "基础推理 / Base inference",
+        "DFlash2"
+      ],
+      "note": "Unsloth 混合 NVFP4 / FP8；配置 SHA256 与历史 TP4 验证记录一致；默认启动参数与 QUASAR QAT 版相同 / Unsloth mixed NVFP4 and FP8; config SHA256 matches the historical TP4 validation; launch defaults match QUASAR QAT."
     },
     {
       "id": "LibertAIDAI/GLM-5.3-Flash-NVFP4",

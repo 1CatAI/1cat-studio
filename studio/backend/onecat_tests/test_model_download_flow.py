@@ -83,6 +83,22 @@ def installed(version="1.5.0", id="r"):
     return runtime
 
 
+def test_unsloth_recipe_preserves_checkpoint_identity_and_capabilities(monkeypatch):
+    unsloth = catalog.entry("unsloth/Qwen3.8-27B-NVFP4")
+    qat = catalog.entry("QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4")
+    assert unsloth["recommended"] == qat["recommended"]
+    config = next(f for f in unsloth["files"] if f["path"] == "config.json")
+    assert config["sha256"] == "1b3c71868d1299e52df6fc907deb202d5132b1ef0f72aae0ef6d15185dd53a5c"
+    assert config not in qat["files"]
+    monkeypatch.setattr(catalog, "model_entry", lambda path: unsloth)
+    monkeypatch.setattr(catalog, "runtime_matches", lambda *_: True)
+    capabilities = catalog.capabilities("/unsloth", "runtime")
+    assert capabilities["tool_parser"] == "qwen3_coder"
+    assert capabilities["accelerators"] == ["dflash"]
+    # QAT's image-input acceptance does not carry over to another publisher.
+    assert not capabilities["vision"]
+
+
 def test_qwen_catalog_defaults_expose_256k_tools_vision_and_mtp_choices(monkeypatch):
     targets = [
         item
