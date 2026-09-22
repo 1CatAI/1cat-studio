@@ -1,56 +1,82 @@
 # SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-"""Remote updates: check a channel manifest, then apply a published Studio bundle.
-
-Applying an update restarts the service that is running it, so the work happens in a
-detached systemd unit. This module only resolves the channel, downloads and verifies
-the bundle, and reports what the applier recorded. Installation itself stays with the
-installer that created this deployment, which keeps the pre-upgrade database snapshot,
-the ``previous`` symlink and the rollback script authoritative.
-"""
+"""VPS release checks and an independently supervised OTA transaction."""
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.request import Request, urlopen
 
-from . import db
+from . import __version__, db, update_protocol as protocol
 from .config import state_root
 
-FORMAT = "onecat-studio-update-v1"
 DEFAULT_CHANNEL = "http://156.226.174.161:8089/onecat/studio/latest.json"
+APP_ROOT = Path(__file__).resolve().parents[3]
 CACHE_SECONDS = 900
-HEALTH_TIMEOUT = 600
-_cache: dict = {"at": 0.0, "url": "", "manifest": None}
+_cache: dict = {}
+TERMINAL = {"installed", "rolled_back", "failed"}
 
 
 def channel_url() -> str:
-    """The configured channel, so a customer can point at staging or at a mirror."""
-    return str(
-        db.settings().get("update_channel")
-        or os.environ.get("ONECAT_UPDATE_CHANNEL")
-        or DEFAULT_CHANNEL
+    return protocol.validate_url(
+        str(
+            db.settings().get("update_channel")
+            or os.environ.get("ONECAT_UPDATE_CHANNEL")
+            or DEFAULT_CHANNEL
+        )
     )
 
 
 def prefix() -> Path:
-    """The app prefix that holds ``releases``, ``current`` and ``previous``."""
-    override = os.environ.get("ONECAT_STUDIO_PREFIX")
-    if override:
-        return Path(override).expanduser().resolve()
-    for entry in (os.environ.get("PYTHONPATH") or "").split(os.pathsep):
-        parts = Path(entry).parts if entry else ()
-        if len(parts) >= 4 and parts[-3:] == ("studio", "backend") or (
-            len(parts) >= 4 and parts[-3] == "studio" and parts[-2] == "backend"
-        ):
-            candidate = Path(*parts[:-3])
-            if (candidate / "current").exists() or (candidate / "releases").exists():
-                return candidate.resolve()
+    if configured := os.environ.get("ONECAT_STUDIO_PREFIX"):
+        return Path(configured).expanduser().resolve()
+    if APP_ROOT.parent.name == "releases":
+        return APP_ROOT.parent.parent
     return (Path.home() / ".local/share/onecat-studio-app").resolve()
+
+
+def deployment() -> dict:
+    """Describe the running code, not an abandoned installation's current link."""
+    path = APP_ROOT / "manifest.json"
+    if path.is_file():
+        manifest = json.loads(path.read_text())
+        if manifest.get("format") == "onecat-studio-linux-v1":
+            return {
+                "mode": "package",
+                "version": manifest["version"],
+                "source_commit": manifest.get("source_commit"),
+                "sequence": manifest.get("sequence", 0),
+            }
+    sha = None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(APP_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=True,
+        )
+        sha = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return {
+        "mode": "source",
+        "version": __version__ + ("-dev." + sha[:8] if sha else "-dev"),
+        "source_commit": sha,
+        "sequence": 0,
+    }
+
+
+def installed_version() -> str:
+    return deployment()["version"]
 
 
 def updates_root() -> Path:
@@ -59,158 +85,194 @@ def updates_root() -> Path:
     return root
 
 
-def status_path() -> Path:
-    return updates_root() / "status.json"
-
-
-def installed_version() -> str | None:
-    manifest = prefix() / "current" / "manifest.json"
-    try:
-        return str(json.loads(manifest.read_text()).get("version"))
-    except (OSError, ValueError):
-        return None
-
-
-def write_status(**fields) -> dict:
-    record = {"updated_at": time.time(), **fields}
-    status_path().write_text(json.dumps(record, ensure_ascii=False, indent=1))
-    return record
-
-
 def read_status() -> dict:
     try:
-        return json.loads(status_path().read_text())
+        return json.loads((updates_root() / "status.json").read_text())
     except (OSError, ValueError):
         return {}
 
 
-def fetch(force: bool = False) -> dict:
-    """Read the channel manifest, cached so the UI stays responsive and offline-safe."""
-    url = channel_url()
-    fresh = (
-        not force
-        and _cache["manifest"] is not None
-        and _cache["url"] == url
-        and time.time() - _cache["at"] < CACHE_SECONDS
-    )
-    if fresh:
-        return _cache["manifest"]
-    from urllib.request import Request, urlopen
+def activating() -> bool:
+    # Interrupted activation remains closed to writes until recovery completes.
+    return (state_root() / "updates/activation.json").is_file()
 
-    request = Request(url, headers={"User-Agent": "onecat-studio"})
-    with urlopen(request, timeout=30) as response:
-        manifest = json.loads(response.read().decode())
-    if manifest.get("format") != FORMAT:
-        raise ValueError("Not a 1Cat Studio update channel")
-    if not manifest.get("version") or not manifest.get("url"):
-        raise ValueError("Update channel has no version or bundle URL")
-    if manifest.get("sha256") and len(str(manifest["sha256"])) != 64:
-        raise ValueError("Update channel sha256 is malformed")
-    _cache.update({"at": time.time(), "url": url, "manifest": manifest})
+
+def write_status(**fields) -> dict:
+    value = {"updated_at": time.time(), **fields}
+    protocol.atomic_json(updates_root() / "status.json", value)
+    return value
+
+
+def fetch(force: bool = False) -> dict:
+    url = channel_url()
+    if not force and _cache.get("url") == url and time.time() - _cache.get("at", 0) < CACHE_SECONDS:
+        return _cache["manifest"]
+    request = Request(
+        url, headers={"User-Agent": "onecat-studio-ota/1", "Cache-Control": "no-cache"}
+    )
+    with urlopen(request, timeout=15) as response:
+        manifest = protocol.verify(protocol.parse_manifest(response.read(65537)))
+    ledger_path = updates_root() / "channel-history.json"
+    with (updates_root() / "channel.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else {}
+        previous = ledger.get(url, {})
+        identity = protocol.release_id(manifest)
+        if manifest["sequence"] < previous.get("sequence", 0):
+            raise ValueError("The update channel returned an older release")
+        if manifest["sequence"] == previous.get("sequence") and identity != previous.get(
+            "release_id"
+        ):
+            raise ValueError("An existing release was changed; publish a new sequence")
+        ledger[url] = {"sequence": manifest["sequence"], "release_id": identity}
+        protocol.atomic_json(ledger_path, ledger)
+    _cache.update(url=url, at=time.time(), manifest=manifest)
     return manifest
 
 
+def busy_reason() -> str | None:
+    from .ota import busy_reason as inspect
+
+    return inspect(state_root())
+
+
 def check(force: bool = False) -> dict:
-    """Never raise for the UI: report the reason instead of failing the request."""
-    current = installed_version()
+    current = deployment()
     result = {
-        "channel": channel_url(),
-        "current": current,
+        "current": current["version"],
+        "deployment": current,
         "latest": None,
         "available": False,
+        "release_id": None,
         "notes": "",
         "size": None,
         "published": None,
+        "verified": False,
         "status": read_status(),
         "error": None,
+        "blocked_reason": busy_reason(),
+        "supported": protocol.supported_host(),
     }
     try:
-        manifest = fetch(force=force)
-    except Exception as error:  # noqa: BLE001 - the channel is operator input
-        result["error"] = "%s: %s" % (type(error).__name__, str(error)[:300])
-        return result
-    result.update(
-        {
-            "latest": manifest.get("version"),
-            "notes": manifest.get("notes") or manifest.get("changelog") or "",
-            "size": manifest.get("size"),
-            "published": manifest.get("release_date"),
-            "available": bool(manifest.get("version") and manifest["version"] != current),
-        }
-    )
-    minimum = manifest.get("min_version")
-    if result["available"] and minimum and current and current < str(minimum):
-        result["error"] = "This release needs at least %s; update in steps" % minimum
-        result["available"] = False
+        manifest = fetch(force)
+        result.update(
+            latest=manifest["version"],
+            release_id=protocol.release_id(manifest),
+            available=manifest["sequence"] > current["sequence"]
+            and manifest["version"] != current["version"],
+            notes=manifest.get("notes", ""),
+            size=manifest["size"],
+            published=manifest.get("release_date"),
+            verified=True,
+        )
+    except (OSError, ValueError, KeyError) as error:
+        result["error"] = str(error)[:300]
     return result
 
 
-def applier_script() -> Path:
-    """The detached applier is installed next to the status file, not in the release."""
-    script = updates_root() / "apply-update.py"
-    source = Path(__file__).resolve().parents[3] / "scripts" / "apply-update.py"
-    if source.is_file():
-        script.write_bytes(source.read_bytes())
-    if not script.is_file():
-        raise ValueError("The updater script is missing from this installation")
-    return script
+def systemd_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
 
 
-def start(manifest: dict, *, port: int) -> dict:
-    """Hand the installation to a unit that outlives the restart it performs.
-
-    The unit downloads the bundle itself: a download owned by the Studio would die
-    when the installer stops the Studio halfway through.
-    """
-    version = str(manifest["version"])
-    script = applier_script()
-    unit = "onecat-studio-update"
-    subprocess.run(["systemctl", "--user", "reset-failed", unit + ".service"], capture_output=True)
-    environment = [
-        "--setenv=ONECAT_STUDIO_HOME=" + str(state_root()),
-        "--setenv=PATH=" + os.environ.get("PATH", "/usr/bin:/bin"),
-    ]
-    if os.environ.get("ONECAT_STUDIO_PREFIX"):
-        environment.append("--setenv=ONECAT_STUDIO_PREFIX=" + os.environ["ONECAT_STUDIO_PREFIX"])
-    argv = [
-        "systemd-run",
-        "--user",
-        "--collect",
-        "--unit",
-        unit,
-        "--description",
-        "1Cat Studio update to " + version,
-        "--property",
-        "Type=oneshot",
-        *environment,
-        sys.executable,
-        str(script),
-        "--url",
-        str(manifest["url"]),
-        "--sha256",
-        str(manifest.get("sha256") or ""),
-        "--version",
-        version,
-        "--prefix",
-        str(prefix()),
-        "--state",
-        str(state_root()),
-        "--health-url",
-        "http://127.0.0.1:%d/api/health" % port,
-    ]
-    result = subprocess.run(argv, capture_output=True, text=True)
-    if result.returncode:
-        raise ValueError((result.stderr or result.stdout).strip()[-500:])
-    write_status(stage="queued", version=version, ok=None, detail="update unit started")
-    return {"version": version, "unit": unit + ".service"}
-
-
-def _job():
-    from .jobs import Job, create_job
-
-    record = create_job("install_update", {})
-    return Job(record["id"])
-
-
-def bundle_url(manifest: dict) -> str:
-    return urljoin(manifest.get("url", ""), urlsplit(manifest.get("url", "")).path.split("/")[-1])
+def start(manifest: dict, *, port: int, switch_to_release: bool = False) -> dict:
+    manifest = protocol.verify(manifest)
+    if not protocol.supported_host():
+        raise ValueError("OTA currently supports Linux x86_64")
+    current = deployment()
+    if current["mode"] == "source" and not switch_to_release:
+        raise ValueError("Confirm switching from source to a published release")
+    if manifest["version"] == current["version"] or manifest["sequence"] <= current["sequence"]:
+        raise ValueError("This release is already installed or older than the running release")
+    if reason := busy_reason():
+        raise ValueError(reason)
+    root = updates_root()
+    with (root / "request.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        old = read_status()
+        if old.get("stage") and old["stage"] not in TERMINAL:
+            raise ValueError("A Studio update is already in progress")
+        if activating():
+            raise ValueError("An interrupted Studio update needs recovery")
+        operation = uuid.uuid4().hex
+        work = root / "operations" / operation
+        worker = work / "onecat_ota"
+        worker.mkdir(parents=True, mode=0o700)
+        (worker / "__init__.py").write_text("")
+        for name in ("ota.py", "update_protocol.py"):
+            shutil.copy2(Path(__file__).with_name(name), worker / name)
+        (worker / "data").mkdir()
+        shutil.copy2(protocol.KEYS, worker / "data/update-keys.json")
+        protocol.atomic_json(work / "release.json", manifest)
+        manager = os.environ.get("ONECAT_STUDIO_SERVICE", "onecat-studio.service")
+        if not re.fullmatch(r"onecat-studio(?:-[a-z0-9-]+)?\.service", manager):
+            raise ValueError("Invalid Studio service name")
+        try:
+            mode = subprocess.run(
+                ["systemctl", "--user", "show", manager, "-p", "KillMode", "--value"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ValueError("The Studio user service is unavailable") from error
+        if mode != "process":
+            raise ValueError(
+                "Studio service needs KillMode=process before OTA can preserve inference"
+            )
+        unit_name = manager.removesuffix(".service") + "-update.service"
+        command = [
+            sys.executable,
+            "-m",
+            "onecat_ota.ota",
+            "--manifest",
+            str(work / "release.json"),
+            "--prefix",
+            str(prefix()),
+            "--state",
+            str(state_root()),
+            "--port",
+            os.environ.get("ONECAT_STUDIO_LISTEN_PORT", str(port)),
+            "--host",
+            os.environ.get("ONECAT_STUDIO_LISTEN_HOST", db.settings()["host"]),
+            "--service",
+            manager,
+            "--operation",
+            operation,
+        ]
+        unit = Path.home() / ".config/systemd/user" / unit_name
+        unit.parent.mkdir(parents=True, exist_ok=True)
+        unit.write_text(
+            "[Unit]\nDescription=1Cat Studio OTA\nAfter=network-online.target\n\n[Service]\n"
+            "Type=simple\nExecStart=" + " ".join(systemd_quote(x) for x in command) + "\n"
+            "Environment=" + systemd_quote("PYTHONPATH=" + str(work)) + "\n"
+            "Environment=PYTHONUNBUFFERED=1\nRestart=on-failure\nRestartSec=5\n"
+            "UMask=0077\nTimeoutStopSec=60\n\n[Install]\nWantedBy=default.target\n"
+        )
+        write_status(
+            stage="queued",
+            version=manifest["version"],
+            operation=operation,
+            ok=None,
+            release_id=protocol.release_id(manifest),
+            service=manager,
+        )
+        try:
+            subprocess.run(
+                ["systemctl", "--user", "daemon-reload"], check=True, capture_output=True
+            )
+            subprocess.run(
+                ["systemctl", "--user", "enable", unit_name], check=True, capture_output=True
+            )
+            subprocess.run(
+                ["systemctl", "--user", "restart", unit_name], check=True, capture_output=True
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            write_status(
+                stage="failed",
+                operation=operation,
+                ok=False,
+                detail="Could not start the OTA worker",
+            )
+            raise ValueError("Could not start the Studio update service") from error
+        return {"version": manifest["version"], "operation": operation, "unit": unit_name}

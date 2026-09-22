@@ -29,6 +29,8 @@ def main():
         from .app import create_app
 
         settings = db.settings()
+        os.environ["ONECAT_STUDIO_LISTEN_HOST"] = args.host or settings["host"]
+        os.environ["ONECAT_STUDIO_LISTEN_PORT"] = str(args.port or settings["port"])
         uvicorn.run(
             create_app(),
             host=args.host or settings["host"],
