@@ -312,6 +312,7 @@ def runtime_env(runtime: dict, profile: dict) -> dict:
         env.pop("PYTHONPATH", None)
     cache = state_root() / "cache" / runtime["id"]
     for key, folder in (
+        ("VLLM_CACHE_ROOT", "vllm"),
         ("TORCHINDUCTOR_CACHE_DIR", "inductor"),
         ("TRITON_CACHE_DIR", "triton"),
         ("TORCH_EXTENSIONS_DIR", "extensions"),

@@ -176,6 +176,21 @@ def test_imported_runtime_finds_tools_beside_real_interpreter(tmp_path, monkeypa
     assert shutil.which("ninja", path=env["PATH"]) == str(alias_bin / "ninja")
 
 
+def test_runtime_compile_cache_is_persistent_and_respects_override(state, tmp_path):
+    profile = {"gpu_uuids": []}
+    runtime = {"id": "r", "environment": {}}
+    first = engine.runtime_env(runtime, profile)
+    restarted = engine.runtime_env(runtime, profile)
+    assert first["VLLM_CACHE_ROOT"] == str(state / "cache" / "r" / "vllm")
+    assert first["VLLM_CACHE_ROOT"] == restarted["VLLM_CACHE_ROOT"]
+    other = engine.runtime_env({"id": "other", "environment": {}}, profile)
+    assert first["VLLM_CACHE_ROOT"] != other["VLLM_CACHE_ROOT"]
+    runtime["environment"]["VLLM_CACHE_ROOT"] = str(tmp_path / "prepared-cache")
+    assert engine.runtime_env(runtime, profile)["VLLM_CACHE_ROOT"] == str(
+        tmp_path / "prepared-cache"
+    )
+
+
 def test_recent_driver_uses_wakeable_v100_idle_clocks(monkeypatch):
     monkeypatch.setattr(
         gpu,
