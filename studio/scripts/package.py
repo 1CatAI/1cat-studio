@@ -53,6 +53,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / ".artifacts/releases")
     parser.add_argument("--base", type=Path, default=ROOT / ".artifacts/package-base")
     parser.add_argument("--sequence", type=int, default=int(time.time()))
+    parser.add_argument("--source-commit", help="Original commit when rebuilding an exported source archive")
     args = parser.parse_args()
     # Never publish an old dist beside newer source/backend code. The installer
     # must receive assets built from the same working tree being archived below.
@@ -94,7 +95,16 @@ def main():
         digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())
     version = tomllib.loads((STUDIO / "pyproject.toml").read_text())["project"]["version"] + "-" + digest.hexdigest()[:10]
-    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    source_commit = args.source_commit
+    if not source_commit:
+        try:
+            source_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            # Exported corresponding source remains buildable without Git.
+            # The signed OTA publisher requires a known original commit.
+            source_commit = None
     stage = output / ("onecat-studio-" + version)
     if stage.exists():
         shutil.rmtree(stage)
