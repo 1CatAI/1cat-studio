@@ -37,6 +37,7 @@ class NewTask(StrictModel):
     operation: Literal["turn", "review", "compact", "skills"] = "turn"
     permission: Literal["workspace-write", "read-only"] = "workspace-write"
     thinking: bool | None = None
+    thinking_effort: Literal["low", "medium", "high", "xhigh"] | None = None
     mode: Literal["default", "plan"] = "default"
 
 
@@ -48,6 +49,7 @@ class ContinueTask(StrictModel):
     operation: Literal["turn", "review", "compact", "skills"] = "turn"
     permission: Literal["workspace-write", "read-only"] | None = None
     thinking: bool | None = None
+    thinking_effort: Literal["low", "medium", "high", "xhigh"] | None = None
     mode: Literal["default", "plan"] | None = None
 
 
@@ -242,6 +244,7 @@ async def new_task(data: NewTask):
         permission=data.permission,
         mode=data.mode,
         thinking=data.thinking,
+        thinking_effort=data.thinking_effort,
     )
 
 
@@ -264,6 +267,7 @@ async def continue_task(task_id: str, data: ContinueTask):
         permission=data.permission,
         mode=data.mode,
         thinking=data.thinking,
+        thinking_effort=data.thinking_effort,
     )
 
 

@@ -33,7 +33,7 @@ import { Input } from "@/onecat/ui";
 import { Switch } from "@/onecat/ui";
 import { TooltipIconButton } from "@/onecat/ui";
 import { latestRun, observeRun, type ChatRun } from "./chat-run";
-import { ThinkingToggle, ModelPicker, type ThinkingSupport } from "./model-controls";
+import { ThinkingToggle, ModelPicker, thinkingEffort, type ThinkingSupport, type ThinkingEffort } from "./model-controls";
 import { useBrowserState } from "./browser-state";
 import { toast } from "sonner";
 import {
@@ -101,7 +101,7 @@ export function ChatPage() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [config, setConfig] = useState(false);
-  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean };
+  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort };
   const [settingsDraft, setSettingsDraft] = useBrowserState<Settings | null>("onecat:chat-settings:" + (threadId || "new"), null);
   const settings = settingsDraft || { system_prompt: "", temperature: 0.7, top_p: 0.9, max_tokens: null, thinking: false,
     ...(threadId && loaded?.thread.id === threadId ? loaded.thread.settings : engine?.profile?.default_sampling) } as Settings;
@@ -110,7 +110,8 @@ export function ChatPage() {
   const setTemperature = (value: number) => setSettingsDraft({ ...settings, temperature: value });
   const setTopP = (value: number) => setSettingsDraft({ ...settings, top_p: value });
   const setMaxTokens = (value: number | null) => setSettingsDraft({ ...settings, max_tokens: value });
-  const setThinking = (value: boolean) => setSettingsDraft({ ...settings, thinking: value });
+  const effort = thinkingEffort(options?.thinking, settings.thinking_effort);
+  const setThinking = (value: boolean, level?: ThinkingEffort) => setSettingsDraft({ ...settings, thinking: value, thinking_effort: level });
   const [submission, setSubmission] = useBrowserState<{ identity: string; thread: string; assistant: string; user: string; createdAt: number } | null>("onecat:chat-submission:" + (threadId || "new"), null);
   const scopeRef = useRef(threadId); scopeRef.current = threadId;
   const [preview, setPreview] = useState<{
@@ -340,7 +341,7 @@ export function ChatPage() {
     let accepted = false;
     try {
       const requestSettings = { system_prompt: systemPrompt, temperature, top_p: topP,
-        max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking };
+        max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking: !!options?.thinking.supported && thinking, thinking_effort: effort };
       const identity = JSON.stringify({ base, userText, images, settings: requestSettings, model: engine?.profile_id });
       let pending = submission?.identity === identity ? submission : null;
       if (!pending) {
@@ -362,7 +363,7 @@ export function ChatPage() {
         message_id: pending.assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
         request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP,
           max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual",
-          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking } : {} },
+          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
       });
       if (abort.signal.aborted && abort.signal.reason === "cancelled") await mutation(`/api/chat/threads/${id}/cancel`);
       refreshData();
@@ -714,7 +715,7 @@ export function ChatPage() {
                   </TooltipIconButton>
                 </>
               )}
-              <ThinkingToggle value={thinking} onChange={setThinking} support={options?.thinking} disabled={busy} />
+              <ThinkingToggle value={thinking} effort={effort} onChange={setThinking} support={options?.thinking} disabled={busy} />
               <ModelPicker compact disabled={busy} />
               <Button type={busy ? "button" : "submit"} size="icon" disabled={!busy && (!ready || uploading || (!input.trim() && !attachments.length))}
                 aria-label={busy ? t("停止生成", "Stop generation") : t("发送消息", "Send message")}

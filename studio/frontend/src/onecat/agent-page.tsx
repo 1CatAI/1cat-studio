@@ -16,7 +16,7 @@ import { type Artifact, artifacts, fileArtifact, previewArtifact } from "./artif
 import { MOTION, useInterfaceMotion } from "./motion";
 import { activeAgent, reduceAgent, latestAgentAnswer, agentItemText, type AgentTask, type AgentItem, type Approval } from "./agent-state";
 import { agentCommands, matchingAgentCommands, parseAgentCommand } from "./agent-commands";
-import { ModelPicker, ThinkingToggle, type ThinkingSupport } from "./model-controls";
+import { ModelPicker, ThinkingToggle, thinkingEffort, type ThinkingSupport, type ThinkingEffort } from "./model-controls";
 import { AgentStats } from "./agent-stats";
 import { PreviewPanel } from "./preview-panel";
 type Project = { id: string; name: string; repository?: string };
@@ -114,6 +114,8 @@ export function AgentPage() {
   const pendingProjectDraft = useRef<{ id: string; text: string } | null>(null);
   useEffect(() => { if (task?.project_id) select(task.project_id); }, [task?.project_id, select]);
   const [thinking, setThinking] = useBrowserState<boolean | null>("onecat:agent-thinking:" + (taskId || projectId || "new"), null);
+  const [effort, setEffort] = useBrowserState<ThinkingEffort | null>("onecat:agent-thinking-effort:" + (taskId || projectId || "new"), null);
+  const selectedEffort = thinkingEffort(status?.model.thinking, effort || task?.thinking_effort);
   const scope = taskId || projectId || "new";
   const currentScope = useRef(scope); currentScope.current = scope;
   useEffect(() => { currentScope.current = scope; return () => { currentScope.current = "__unmounted__"; }; }, []);
@@ -260,14 +262,14 @@ export function AgentPage() {
         const context = sourceChat.messages.map(m => `${m.role}: ${m.content.filter(p => p.type === "text").map(p => p.text || "").join("")}`).join("\n\n");
         prompt = `${t("背景对话", "Conversation context")}:\n${context.slice(-32000)}\n\n${t("当前任务", "Task")}:\n${prompt}`;
       }
-      const requestedThinking = status?.model.thinking?.supported ? thinking : false;
-      const identity = JSON.stringify({ prompt, operation, permission, mode, thinking: requestedThinking, turn: running ? task?.current_turn : undefined });
+      const requestedThinking = status?.model.thinking?.supported ? thinking ?? task?.thinking ?? false : false;
+      const identity = JSON.stringify({ prompt, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort, turn: running ? task?.current_turn : undefined });
       const requestId = submission?.text === identity ? submission.id : newMessageId();
       setSubmission({ text: identity, id: requestId });
       const result = running
         ? await mutation<AgentTask>(`/api/agent/tasks/${taskId}/steer`, { prompt, request_id: requestId, turn_id: task?.current_turn })
         : await mutation<AgentTask>(taskId ? `/api/agent/tasks/${taskId}/continue` : "/api/agent/tasks",
-        taskId ? { prompt, request_id: requestId, operation, permission, mode, thinking: requestedThinking } : { prompt, project_id: projectId, request_id: requestId, source_thread: source || null, operation, permission, mode, thinking: requestedThinking });
+        taskId ? { prompt, request_id: requestId, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort } : { prompt, project_id: projectId, request_id: requestId, source_thread: source || null, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort });
       setSubmission(null);
       setDraft(value => value === text ? "" : value);
       refreshData();
@@ -396,7 +398,7 @@ export function AgentPage() {
             <input hidden type="file" multiple ref={element => { folderInput.current = element; element?.setAttribute("webkitdirectory", ""); }} onChange={e => void upload(e.target.files)} />
             <Button type="button" size="icon-sm" variant="ghost" aria-label={t("上传文件", "Upload files")} title={t("上传文件", "Upload files")} disabled={!project || running || busy} onClick={() => fileInput.current?.click()}><Plus size={18} /></Button>
             <button type="button" className="oc-agent-permission" disabled={running || busy} onClick={() => setInfoPanel("permissions")}><ShieldCheck size={14} /><span>{mode === "plan" ? t("计划 · 只读", "Plan · Read only") : (running ? task?.execution_permission : permission) === "read-only" ? t("只读", "Read only") : t("项目写入", "Workspace write")}</span><ChevronDown size={12} /></button>
-            <ThinkingToggle value={thinking ?? task?.thinking ?? false} onChange={setThinking} support={status?.model.thinking} disabled={running || busy} />
+            <ThinkingToggle value={thinking ?? task?.thinking ?? false} effort={selectedEffort} onChange={(enabled, level) => { setThinking(enabled); setEffort(level || null); }} support={status?.model.thinking} disabled={running || busy} />
             <ModelPicker agent compact disabled={running || busy} opened={infoPanel === "model"} onOpenChange={open => setInfoPanel(open ? "model" : null)} />
             {running && canSteer && draft.trim() && <Button type="submit" size="icon" aria-label={t("补充要求", "Add instructions")} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}</Button>}
             {running ? <Button type="button" size="icon" aria-label={t("停止任务", "Stop task")} disabled={task?.state === "stopping"}

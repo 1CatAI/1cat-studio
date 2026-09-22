@@ -285,6 +285,19 @@ def start(thread: str, payload: dict) -> dict:
         submission = {"messages": proposed, "settings": normalize(payload.get("settings", {}))}
         messages = proposed
     body = {**body, "stream": True, "return_token_ids": True}
+    if submission and "thinking" in submission["settings"]:
+        from .model_controls import thinking_kwargs
+        from .engine import private_state
+
+        settings = submission["settings"]
+        body["chat_template_kwargs"] = {
+            **(body.get("chat_template_kwargs") or {}),
+            **thinking_kwargs(
+                private_state().get("profile") or {},
+                settings["thinking"],
+                settings.get("thinking_effort"),
+            ),
+        }
     record = {
         "id": db.uid(),
         "thread_id": thread,
