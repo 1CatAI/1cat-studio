@@ -299,6 +299,14 @@ def runtime_env(runtime: dict, profile: dict) -> dict:
     env["PYTHONNOUSERSITE"] = "1"
     env["HF_HUB_OFFLINE"] = "1"
     env["TRANSFORMERS_OFFLINE"] = "1"
+    if runtime.get("python_path"):
+        python = Path(runtime["python_path"]).expanduser()
+        # Imported runtimes can point to a venv interpreter symlink while Ninja
+        # and compiler helpers live beside the underlying interpreter. systemd
+        # does not activate either environment's bin directory for us.
+        paths = [str(python.parent), str(python.resolve().parent)]
+        paths.extend(env.get("PATH", os.defpath).split(os.pathsep))
+        env["PATH"] = os.pathsep.join(dict.fromkeys(paths))
     # Keep Studio's import path out of the independent inference environment.
     if "PYTHONPATH" not in runtime.get("environment", {}):
         env.pop("PYTHONPATH", None)

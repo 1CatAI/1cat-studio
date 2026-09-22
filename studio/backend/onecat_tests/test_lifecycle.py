@@ -148,6 +148,34 @@ def test_uuid_profiles_resolve_to_current_driver_indices(monkeypatch):
     assert env["CUDA_VISIBLE_DEVICES"] == "3,1" and env["CUDA_DEVICE_ORDER"] == "PCI_BUS_ID"
 
 
+def test_imported_runtime_finds_tools_beside_real_interpreter(tmp_path, monkeypatch):
+    import shutil
+    import subprocess
+
+    real_bin = tmp_path / "runtime" / "bin"
+    alias_bin = tmp_path / "alias" / "bin"
+    real_bin.mkdir(parents=True)
+    alias_bin.mkdir(parents=True)
+    interpreter = real_bin / "python"
+    interpreter.touch()
+    alias = alias_bin / "python"
+    alias.symlink_to(interpreter)
+    ninja = real_bin / "ninja"
+    ninja.write_text("#!/bin/sh\nprintf 'runtime-ninja\\n'\n")
+    ninja.chmod(0o755)
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    env = engine.runtime_env(
+        {"id": "r", "python_path": str(alias), "environment": {}},
+        {"gpu_uuids": []},
+    )
+    assert shutil.which("ninja", path=env["PATH"]) == str(ninja)
+    assert subprocess.check_output(["ninja"], env=env, text=True) == "runtime-ninja\n"
+    # A helper installed in the venv itself takes precedence over the base env.
+    (alias_bin / "ninja").symlink_to(ninja)
+    assert shutil.which("ninja", path=env["PATH"]) == str(alias_bin / "ninja")
+
+
 def test_recent_driver_uses_wakeable_v100_idle_clocks(monkeypatch):
     monkeypatch.setattr(
         gpu,
