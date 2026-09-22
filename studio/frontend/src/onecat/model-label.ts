@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import type { Profile } from "./api";
 
+export function modelPublisher(repo?: string | null) {
+  if (!repo?.includes("/")) return "";
+  const publisher = repo.split("/")[0];
+  return publisher.toLowerCase() === "unsloth" ? "Unsloth" : publisher;
+}
+
 export function accelerationLabel(profile?: Pick<Profile, "speculative_config">) {
   const config = profile?.speculative_config;
   if (!config) return "";

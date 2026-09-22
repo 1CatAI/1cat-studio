@@ -124,6 +124,7 @@ def start(
     permission=None,
     mode=None,
     thinking=None,
+    thinking_effort=None,
 ):
     if operation not in {"turn", "review", "compact", "skills"}:
         raise ValueError("Unsupported Agent operation")
@@ -144,9 +145,13 @@ def start(
             "(SELECT 1 FROM json_each(records.data,'$.request_ids') WHERE value=?) LIMIT 1",
             (project_id, request_id),
         ).fetchone()
+    signature_parts = [task_id, prompt, operation, permission, mode, thinking, source_thread]
+    # Keep retries accepted before the strength control was introduced compatible.
+    if thinking_effort is not None:
+        signature_parts.append(thinking_effort)
     signature = hashlib.sha256(
         json.dumps(
-            [task_id, prompt, operation, permission, mode, thinking, source_thread],
+            signature_parts,
             ensure_ascii=False,
         ).encode()
     ).hexdigest()
@@ -211,7 +216,7 @@ def start(
             "请使用创建此任务的 Codex 版本继续 / Resume with the original Codex component version",
         )
     if operation != "skills":
-        from ..model_controls import thinking_kwargs
+        from ..model_controls import thinking_kwargs, thinking_support
 
         chosen_thinking = (
             thinking
@@ -220,7 +225,13 @@ def start(
                 "thinking", state["profile"].get("default_sampling", {}).get("thinking")
             )
         )
-        thinking_kwargs(state["profile"], chosen_thinking)
+        chosen_effort = thinking_effort or record.get("thinking_effort")
+        if (
+            thinking_effort is None
+            and chosen_effort not in thinking_support(state["profile"])["efforts"]
+        ):
+            chosen_effort = None
+        thinking_kwargs(state["profile"], chosen_thinking, chosen_effort)
         record.update(
             model=state["profile"]["served_model_name"],
             profile_id=state.get("profile_id"),
@@ -230,6 +241,7 @@ def start(
             context_window=state["profile"].get("max_model_len", 32768),
             model_label=state["profile"].get("name", state["profile"]["served_model_name"]),
             thinking=chosen_thinking,
+            thinking_effort=chosen_effort,
             plan=[],
             changes=[],
             diff="",
@@ -777,7 +789,9 @@ class Run:
         payload = {
             **payload,
             "return_token_ids": True,
-            "chat_template_kwargs": thinking_kwargs(state["profile"], self.record.get("thinking")),
+            "chat_template_kwargs": thinking_kwargs(
+                state["profile"], self.record.get("thinking"), self.record.get("thinking_effort")
+            ),
         }
         self.record["model_calls"] += 1
         try:

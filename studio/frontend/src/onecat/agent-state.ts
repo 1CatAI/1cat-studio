@@ -21,7 +21,7 @@ export type AgentTask = {
   settled?: boolean;
   model_label?: string; context_window?: number; codex_version?: string;
   permission?: "workspace-write" | "read-only"; mode?: "default" | "plan"; turn_count?: number;
-  thinking?: boolean; current_turn?: string; operation?: string;
+  thinking?: boolean; thinking_effort?: "low" | "medium" | "high" | "xhigh" | null; current_turn?: string; operation?: string;
   execution_permission?: "workspace-write" | "read-only";
   timing_missing_calls?: number;
   metrics?: { llm_s: number; tool_s: number; tool_calls: number; ttft_s: number; ttft_count: number;

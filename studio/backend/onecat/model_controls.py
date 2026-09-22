@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -13,7 +15,9 @@ from . import db
 
 
 @lru_cache(maxsize=64)
-def _template_support(files: tuple) -> bool:
+def _template_support(files: tuple) -> tuple[bool, tuple[str, ...]]:
+    supported = False
+    efforts = ()
     for filename, _, _ in files:
         path = Path(filename)
         try:
@@ -22,12 +26,18 @@ def _template_support(files: tuple) -> bool:
             text = path.read_text()
             if path.suffix == ".json":
                 template = json.loads(text).get("chat_template", "")
-                text = json.dumps(template)
+                text = template if isinstance(template, str) else json.dumps(template)
             if "enable_thinking" in text:
-                return True
-        except (OSError, ValueError):
+                supported = True
+            # Only advertise levels explicitly accepted by the deployed template.
+            accepted = re.search(r"\b(?:resolved_)?reasoning_effort\s+not\s+in\s+(\([^)]*\))", text)
+            if accepted:
+                values = ast.literal_eval(accepted[1])
+                if isinstance(values, (tuple, list)):
+                    efforts = tuple(v for v in ("low", "medium", "high", "xhigh") if v in values)
+        except (OSError, ValueError, SyntaxError):
             continue
-    return False
+    return supported, efforts
 
 
 def thinking_support(profile: dict) -> dict:
@@ -41,26 +51,55 @@ def thinking_support(profile: dict) -> dict:
                 files.append((str(file), stat.st_mtime_ns, stat.st_size))
             except OSError:
                 pass
-    supported = _template_support(tuple(files))
+    supported, efforts = _template_support(tuple(files))
     return {
         "supported": supported,
+        "efforts": list(efforts) if supported else [],
+        "default_effort": "xhigh" if "xhigh" in efforts else (efforts[-1] if efforts else None),
         "reason": None
         if supported
         else "当前模型模板未声明思考开关 / This model template does not expose a thinking switch",
     }
 
 
-def thinking_kwargs(profile: dict, thinking: bool | None) -> dict:
+def thinking_kwargs(profile: dict, thinking: bool | None, effort: str | None = None) -> dict:
     if thinking is None:
         return {}
-    if not thinking_support(profile)["supported"]:
+    support = thinking_support(profile)
+    if not support["supported"]:
         if thinking:
             raise HTTPException(
                 409,
                 "当前模型不支持切换思考，请选择支持此功能的模型 / Select a model with a thinking switch",
             )
         return {}
-    return {"enable_thinking": thinking}
+    result = {"enable_thinking": thinking}
+    if thinking and effort is not None:
+        if effort not in support["efforts"]:
+            raise HTTPException(
+                409, "当前模型不支持此思考强度 / This model does not support this thinking level"
+            )
+        result["reasoning_effort"] = effort
+    return result
+
+
+def identity(model: dict) -> dict:
+    return {
+        "name": model.get("name") or model.get("served_model_name") or "—",
+        "repo_id": model.get("repo_id") or model.get("catalog_id"),
+        "source": model.get("source"),
+    }
+
+
+def profile_identity(profile: dict) -> dict | None:
+    if not profile.get("model_path"):
+        return None
+    path = Path(profile["model_path"]).expanduser().resolve()
+    model = next(
+        (m for m in db.all_records("models") if Path(m["path"]).expanduser().resolve() == path),
+        None,
+    )
+    return identity(model or profile)
 
 
 def choices(agent: bool = False) -> dict:
@@ -114,7 +153,7 @@ def choices(agent: bool = False) -> dict:
         items.append(
             {
                 "id": model["id"],
-                "name": model["name"],
+                **identity(model),
                 "default_profile_id": model.get("default_profile_id"),
                 "bytes": model.get("bytes"),
                 "active": bool(

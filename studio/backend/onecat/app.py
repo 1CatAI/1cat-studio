@@ -648,7 +648,10 @@ def create_app() -> FastAPI:
 
     @admin.get("/inference/status")
     def inference_status():
-        return engine.status()
+        from .model_controls import profile_identity
+
+        status = engine.status()
+        return {**status, "model": profile_identity(status.get("profile") or {})}
 
     @admin.post("/inference/load")
     def load(payload: dict):
