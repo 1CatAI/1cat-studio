@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import json
 import platform
 import re
@@ -18,7 +19,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry
+from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry, updates
 from .config import automatic_gpu_actions, frontend_dist, initialize_paths, state_root
 from .jobs import TERMINAL, create_job, list_jobs, request_cancel
 from .schemas import (
@@ -39,6 +40,8 @@ def public_runtime(record: dict) -> dict:
 
 
 def scheduled_job(kind: str, payload: dict) -> dict:
+    if updates.activating():
+        raise ValueError("Studio 正在更新 / Studio is updating")
     from .model_switch import KINDS, schedule
 
     if kind in KINDS:
@@ -62,6 +65,8 @@ def scheduled_job(kind: str, payload: dict) -> dict:
 
 async def lifecycle_monitor():
     await asyncio.sleep(2)
+    while updates.activating():
+        await asyncio.sleep(2)
     await asyncio.to_thread(runtimes.refresh_incomplete_metadata)
     from .catalog import backfill_default_profiles
 
@@ -84,6 +89,8 @@ async def lifecycle_monitor():
             scheduled_job("start_model", {"profile_id": automatic})
     while True:
         await asyncio.sleep(2)
+        if updates.activating():
+            continue
         from .lifecycle import reconcile_owned
 
         if automatic_gpu_actions():
@@ -166,6 +173,21 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def serialize_management(request, call_next):
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            with (updates.updates_root() / "admission.lock").open("a") as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    if updates.activating():
+                        raise BlockingIOError
+                except BlockingIOError:
+                    return JSONResponse(
+                        {"detail": "Studio 正在更新，请稍后重试 / Studio is updating"},
+                        status_code=503, headers={"Retry-After": "5"},
+                    )
+                return await management(request, call_next)
+        return await call_next(request)
+
+    async def management(request, call_next):
         if (
             request.method not in {"GET", "HEAD", "OPTIONS"}
             and request.url.path.startswith("/api/")
@@ -195,7 +217,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "product": "1Cat Studio", "version": __version__}
+        return {"status": "ok", "product": "1Cat Studio", "version": __version__,
+                "release": updates.installed_version()}
 
     @app.get("/api/auth/status")
     def auth_status(request: Request):
@@ -407,6 +430,11 @@ def create_app() -> FastAPI:
         db.put("secrets", "modelscope", {"token": str(payload.get("token", "")) or None})
         return {"configured": bool(payload.get("token"))}
 
+    @admin.get("/updates/progress")
+    def update_progress():
+        return {"current": updates.installed_version(), "status": updates.read_status(),
+                "blocked_reason": updates.busy_reason()}
+
     @admin.get("/updates")
     def update_status(force: bool = False):
         from .updates import check
@@ -421,13 +449,15 @@ def create_app() -> FastAPI:
             manifest = updates.fetch(force=True)
         except Exception as error:  # noqa: BLE001 - the channel is operator input
             raise HTTPException(409, "更新通道不可用 / Update channel failed: " + str(error)[:200])
-        if manifest.get("version") == updates.installed_version():
-            raise HTTPException(409, "已是最新版本 / Already running " + str(manifest.get("version")))
+        payload = payload or {}
+        if payload.get("release_id") != updates.protocol.release_id(manifest):
+            raise HTTPException(409, "版本信息已变化，请重新检查更新 / Check the release again")
         port = int(db.settings().get("port") or 8888)
         try:
-            started = updates.start(manifest, port=port)
-        except Exception as error:  # noqa: BLE001
-            raise HTTPException(500, "无法启动更新 / Could not start the update: " + str(error)[:200])
+            started = updates.start(manifest, port=port,
+                                    switch_to_release=payload.get("switch_to_release") is True)
+        except ValueError as error:
+            raise HTTPException(409, str(error))
         return {"started": started, "check": updates.check()}
 
     @admin.get("/runtimes")

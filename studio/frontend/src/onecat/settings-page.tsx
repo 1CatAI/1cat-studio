@@ -14,6 +14,7 @@ import { Input } from "@/onecat/ui";
 import { Switch } from "@/onecat/ui";
 import { useBrowserState } from "./browser-state";
 import { GPUControls } from "./gpu-controls";
+import { StudioUpdates } from "./studio-updates";
 import { modelLabel } from "./model-label";
 import { setLocale } from "@/onecat/locale";
 import { toast } from "sonner";
@@ -117,6 +118,7 @@ export function SettingsPage() {
         {[
           ["appearance", t("外观", "Appearance")], ["models", t("模型与环境", "Models and runtimes")],
           ["policy", t("服务策略", "Service policy")], ["data", t("数据维护", "Data")],
+          ["updates", t("Studio 更新", "Studio updates")],
         ].map(([id, label]) => <a key={id} href={"#settings-" + id}>{label}</a>)}
       </nav>
       <ErrorNotice error={error} />
@@ -314,6 +316,7 @@ export function SettingsPage() {
         </>
       )}
       <GPUControls />
+      <StudioUpdates dirty={dirty} />
       <div className="oc-panel" id="settings-data">
         <h2>{t("备份与诊断", "Backup and diagnostics")}</h2>
         <p className="oc-muted">
