@@ -29,12 +29,17 @@ def main():
         from .app import create_app
 
         settings = db.settings()
-        os.environ["ONECAT_STUDIO_LISTEN_HOST"] = args.host or settings["host"]
-        os.environ["ONECAT_STUDIO_LISTEN_PORT"] = str(args.port or settings["port"])
+        host = args.host or settings["host"]
+        port = args.port or settings["port"]
+        os.environ["ONECAT_STUDIO_LISTEN_HOST"] = host
+        os.environ["ONECAT_STUDIO_LISTEN_PORT"] = str(port)
+        app = create_app()
+        app.state.listen_host = host
+        app.state.listen_port = port
         uvicorn.run(
-            create_app(),
-            host=args.host or settings["host"],
-            port=args.port or settings["port"],
+            app,
+            host=host,
+            port=port,
             log_level="info",
             proxy_headers=False,
             timeout_graceful_shutdown=10,
