@@ -68,7 +68,9 @@ export function ServicePage() {
     logName ? "/api/logs/" + logName : null,
     2000,
   );
-  const endpoint = window.location.origin + "/v1";
+  const currentEndpoint = window.location.origin + "/v1";
+  const lanEndpoints = engine?.lan_api_urls || [];
+  const endpoint = lanEndpoints[0] || currentEndpoint;
   return (
     <Page
       title={t("服务", "Service")}
@@ -153,13 +155,22 @@ export function ServicePage() {
         <TabsContent value="api">
           <div className="oc-panel">
             <div className="oc-row">
-              <h2>{t("接入地址", "API endpoint")}</h2>
+              <h2>{lanEndpoints.length ? t("局域网接入地址", "LAN API endpoint") : t("接入地址", "API endpoint")}</h2>
               <Button variant="ghost" onClick={() => copyText(endpoint)}>
                 <Copy />
                 {t("复制", "Copy")}
               </Button>
             </div>
             <code className="oc-endpoint">{endpoint}</code>
+            {lanEndpoints.slice(1).map((url) => (
+              <code className="oc-endpoint" key={url}>{url}</code>
+            ))}
+            {endpoint !== currentEndpoint && (
+              <p className="oc-muted oc-spaced">
+                {t("当前页面地址：", "Current page address: ")}
+                <code>{currentEndpoint}</code>
+              </p>
+            )}
             <details>
               <summary>{t("调用示例", "Example request")}</summary>
               <pre className="oc-log">

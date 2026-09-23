@@ -267,6 +267,7 @@ export type Profile = {
 export type Engine = {
   state: string;
   model?: { name: string; repo_id?: string | null; source?: string | null } | null;
+  lan_api_urls?: string[];
   profile_id?: string;
   profile?: Profile;
   port?: number;
