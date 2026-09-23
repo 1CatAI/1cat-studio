@@ -99,13 +99,16 @@ def class_filter(policy):
 
 def class_policy(devices):
     """A binding that means the same thing on any machine of these classes."""
-    classes = sorted(
-        {tuple(d["compute_capability"]) for d in devices if d["compute_capability"]}
-    )
-    if not classes:
+    usable = [d for d in devices if d["compute_capability"] and d["manageable"]]
+    if not usable:
         return {"mode": "all"}
-    capability = [list(classes[0])] if len(classes) == 1 else [list(c) for c in classes]
-    return {"mode": "class", "compute_capability": capability}
+    # A small display adapter must not join the accelerator control group.
+    best = max(usable, key=lambda d: (d["memory_mib"] or 0, d["compute_capability"]))
+    return {
+        "mode": "class",
+        "compute_capability": best["compute_capability"],
+        "min_memory_mib": min(15360, best["memory_mib"] or 0),
+    }
 
 
 def valid_capability(value):

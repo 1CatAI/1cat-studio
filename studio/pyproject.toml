@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "onecat-studio"
-version = "0.5.1"
+version = "0.5.2"
 description = "A self-hosted inference workbench for 1Cat-vLLM, with independent application services"
 requires-python = ">=3.12,<3.14"
 license = "LicenseRef-1Cat-Community-1.0"

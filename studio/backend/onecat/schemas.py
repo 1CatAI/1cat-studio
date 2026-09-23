@@ -70,6 +70,7 @@ class Profile(StrictModel):
     runtime_id: str = Field(min_length=1)
     served_model_name: str = Field(default="onecat-model", min_length=1, max_length=100)
     gpu_uuids: list[str] = Field(default_factory=list)
+    portable_gpu_binding: bool = False
     tensor_parallel_size: int = Field(default=1, ge=1, le=64)
     dtype: Literal["half", "bfloat16", "auto"] = "half"
     quantization: str | None = None
