@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry
 from .config import automatic_gpu_actions, frontend_dist, initialize_paths, state_root
 from .jobs import TERMINAL, create_job, list_jobs, request_cancel
+from .network import lan_api_urls
 from .schemas import (
     BenchmarkRequest,
     HardwareSetting,
@@ -618,7 +619,11 @@ def create_app() -> FastAPI:
 
     @admin.get("/inference/status")
     def inference_status():
-        return engine.status()
+        settings = db.settings()
+        return {
+            **engine.status(),
+            "lan_api_urls": lan_api_urls(settings["port"]) if settings["host"] == "0.0.0.0" else [],
+        }
 
     @admin.post("/inference/load")
     def load(payload: dict):
