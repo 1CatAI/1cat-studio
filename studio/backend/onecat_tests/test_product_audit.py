@@ -30,6 +30,31 @@ def test_settings_restart_required_only_when_listener_changes(client):
     assert result['restart_required']
 
 
+def test_lan_address_waits_for_listener_restart(client, monkeypatch):
+    from onecat import app
+
+    monkeypatch.setattr(app, 'lan_api_urls', lambda port: [f'http://192.168.3.60:{port}/v1'])
+    assert client.get('/api/inference/status').json()['lan_api_urls'] == []
+    result = client.put('/api/settings', json={'host': '0.0.0.0'}).json()
+    assert result['restart_required']
+    assert client.get('/api/inference/status').json()['lan_api_urls'] == []
+    client.app.state.listen_host = '0.0.0.0'
+    assert client.get('/api/inference/status').json()['lan_api_urls'] == [
+        'http://192.168.3.60:8888/v1'
+    ]
+
+
+def test_autostart_profile_can_be_selected_and_cleared(client):
+    db.put('profiles', 'boot-profile', {'id': 'boot-profile'})
+    saved = client.put('/api/settings', json={'autostart_profile': 'boot-profile'}).json()
+    assert saved['autostart_profile'] == 'boot-profile'
+    assert not saved['restart_required']
+    assert db.settings()['autostart_profile'] == 'boot-profile'
+    cleared = client.put('/api/settings', json={'autostart_profile': None}).json()
+    assert cleared['autostart_profile'] is None
+    assert db.settings()['autostart_profile'] is None
+
+
 def test_worker_spawn_failure_releases_job(client, monkeypatch):
     def fail(*args, **kwargs):
         raise OSError('Cannot create worker process')

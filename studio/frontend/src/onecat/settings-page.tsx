@@ -45,6 +45,8 @@ export function SettingsPage() {
   const { data: cap } = useQuery<{
     version: string;
     gpu_control: boolean;
+    automatic_gpu_actions: boolean;
+    startup: { service_enabled: boolean; linger_enabled: boolean; user: string };
     upstream_commit: string;
   }>("/api/studio/capabilities");
   type Draft = { changes: Partial<Settings> };
@@ -257,7 +259,8 @@ export function SettingsPage() {
             <h2>{t("服务与资源策略", "Service and resource policy")}</h2>
             <div className="oc-form-grid">
               <Field
-                label={t("启动 Studio 时自动加载", "Load when Studio starts")}
+                label={t("开机自动加载模型", "Load model on boot")}
+                hint={t("选择已保存的启动预设，点击保存后生效。Studio 随系统启动时会自动加载它。", "Choose a saved launch profile and save. Studio loads it when the system starts.")}
               >
                 <select
                   value={settings.autostart_profile || ""}
@@ -275,6 +278,19 @@ export function SettingsPage() {
                   ))}
                 </select>
               </Field>
+              {cap?.startup && (
+                <div className="oc-muted">
+                  <p>{cap.startup.service_enabled
+                    ? t("Studio 用户服务已设为开机启动。", "Studio user service is enabled at boot.")
+                    : t("Studio 用户服务未启用；请以服务模式安装，或执行 systemctl --user enable --now onecat-studio.service。", "Studio user service is not enabled; install in service mode or run systemctl --user enable --now onecat-studio.service.")}</p>
+                  <p>{cap.startup.linger_enabled
+                    ? t("无需登录也会启动。", "Starts without a user login.")
+                    : t(`目前需用户登录才会启动；管理员可执行 sudo loginctl enable-linger ${cap.startup.user}。`, `A user login is currently required; an administrator can run sudo loginctl enable-linger ${cap.startup.user}.`)}</p>
+                  {!cap.automatic_gpu_actions && (
+                    <p className="oc-status-warn">{t("自动 GPU 操作已被管理员暂停，所选模型不会自动加载。", "Automatic GPU actions are paused by an administrator; the selected model will not load automatically.")}</p>
+                  )}
+                </div>
+              )}
               <NumberField
                 label={t(
                   "空闲卸载分钟数（0 为关闭）",
@@ -293,10 +309,10 @@ export function SettingsPage() {
                 max={65535}
               />
               <Field
-                label={t("局域网访问", "LAN access")}
+                label={t("允许局域网访问 Studio 与 API", "Allow LAN access to Studio and API")}
                 hint={t(
-                  "修改后重启生效，访问仍需登录或 API Key。",
-                  "Takes effect after restart. Login or an API key is still required.",
+                  "保存并重启 Studio 后生效；访问仍需登录或 API Key。接入地址见“服务 → API”。",
+                  "Save and restart Studio to apply. Login or an API key is still required. Find the address under Service → API.",
                 )}
               >
                 <Switch

@@ -5,6 +5,7 @@ import { modelLabel } from "./model-label";
 import { useBrowserState } from "./browser-state";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Copy,
   KeyRound,
@@ -30,6 +31,7 @@ import {
   type Job,
   type GPU,
   type RequestHistory as History,
+  type Settings,
 } from "./api";
 import {
   Page,
@@ -51,6 +53,7 @@ export function ServicePage() {
     2000,
   );
   const { data: jobs } = useQuery<{ items: Job[] }>("/api/jobs", 2000);
+  const { data: studioSettings } = useQuery<Settings>("/api/settings");
   const { data: keys } = useQuery<{
     items: { id: string; name: string; prefix: string; created: number }[];
   }>("/api/keys");
@@ -162,6 +165,17 @@ export function ServicePage() {
               </Button>
             </div>
             <code className="oc-endpoint">{endpoint}</code>
+            {!lanEndpoints.length && studioSettings && (
+              <p className="oc-muted oc-spaced">
+                {studioSettings.host === "127.0.0.1" ? (
+                  <>{t("目前仅本机可访问。", "Local access only.")} <Link to="/settings">{t("在设置中开启局域网访问", "Enable LAN access in Settings")}</Link></>
+                ) : engine?.listen_host !== "0.0.0.0" ? (
+                  t("局域网访问已保存；重启 Studio 后生效。", "LAN access is saved; restart Studio to apply it.")
+                ) : (
+                  t("没有检测到活动的局域网 IPv4 地址。", "No active LAN IPv4 address was found.")
+                )}
+              </p>
+            )}
             {lanEndpoints.slice(1).map((url) => (
               <code className="oc-endpoint" key={url}>{url}</code>
             ))}

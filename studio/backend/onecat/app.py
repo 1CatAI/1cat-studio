@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import platform
 import re
 import shutil
@@ -37,6 +38,30 @@ _runtime_install_lock = threading.Lock()
 
 def public_runtime(record: dict) -> dict:
     return {k: v for k, v in record.items() if k != "environment"}
+
+
+def startup_state() -> dict:
+    if platform.system() != "Linux":
+        return {"service_enabled": False, "linger_enabled": False, "user": ""}
+    import pwd
+
+    user = pwd.getpwuid(os.getuid()).pw_name
+    try:
+        service = subprocess.run(
+            ["systemctl", "--user", "is-enabled", "onecat-studio.service"],
+            capture_output=True, text=True, timeout=3,
+        )
+        linger = subprocess.run(
+            ["loginctl", "show-user", user, "--property=Linger", "--value"],
+            capture_output=True, text=True, timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {"service_enabled": False, "linger_enabled": False, "user": user}
+    return {
+        "service_enabled": service.returncode == 0 and service.stdout.strip() == "enabled",
+        "linger_enabled": linger.returncode == 0 and linger.stdout.strip() == "yes",
+        "user": user,
+    }
 
 
 def scheduled_job(kind: str, payload: dict) -> dict:
@@ -157,6 +182,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="1Cat Studio", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None
     )
+    listener = db.settings()
+    app.state.listen_host = listener["host"]
+    app.state.listen_port = listener["port"]
     from .agent.api import router as agent_router
 
     app.include_router(agent_router)
@@ -279,6 +307,7 @@ def create_app() -> FastAPI:
             "single_active_model": True,
             "gpu_control": gpu.control_available(),
             "automatic_gpu_actions": automatic_gpu_actions(),
+            "startup": startup_state(),
             "upstream_commit": "afeb2778f4a7e43dc3a0bdf2d2323b8dba6fd13d",
         }
 
@@ -618,11 +647,14 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     @admin.get("/inference/status")
-    def inference_status():
-        settings = db.settings()
+    def inference_status(request: Request):
         return {
             **engine.status(),
-            "lan_api_urls": lan_api_urls(settings["port"]) if settings["host"] == "0.0.0.0" else [],
+            "listen_host": request.app.state.listen_host,
+            "lan_api_urls": (
+                lan_api_urls(request.app.state.listen_port)
+                if request.app.state.listen_host == "0.0.0.0" else []
+            ),
         }
 
     @admin.post("/inference/load")
