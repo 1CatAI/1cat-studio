@@ -117,6 +117,8 @@ PYTHONPATH=studio/backend .venv/bin/python -m onecat --host 127.0.0.1 --port 888
 3. 创建启动预设，选择模型、环境与 GPU，再启动服务。
 4. 模型就绪后，进入聊天，或按需准备 Agent 和创作工作流。
 
+批量克隆四张 V100（每张至少 16 GiB）的整块系统盘时，可在 Studio 的 user systemd 服务中用 `ExecStartPre` 运行 `python -m onecat.portable_gpu`，并为需要自动重绑的预设保存 `portable_gpu_binding: true`。每次启动会按显卡能力重新绑定本机 UUID，忽略显示用显卡；其他卡数或较小显存不会自动套用四卡预设。
+
 默认数据目录为 `~/.local/share/onecat-studio`，可通过 `ONECAT_STUDIO_HOME` 环境变量或 `--state-dir` 参数修改。源码目录与数据目录分开保存。
 
 日常调整界面时，可以在另一个终端运行：
