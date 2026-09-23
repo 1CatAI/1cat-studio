@@ -266,6 +266,8 @@ export type Profile = {
 };
 export type Engine = {
   state: string;
+  listen_host?: string;
+  lan_api_urls?: string[];
   profile_id?: string;
   profile?: Profile;
   port?: number;

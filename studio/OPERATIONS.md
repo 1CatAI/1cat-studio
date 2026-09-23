@@ -4,7 +4,7 @@
 
 解压管理器发行包，运行 `bash scripts/install.sh`。默认程序目录为 `~/.local/share/onecat-studio-app`，数据目录为 `~/.local/share/onecat-studio`。安装器支持 `--prefix`、`--state-dir`、`--no-service`，无需安装 CUDA、Node 或系统 Python。需 Linux x86_64 / glibc；GPU 驱动由主机提供。
 
-默认只监听 127.0.0.1:8888。远端使用 `ssh -L 8888:127.0.0.1:8888 -p PORT USER@HOST`，然后打开本机浏览器。首次管理员初始化只接受本机连接或 SSH 转发。设置页可更改端口、局域网访问；重启 Studio 生效。局域网外使用 SSH 转发或 HTTPS 反向代理。
+默认只监听 127.0.0.1:8888。远端使用 `ssh -L 8888:127.0.0.1:8888 -p PORT USER@HOST`，然后打开本机浏览器。首次管理员初始化只接受本机连接或 SSH 转发。设置页可更改端口、开启局域网访问；保存并重启 Studio 后生效。服务页的 API 标签会显示当前活动网卡的局域网接入地址，不把 IP 固定在安装包里。同一局域网的客户端使用该地址和 API Key；局域网外使用 SSH 转发或 HTTPS 反向代理。
 
 0.3.1 起，GPU 控制助手随管理器默认安装，自动检测 GPU UUID，无需另行下载。
 安装器在管理员授权后写入受限控制程序及规则；升级保留原有 GPU 权限限制，
@@ -21,7 +21,7 @@ systemctl --user restart onecat-studio.service
 journalctl --user -u onecat-studio.service -n 100
 ```
 
-用户服务随用户会话启动；需要无人登录也自启时，由管理员执行 `loginctl enable-linger USER`。安装器不会更改系统显卡驱动。
+安装器默认启用 Studio 用户服务。设置页显示用户服务与 linger 状态；需要无人登录也自启时，由管理员执行 `loginctl enable-linger USER`。安装器不会更改系统显卡驱动。
 
 ## 推理环境与模型
 
@@ -36,7 +36,7 @@ journalctl --user -u onecat-studio.service -n 100
 
 模型库可导入 safetensors/PyTorch 模型目录，也可搜索版本化的已验证 ModelScope 目录。默认只显示匹配本机硬件及所选环境的检查点；“全部已验证”显示其他配置的要求。下载接口同样校验目录、版本、GPU 和固定文件清单，不接受任意仓库或 GGUF-only 权重。下载任务固定 revision 的 SHA256 文件清单，并在完成后逐文件校验，失败/取消后可从服务页重试续传。受限模型在设置中填写 ModelScope token。不同量化/架构的兼容性取决于实际导入的运行环境；启动失败会保留真实日志。
 
-启动预设保存 GPU UUID、TP、dtype、量化、KV、上下文、batch、graph、attention、推测解码和额外 argv。单个 GPU 同时被其他计算进程占用时拒绝启动。新模型在单独 systemd 用户单元中运行；无用户 systemd 的开发环境使用独立进程组。Studio 重启不会主动终止正在运行的模型。空闲卸载与自启预设均在设置页配置。
+启动预设保存 GPU UUID、TP、dtype、量化、KV、上下文、batch、graph、attention、推测解码和额外 argv。单个 GPU 同时被其他计算进程占用时拒绝启动。新模型在单独 systemd 用户单元中运行；无用户 systemd 的开发环境使用独立进程组。Studio 重启不会主动终止正在运行的模型。在模型库的启动预设卡片或设置页可以选择唯一一个开机加载预设；取消选择则只启动 Studio。要让模型在无人登录时开机加载，需要 Studio 用户服务和 linger 均已启用，且未设置 `ONECAT_AUTO_GPU_ACTIONS=0`。空闲卸载也在设置页配置。
 
 ## 聊天与 API
 

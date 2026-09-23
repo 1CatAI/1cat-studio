@@ -17,6 +17,7 @@ import {
   FileDown,
   Search,
   MoreHorizontal,
+  Power,
 } from "lucide-react";
 import { Button } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
@@ -35,6 +36,7 @@ import {
   type Runtime,
   type GPU,
   type Engine,
+  type Settings,
 } from "./api";
 import {
   Page,
@@ -679,6 +681,7 @@ export function ModelsPage() {
   const { data: profiles } = useQuery<{ items: Profile[] }>("/api/profiles");
   const { data: runtimes } = useQuery<{ items: Runtime[] }>("/api/runtimes");
   const { data: engine } = useQuery<Engine>("/api/inference/status", 3000);
+  const { data: settings } = useQuery<Settings>("/api/settings");
   const [importOpen, setImportOpen] = useState(false),
     [path, setPath] = useState(""),
     [editor, setEditor] = useState<Profile | null>(null),
@@ -831,6 +834,9 @@ export function ModelsPage() {
                       {p.max_model_len.toLocaleString()} context ·{" "}
                       {accelerationLabel(p) || t("基础推理", "Target only")}
                     </p>
+                    {settings?.autostart_profile === p.id && (
+                      <p className="oc-status-good">{t("已选为开机加载预设", "Selected for boot loading")}</p>
+                    )}
                   </div>
                   <span
                     className={
@@ -863,6 +869,19 @@ export function ModelsPage() {
                     <Settings2 />
                     {t("配置", "Configure")}
                   </Button>
+                  <Action
+                    variant="outline"
+                    disabled={!settings}
+                    run={() => mutation("/api/settings", {
+                      autostart_profile: settings?.autostart_profile === p.id ? null : p.id,
+                    }, "PUT")}
+                    success={t("开机加载预设已更新", "Boot loading profile updated")}
+                  >
+                    <Power />
+                    {settings?.autostart_profile === p.id
+                      ? t("取消开机加载", "Disable boot loading")
+                      : t("开机自动加载", "Load on boot")}
+                  </Action>
                   <Popover.Root><Popover.Trigger asChild><Button variant="ghost" aria-label={t("更多预设操作", "More profile actions")}><MoreHorizontal />{t("更多", "More")}</Button></Popover.Trigger><Popover.Portal><Popover.Content className="oc-profile-more" sideOffset={8} align="start">
                   <Button
                     variant="ghost"

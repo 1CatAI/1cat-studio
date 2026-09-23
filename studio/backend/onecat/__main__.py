@@ -29,10 +29,15 @@ def main():
         from .app import create_app
 
         settings = db.settings()
+        host = args.host or settings["host"]
+        port = args.port or settings["port"]
+        app = create_app()
+        app.state.listen_host = host
+        app.state.listen_port = port
         uvicorn.run(
-            create_app(),
-            host=args.host or settings["host"],
-            port=args.port or settings["port"],
+            app,
+            host=host,
+            port=port,
             log_level="info",
             proxy_headers=False,
             timeout_graceful_shutdown=10,
