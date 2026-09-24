@@ -104,7 +104,8 @@
       "architecture": "Qwen3_5ForConditionalGeneration",
       "quantization": "NVFP4",
       "runtime_versions": [
-        "1.5.0"
+        "1.5.0",
+        "1.5.1.dev706+g4f8e5e674.cu128"
       ],
       "gpu": {
         "compute_capability": [
@@ -313,7 +314,8 @@
       "architecture": "DFlash2DraftModel",
       "quantization": "BF16",
       "runtime_versions": [
-        "1.5.0"
+        "1.5.0",
+        "1.5.1.dev706+g4f8e5e674.cu128"
       ],
       "gpu": {
         "compute_capability": [
