@@ -37,6 +37,16 @@ def test_token_scope_expiry_and_revocation(monkeypatch):
     assert pi_runtime.model_context(token) is None
 
 
+def test_token_stays_valid_while_a_long_task_keeps_using_it(monkeypatch):
+    now = pi_runtime.time.time()
+    token = pi_runtime.issue_model_token("task", "project", "swarm")
+    for hours in (0.9, 1.8, 2.7, 3.6):
+        monkeypatch.setattr(pi_runtime.time, "time", lambda h=hours: now + h * 3600)
+        assert pi_runtime.model_context(token)["task_id"] == "task"
+    monkeypatch.setattr(pi_runtime.time, "time", lambda: now + 3.6 * 3600 + pi_runtime.TOKEN_IDLE_S + 1)
+    assert pi_runtime.model_context(token) is None
+
+
 def test_runtime_verifies_commit_protocol_and_binary(tmp_path, monkeypatch):
     monkeypatch.setattr(pi_runtime, "component_root", lambda: tmp_path)
     monkeypatch.setattr(runtime, "info", lambda: {"sandbox_ready": True})

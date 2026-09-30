@@ -71,6 +71,12 @@ def info() -> dict:
     }
 
 
+# The token is written once into the sandboxed PI config and cannot be
+# replaced while the task runs, so it expires after an hour without use rather
+# than an hour after issue. Task teardown revokes it explicitly.
+TOKEN_IDLE_S = 3600
+
+
 def issue_model_token(task_id: str, project_id: str, swarm_id: str | None = None,
                       *, engine_identity=None) -> str:
     now = time.time()
@@ -80,7 +86,7 @@ def issue_model_token(task_id: str, project_id: str, swarm_id: str | None = None
     token = secrets.token_urlsafe(32)
     _tokens[hashlib.sha256(token.encode()).hexdigest()] = {
         "task_id": task_id, "project_id": project_id, "swarm_id": swarm_id,
-        "engine": "pi", "engine_identity": engine_identity, "expires_at": now + 3600,
+        "engine": "pi", "engine_identity": engine_identity, "expires_at": now + TOKEN_IDLE_S,
     }
     return token
 
@@ -92,9 +98,11 @@ def model_context(token: str | None) -> dict | None:
     context = _tokens.get(key)
     if not context:
         return None
-    if context["expires_at"] <= time.time():
+    now = time.time()
+    if context["expires_at"] <= now:
         _tokens.pop(key, None)
         return None
+    context["expires_at"] = now + TOKEN_IDLE_S
     return dict(context)
 
 
