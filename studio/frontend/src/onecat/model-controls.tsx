@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Popover } from "radix-ui";
 import { Brain, ChevronDown, LoaderCircle, Search } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -57,16 +57,22 @@ export function ModelPicker({ agent = false, compact = false, disabled = false, 
   const [jobId, setJobId] = useState<string>();
   const [editor, setEditor] = useState<{ modelId: string; initial: Profile; profiles: Profile[] }>();
   const submitting = useRef(false);
-  const { data: engine } = useQuery<Engine>("/api/inference/status");
-  const { data, error: loadError } = useQuery<{ items: Choice[] }>(open ? `/api/inference/models?agent=${agent}` : null);
-  const { data: jobs } = useQuery<{ items: Job[] }>(open && jobId ? "/api/jobs" : null, 1000);
+  const { data: engine, error: engineError } = useQuery<Engine>("/api/inference/status");
+  const { data, error: loadError, refresh: refreshChoices } = useQuery<{ items: Choice[] }>(open ? `/api/inference/models?agent=${agent}` : null);
+  const { data: jobs, error: jobError } = useQuery<{ items: Job[] }>(open && jobId ? "/api/jobs" : null, 1000);
+  useEffect(() => {
+    if (open && !engineError) refreshChoices();
+  }, [open, engine?.profile_id, engine?.state, engine?.profile?.tool_calling, engineError, refreshChoices]);
   const job = jobs?.items.find(item => item.id === jobId);
   const applying = pending || (!!jobId && (!job || !["completed", "failed", "cancelled"].includes(job.state)));
   const publisher = modelPublisher(engine?.model?.repo_id || engine?.profile?.catalog_id);
   const matches = (choice: Choice) => `${choice.name} ${choice.repo_id || ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
+  const inUse = (choice: Choice) => !engineError && engine?.state === "ready"
+    && choice.profiles.some(profile => profile.id === engine.profile_id)
+    && (!agent || !!engine.profile?.tool_calling);
   async function load(choice: Choice) {
-    if (submitting.current || applying) return;
-    if (engine?.state === "ready" && choice.active) { setOpen(false); return; }
+    if (submitting.current || applying || engineError || loadError) return;
+    if (inUse(choice)) { setOpen(false); return; }
     submitting.current = true; setPending(true); setError(""); setJobId(undefined);
     try {
       const result = await mutation<Job>("/api/inference/load-model", { model_id: choice.id, agent });
@@ -104,9 +110,9 @@ export function ModelPicker({ agent = false, compact = false, disabled = false, 
       <ChevronDown size={14} /></button>
     <Modal open={open && !editor} onOpenChange={setOpen} title={t("选择模型", "Select model")}>
       <div className="oc-model-search"><Search size={16} /><Input aria-label={t("搜索已下载模型", "Search downloaded models")} placeholder={t("搜索模型…", "Search models…")} value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <ErrorNotice error={error || loadError || job?.error || ""} />
+      <ErrorNotice error={error || loadError || engineError || jobError || job?.error || ""} />
       {jobId && <div className="oc-model-job" role="status">{applying && <LoaderCircle size={16} className="animate-spin" />}
-        <span>{job?.state === "completed" ? t("模型已就绪", "Model ready") : job?.state === "cancelled" ? t("已取消", "Cancelled") : job?.state === "failed" ? t("启动失败", "Launch failed") : jobLabel(job?.stage || "queued", t)}</span>
+        <span>{jobError ? t("正在恢复启动状态…", "Reconnecting to launch progress…") : job?.state === "completed" ? t("模型已就绪", "Model ready") : job?.state === "cancelled" ? t("已取消", "Cancelled") : job?.state === "failed" ? t("启动失败", "Launch failed") : jobLabel(job?.stage || "queued", t)}</span>
         {applying && job && <Button size="sm" variant="ghost" onClick={async () => { try { await mutation(`/api/jobs/${job.id}/cancel`); refreshData(); } catch (e) { setError((e as Error).message); } }}>{t("取消启动", "Cancel launch")}</Button>}
       </div>}
       <div className="oc-model-choices">
@@ -117,8 +123,8 @@ export function ModelPicker({ agent = false, compact = false, disabled = false, 
           </div>
           <div className="oc-model-choice-actions">
             <Button size="sm" variant="ghost" disabled={applying} onClick={() => void adjust(m)}>{t("调整", "Adjust")}</Button>
-            <Button size="sm" variant="outline" disabled={!m.can_load || applying || (m.active && engine?.state === "ready")} onClick={() => void load(m)}>
-              {m.active && engine?.state === "ready" ? t("使用中", "In use") : t("使用", "Use")}
+            <Button size="sm" variant="outline" disabled={!m.can_load || applying || !!engineError || !!loadError || inUse(m)} onClick={() => void load(m)}>
+              {inUse(m) ? t("使用中", "In use") : t("使用", "Use")}
             </Button>
           </div>
         </div>)}

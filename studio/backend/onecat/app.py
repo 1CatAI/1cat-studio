@@ -142,6 +142,9 @@ async def lifecycle_monitor():
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_paths()
+    from .decode_metrics import aggregator as decode_aggregator
+
+    decode_aggregator.reset()
     from .migrations import upgrade
 
     upgrade()
@@ -711,11 +714,6 @@ def create_app() -> FastAPI:
     @admin.post("/inference/load-model")
     def load_model(payload: dict):
         from .model_controls import resolve_profile
-        from .agent.tasks import ACTIVE
-
-        # An Agent can be between model requests while its tools still run.
-        if any(t.get("state") in ACTIVE or t.get("settled") is False for t in db.all_records("agent_tasks")):
-            raise HTTPException(409, "Agent 正在执行，请先完成或停止任务 / Finish or stop the Agent task before switching models")
         profile = resolve_profile(str(payload.get("model_id", "")), payload.get("profile_id"), payload.get("agent") is True)
         return load({"profile_id": profile["id"]})
 
@@ -827,7 +825,7 @@ def create_app() -> FastAPI:
     def requests_list(days: int | None = None, model: str = "", source: str = ""):
         if days is not None and days not in {1, 3, 7}:
             raise ValueError("Choose 1, 3 or 7 days")
-        if source not in {"", "studio", "api"}:
+        if source not in {"", "studio", "api", "agent"}:
             raise ValueError("Unknown request source")
         with db.connect() as conn:
             rows = [
@@ -847,6 +845,12 @@ def create_app() -> FastAPI:
             "active": in_flight,
             "scope": {"days": days, "model": model, "source": source},
         }
+
+    @admin.get("/requests/aggregate")
+    def requests_aggregate(window_s: float = Query(default=2.0, ge=0.1, le=60.0), agent_task_id: str | None = None):
+        from .decode_metrics import aggregator
+
+        return aggregator.snapshot(window_s, agent_task_id)
 
     @admin.get("/requests/usage")
     def request_usage(days: int = 1, model: str = "", source: str = ""):
@@ -953,10 +957,10 @@ def create_app() -> FastAPI:
         return JSONResponse(status(id), headers={"Cache-Control": "no-store"})
 
     @admin.post("/chat/threads/{id}/cancel")
-    async def cancel_chat_run(id: str):
+    async def cancel_chat_run(id: str, payload: dict | None = None):
         from .chat_runs import cancel
 
-        return await cancel(id)
+        return await cancel(id, (payload or {}).get("run_id"))
 
     @admin.post("/chat/threads")
     def create_thread(payload: dict):
@@ -1197,6 +1201,39 @@ def create_app() -> FastAPI:
         return restore(str(payload.get("path", "")))
 
     app.include_router(admin)
+
+    # PI receives a short-lived bearer token from the task adapter.  These
+    # endpoints are intentionally separate from the public OpenAI routes so a
+    # PI request is attributed to its parent task in request history and in the
+    # rolling Decode aggregate.
+    async def internal_pi_context(request: Request):
+        from .agent.pi_runtime import model_context
+
+        authorization = request.headers.get("authorization", "")
+        token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        context = model_context(token)
+        if not context:
+            raise HTTPException(401, "PI model token is missing or expired")
+        request.state.onecat_agent_context = context
+        return context
+
+    @app.get("/internal/agent/v1/models")
+    async def internal_pi_models(request: Request):
+        await internal_pi_context(request)
+        state = engine.status()
+        if state.get("state") != "ready":
+            raise HTTPException(503, "No model is ready")
+        return {"object": "list", "data": [{"id": state["profile"]["served_model_name"], "object": "model", "owned_by": "1cat"}]}
+
+    @app.post("/internal/agent/v1/chat/completions")
+    async def internal_pi_chat(request: Request):
+        await internal_pi_context(request)
+        return await proxy.forward(request, "/v1/chat/completions", "agent")
+
+    @app.post("/internal/agent/v1/completions")
+    async def internal_pi_completion(request: Request):
+        await internal_pi_context(request)
+        return await proxy.forward(request, "/v1/completions", "agent")
 
     @app.get("/v1/models", dependencies=[Depends(auth.require_inference)])
     async def api_models():

@@ -159,6 +159,7 @@ def choices(agent: bool = False) -> dict:
                 "active": bool(
                     active_profile.get("model_path")
                     and Path(active_profile["model_path"]).expanduser().resolve() == path
+                    and (not agent or active_profile.get("tool_calling"))
                 ),
                 "profiles": [{"id": p["id"], "name": p["name"]} for p in matching],
                 "can_load": bool(matching or can_default),

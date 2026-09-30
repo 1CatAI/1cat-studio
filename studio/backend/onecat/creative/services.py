@@ -564,12 +564,8 @@ def _lifecycle(job: Job):
         text = engine.private_state()
         if set(record["gpu_uuids"]).intersection((text.get("profile") or {}).get("gpu_uuids", [])):
             job.update("releasing_model", detail="释放文本模型 / Unloading text model")
-            db.put("engine", "maintenance", {"job_id": job.id, "kind": "creative_load"})
-            try:
+            with engine.text_maintenance(job):
                 engine.stop(job)
-            finally:
-                if db.get("engine", "maintenance", {}).get("job_id") == job.id:
-                    db.delete("engine", "maintenance")
         job.check_cancelled()
         from ..gpu_control import ensure_saved
 

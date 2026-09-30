@@ -34,3 +34,21 @@ def test_model_default_is_persisted_and_used_without_restarting(client, tmp_path
 def test_model_default_requires_admin(client):
     client.cookies.clear()
     assert client.put("/api/models/missing/default-profile", json={"profile_id": "p"}).status_code == 401
+
+
+def test_agent_picker_requires_tools_in_the_running_profile(client, tmp_path):
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text("{}")
+    db.put("models", "model", {"id": "model", "name": "Model", "state": "downloaded", "path": str(model)})
+    for name, tools in (("chat", False), ("agent", True)):
+        db.put("profiles", name, {"id": name, "name": name, "model_path": str(model), "tool_calling": tools})
+    db.put("engine", "active", {"state": "ready", "profile_id": "chat", "profile": db.get("profiles", "chat")})
+
+    assert client.get("/api/inference/models").json()["items"][0]["active"]
+    choice = client.get("/api/inference/models?agent=true").json()["items"][0]
+    assert choice["can_load"] and choice["profiles"][0]["id"] == "agent"
+    assert not choice["active"], "Chat-only runtime must not disable the Agent launch button"
+
+    db.patch("engine", "active", {"profile_id": "agent", "profile": db.get("profiles", "agent")})
+    assert client.get("/api/inference/models?agent=true").json()["items"][0]["active"]

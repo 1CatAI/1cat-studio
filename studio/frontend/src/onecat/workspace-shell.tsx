@@ -41,6 +41,7 @@ import {
 } from "./api";
 import { Field, format, useText, Modal, jobLabel, ErrorNotice } from "./common";
 import { LaunchProgress } from "./launch-progress";
+import { DecodeStatus } from "./decode-status";
 import { modelLabel, accelerationLabel } from "./model-label";
 import { ModelPicker } from "./model-controls";
 import { AgentHistory } from "./agent-page";
@@ -80,7 +81,7 @@ export function Shell() {
   const currentThread = useRouterState({
     select: (s) => (s.location.search as { thread?: string }).thread,
   });
-  const { data: engine, refresh: refreshEngine } = useQuery<Engine>(
+  const { data: engine, error: engineError, refresh: refreshEngine } = useQuery<Engine>(
     "/api/inference/status",
     3000,
   );
@@ -502,7 +503,7 @@ export function Shell() {
                 <span
                   className={
                     "oc-status-dot " +
-                    (engine?.state === "ready" ? "ready" : "")
+                    (!engineError && engine?.state === "ready" ? "ready" : "")
                   }
                 />
                 <ModelPicker agent={conversation.mode === "agent"} />
@@ -523,14 +524,17 @@ export function Shell() {
             />
           )}
           <div className="oc-header-stats">
-            <span>
+            <span className="oc-header-engine-state">
               {(path === "/canvas" || path === "/creative")
                 ? t("整机 GPU", "All GPUs")
+                : engineError ? t("连接中断", "Disconnected")
                 : engine?.state === "ready"
                   ? t("就绪", "Ready")
                   : jobLabel(engine?.state || "", t) || "—"}
             </span>
+            <DecodeStatus />
             <span
+              className="oc-header-power"
               title={t(
                 `全部硬件：${devices?.gpus.length || 0} 张 GPU，其中 ${measured.length} 张提供功率读数`,
                 `All hardware: ${devices?.gpus.length || 0} GPUs, ${measured.length} reporting power`,

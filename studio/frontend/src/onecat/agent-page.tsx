@@ -7,7 +7,7 @@ import { Bot, Check, ChevronDown, FileCode, FolderOpen, GitBranch, LoaderCircle,
 import { Button } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
 import { Textarea } from "@/onecat/ui";
-import { api, ApiError, copyText, mutation, newMessageId, refreshData, useQuery, type Message, type Thread } from "./api";
+import { api, ApiError, copyText, mutation, newMessageId, refreshData, useQuery, type Message, type Thread, type DecodeAggregate } from "./api";
 import { CopyButton, ErrorNotice, Field, Modal, format, useText } from "./common";
 import { useBrowserState } from "./browser-state";
 import { Markdown } from "./markdown";
@@ -19,9 +19,13 @@ import { agentCommands, matchingAgentCommands, parseAgentCommand } from "./agent
 import { ModelPicker, ThinkingToggle, thinkingEffort, type ThinkingSupport, type ThinkingEffort } from "./model-controls";
 import { AgentStats } from "./agent-stats";
 import { PreviewPanel } from "./preview-panel";
+import { SubagentTree } from "./agent-swarm";
 type Project = { id: string; name: string; repository?: string };
-type AgentStatus = { installed: boolean; sandbox_ready: boolean; sandbox_error?: string;
-  version: string; source: string; model: { ready: boolean; name?: string; label?: string; context_window?: number; tool_calling: boolean; thinking?: ThinkingSupport } };
+type EngineStatus = { installed: boolean; ready?: boolean; sandbox_ready?: boolean; sandbox_error?: string; error?: string;
+  version: string; protocol?: string; upstream_commit?: string; capabilities?: Record<string, boolean> };
+type AgentStatus = EngineStatus & { source: string; pi?: EngineStatus;
+  engines?: { codex?: EngineStatus; pi?: EngineStatus };
+  model: { ready: boolean; name?: string; label?: string; context_window?: number; tool_calling: boolean; max_num_seqs?: number; running_requests?: number; waiting_requests?: number; thinking?: ThinkingSupport } };
 
 function useAgentTask(id?: string) {
   const [task, setTask] = useState<AgentTask>();
@@ -106,8 +110,10 @@ export function AgentPage() {
   const { enabled } = useInterfaceMotion();
   const { task: taskId, source } = useSearch({ strict: false }) as { task?: string; source?: string };
   const { task, error: connectionError } = useAgentTask(taskId);
+  const { data: taskAggregate, error: aggregateError } = useQuery<DecodeAggregate>(task?.engine === "pi" ? `/api/requests/aggregate?window_s=2&agent_task_id=${encodeURIComponent(task.id)}` : null, 1000);
+  const currentAggregate = aggregateError ? undefined : taskAggregate || task?.decode_aggregate;
   const { data: projects, error: projectsError } = useQuery<{ items: Project[] }>("/api/agent/projects");
-  const { data: status } = useQuery<AgentStatus>("/api/agent/status", 4000);
+  const { data: status, error: statusError } = useQuery<AgentStatus>("/api/agent/status", 4000);
   const [selected, select] = useBrowserState("onecat:agent-project", "");
   const projectId = taskId ? task?.project_id || "" : selected;
   const project = projects?.items.find(p => p.id === projectId);
@@ -137,10 +143,18 @@ export function AgentPage() {
   const [infoPanel, setInfoPanel] = useState<"status" | "help" | "history" | "permissions" | "model" | null>(null);
   const [permission, setPermission] = useState<"workspace-write" | "read-only">("workspace-write");
   const [mode, setMode] = useState<"default" | "plan">("default");
+  const [preferredEngine, setAgentEngine] = useBrowserState<"codex" | "pi">("onecat:agent-engine", "codex");
+  const [preferredCollaboration, setCollaboration] = useBrowserState<"single" | "auto" | "swarm">("onecat:agent-collaboration", "single");
+  const agentEngine = taskId ? task?.engine || "codex" : preferredEngine === "pi" ? "pi" : "codex";
+  const requestedCollaboration = taskId ? task?.collaboration : preferredCollaboration;
+  const collaboration = agentEngine === "pi" && (requestedCollaboration === "auto" || requestedCollaboration === "swarm") ? requestedCollaboration : "single";
   const input = useRef<HTMLTextAreaElement>(null), permissionInput = useRef<HTMLSelectElement>(null);
   const commands = commandDismissed ? [] : matchingAgentCommands(draft);
   const selectedCommand = Math.min(commandIndex, Math.max(0, commands.length - 1));
-  useEffect(() => { setPermission(task?.permission || "workspace-write"); setMode(task?.mode || "default"); }, [taskId, task?.permission, task?.mode]);
+  useEffect(() => {
+    setPermission(task?.permission || "workspace-write");
+    setMode(task?.mode || "default");
+  }, [taskId, task?.permission, task?.mode]);
   useLayoutEffect(() => {
     const el = input.current;
     if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 180) + "px"; }
@@ -206,12 +220,15 @@ export function AgentPage() {
     if (element.firstElementChild) observer.observe(element.firstElementChild);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [taskId, !!task]);
-  const reason = !status ? t("正在检查 Agent…", "Checking Agent…")
-    : !status.installed ? t("安装包缺少 Codex 组件，请更新 Studio。", "Codex is missing from this installation. Update Studio.")
-    : !status.sandbox_ready ? t("Agent 执行沙箱尚未就绪，请完成安装配置。", "The Agent execution sandbox needs installation setup.")
-    : !status.model.ready ? t("启动一个支持工具调用的模型，即可开始任务。", "Start a model with tool calling to begin a task.")
+  const selectedRuntime = agentEngine === "pi" ? (status?.pi || status?.engines?.pi) : status;
+  const engineReady = !!selectedRuntime?.installed && (agentEngine === "pi" ? !!selectedRuntime.ready : !!status?.sandbox_ready);
+  const reason = statusError ? t("暂时无法确认 Agent 状态，请稍后重试。", "Agent status is unavailable. Please try again shortly.")
+    : !status ? t("正在检查 Agent…", "Checking Agent…")
+    : !engineReady ? selectedRuntime?.error || selectedRuntime?.sandbox_error || t(agentEngine === "pi" ? "PI（Oh My Pi）运行时不可用，请安装固定版本 omp。" : "Codex 运行环境不可用，请检查组件与沙箱。", agentEngine === "pi" ? "PI (Oh My Pi) is unavailable; install the pinned omp runtime." : "Codex is unavailable; check its component and sandbox.")
+    : !status.model.ready ? t("请在输入框下方选择并启动模型。", "Choose and start a model below the input.")
     : !status.model.tool_calling ? t("请在模型启动预设中启用工具调用。", "Enable tool calling in the model's launch profile.")
     : source && !taskId && !sourceChat ? sourceError || t("正在读取背景对话…", "Loading conversation context…") : "";
+  const startHint = running ? "" : reason || (!project ? t("请在顶部选择或创建项目。", "Choose or create a project at the top.") : "");
   async function submit(text = draft) {
     if (sending.current || !text.trim()) return;
     let prompt = text.trim(), operation = "turn";
@@ -219,8 +236,9 @@ export function AgentPage() {
     setNotice("");
     try {
       if (prompt.startsWith("/")) {
-        if (!command || !agentCommands.some(([name]) => name === command.name)) throw new Error(t("这个命令尚未接入。输入 /help 查看可用命令；命令不会作为普通消息发送。", "This command is not connected. Use /help for available commands; it was not sent to the model."));
-        switch (command.name) {
+        const nativePiSkill = agentEngine === "pi" && /^\/skill:\S+(?:\s|$)/.test(prompt);
+        if (!nativePiSkill && (!command || !agentCommands.some(([name]) => name === command.name))) throw new Error(t("这个命令尚未接入。输入 /help 查看可用命令；命令不会作为普通消息发送。", "This command is not connected. Use /help for available commands; it was not sent to the model."));
+        switch (command?.name) {
           case "help": setInfoPanel("help"); setDraft(""); return;
           case "status": setInfoPanel("status"); setDraft(""); return;
           case "model": setInfoPanel("model"); setDraft(""); return;
@@ -263,13 +281,13 @@ export function AgentPage() {
         prompt = `${t("背景对话", "Conversation context")}:\n${context.slice(-32000)}\n\n${t("当前任务", "Task")}:\n${prompt}`;
       }
       const requestedThinking = status?.model.thinking?.supported ? thinking ?? task?.thinking ?? false : false;
-      const identity = JSON.stringify({ prompt, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort, turn: running ? task?.current_turn : undefined });
+      const identity = JSON.stringify({ prompt, operation, permission, mode, engine: agentEngine, collaboration, thinking: requestedThinking, thinking_effort: selectedEffort, turn: running ? task?.current_turn : undefined });
       const requestId = submission?.text === identity ? submission.id : newMessageId();
       setSubmission({ text: identity, id: requestId });
       const result = running
         ? await mutation<AgentTask>(`/api/agent/tasks/${taskId}/steer`, { prompt, request_id: requestId, turn_id: task?.current_turn })
         : await mutation<AgentTask>(taskId ? `/api/agent/tasks/${taskId}/continue` : "/api/agent/tasks",
-        taskId ? { prompt, request_id: requestId, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort } : { prompt, project_id: projectId, request_id: requestId, source_thread: source || null, operation, permission, mode, thinking: requestedThinking, thinking_effort: selectedEffort });
+        taskId ? { prompt, request_id: requestId, operation, permission, mode, engine: agentEngine, collaboration, thinking: requestedThinking, thinking_effort: selectedEffort } : { prompt, project_id: projectId, request_id: requestId, source_thread: source || null, operation, permission, mode, engine: agentEngine, collaboration, thinking: requestedThinking, thinking_effort: selectedEffort });
       setSubmission(null);
       setDraft(value => value === text ? "" : value);
       refreshData();
@@ -316,6 +334,15 @@ export function AgentPage() {
           {!taskId && <Button size="icon-sm" variant="ghost" aria-label={t("新建项目", "New project")} onClick={() => setCreateOpen(true)}><Plus /></Button>}
         </div>
         <div className="oc-agent-toolbar-actions">
+          <div className="oc-agent-engine-picker" role="group" aria-label={t("Agent 引擎", "Agent engine")}>
+            <button type="button" className={agentEngine === "codex" ? "is-active" : ""} aria-pressed={agentEngine === "codex"} disabled={!!taskId || running || busy} onClick={() => { setAgentEngine("codex"); setCollaboration("single"); }}>{t("Codex", "Codex")}</button>
+            <button type="button" className={agentEngine === "pi" ? "is-active" : ""} aria-pressed={agentEngine === "pi"} disabled={!!taskId || running || busy} onClick={() => setAgentEngine("pi")}>{t("PI", "PI")}</button>
+          </div>
+          <select className="oc-agent-collaboration" value={collaboration} disabled={!!taskId || running || busy || agentEngine === "codex"} onChange={e => setCollaboration(e.target.value as typeof collaboration)} aria-label={t("协作模式", "Collaboration mode")}>
+            <option value="single">{t("单 Agent", "Single agent")}</option>
+            <option value="auto">{t("PI 自动委派", "PI auto delegation")}</option>
+            <option value="swarm">{t("PI 蜂群", "PI swarm")}</option>
+          </select>
           {taskId && <Button variant="ghost" size="sm" asChild><Link to="/agent"><Plus />{t("新任务", "New task")}</Link></Button>}
           <Button variant="ghost" size="sm" disabled={!project} onClick={() => { setPreview(undefined); setPanel(panel === "files" ? null : "files"); }}><FileCode />{t("文件", "Files")}</Button>
           {task?.diff && <Button variant="ghost" size="sm" onClick={() => { setPreview(undefined); setPanel(panel === "diff" ? null : "diff"); }}><FileDiff />{t("修改", "Changes")}</Button>}
@@ -344,6 +371,15 @@ export function AgentPage() {
             {step.status === "completed" ? <Check size={14} /> : step.status === "inProgress" && running ? <LoaderCircle size={14} className="animate-spin" /> : <span className="oc-agent-plan-dot" />}
             <span>{step.step}</span></li>)}</ol>
         </details>}
+        {task?.engine === "pi" && <section className="oc-agent-swarm-card">
+          <div className="oc-row"><strong>{task.collaboration === "swarm" ? t("当前 PI 蜂群", "Current PI swarm") : t("当前 PI 任务", "Current PI task")}</strong><span>{task.subagents?.length || 0} {t("子任务", "subtasks")}</span></div>
+          <div className="oc-request-stats">
+            <div><span>{t("本任务聚合 Decode", "Task aggregate Decode")}</span><strong>{format(currentAggregate?.decode_tokens_s, 1)} tok/s</strong></div>
+            <div><span>{t("运行 / 排队请求", "Running / queued requests")}</span><strong>{currentAggregate?.active_requests ?? "—"} / {currentAggregate?.waiting_requests ?? "—"}</strong></div>
+          </div>
+          {(aggregateError || currentAggregate?.reason) && <small className="oc-muted">{aggregateError ? t("暂时无法获取实时数据", "Live data is temporarily unavailable") : currentAggregate?.reason}</small>}
+          <SubagentTree nodes={task.subagents || []} />
+        </section>}
         {task?.items.map(item => <Activity key={item.id} item={item} running={running && !item.finished}
           onPreview={openPreview} />)}
         {!!task?.changes?.length && !running && <div className="oc-agent-result"><strong>{t("本轮文件修改", "Files changed this turn")}</strong>
@@ -359,20 +395,6 @@ export function AgentPage() {
         {task?.approvals.map(approval => <ApprovalCard key={approval.id} approval={approval} taskId={task.id} onError={setError} />)}
         {source && !taskId && <p className="oc-agent-source"><MessageContext />{t("引用对话", "Using conversation")}: {sourceChat?.thread.title || sourceError || t("读取中…", "Loading…")}
           <Button variant="ghost" size="icon-sm" aria-label={t("移除对话背景", "Remove conversation context")} onClick={() => navigate({ to: "/agent" })}><X /></Button></p>}
-        {!running && (!project || reason) && <div className="oc-readiness oc-agent-readiness" role="status">
-          {!project && <div className="oc-readiness-steps">
-            <span data-ready={false}><FolderOpen size={14} />{t("选择项目", "Choose a project")}</span>
-            <span data-ready={!!status?.model.ready}>{status?.model.ready ? <Check size={14} /> : <Square size={14} />}{t("模型就绪", "Model ready")}</span>
-            <span data-ready={!!status?.model.tool_calling}>{status?.model.tool_calling ? <Check size={14} /> : <Square size={14} />}{t("工具调用", "Tool calling")}</span>
-          </div>}
-          <div className="oc-actions">
-            {!project && <Button type="button" variant="outline" size="sm" onClick={() => setCreateOpen(true)}>{t("创建项目", "Create project")}</Button>}
-            {reason && (status && (!status.installed || !status.sandbox_ready)
-              ? <Button variant="outline" size="sm" asChild><Link to="/setup">{t("准备运行环境", "Prepare runtime")}</Link></Button>
-              : <Button variant="outline" size="sm" onClick={() => setInfoPanel("model")}>{t("选择已下载模型", "Choose downloaded model")}</Button>)}
-          </div>
-          {reason && <p className="oc-muted">{reason}</p>}
-        </div>}
         {task && !running && ["failed", "interrupted", "cancelled"].includes(task.state) && <Button variant="ghost" size="sm" disabled={busy || !!reason} onClick={() => void submit(t("继续刚才的任务，先核实已完成的操作，避免重复修改。", "Continue the previous task. Check completed actions first to avoid duplicate edits."))}><RotateCcw size={14} />{t("继续这个任务", "Resume this task")}</Button>}
         {notice && <p className="oc-agent-note" role="status">{notice}</p>}
         <form className="oc-agent-composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
@@ -381,6 +403,7 @@ export function AgentPage() {
               onMouseDown={e => e.preventDefault()} onClick={() => chooseCommand(name)}><strong>/{name}</strong><span>{t(zh, en)}</span></button>)}
           </div>}
           <Textarea ref={input} rows={1} aria-label={t("Agent 任务", "Agent task")} value={draft} maxLength={30000} readOnly={busy}
+            aria-describedby={startHint ? "agent-start-hint" : undefined}
             aria-autocomplete="list" aria-controls={commands.length ? "agent-command-list" : undefined} aria-activedescendant={commands[selectedCommand] ? `agent-command-${commands[selectedCommand][0]}` : undefined}
             onChange={e => { setDraft(e.target.value); setCommandIndex(0); setCommandDismissed(false); }}
             placeholder={taskId ? t("补充要求，或输入 / 查看命令…", "Add instructions, or type / for commands…") : t("你想完成什么？输入 / 查看命令", "What would you like to build? Type / for commands")}
@@ -407,10 +430,14 @@ export function AgentPage() {
                 disabled={busy || !draft.trim() || (!draft.startsWith("/") && (!project || !!reason || (!!taskId && !task)))}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}</Button>}
           </div>
         </form>
-        <div className="oc-agent-status">
-          <span role="status">{task ? <>{running ? <LoaderCircle size={13} className="animate-spin" /> : task.state === "completed" ? <Check size={13} /> : <Square size={12} />}{label(task.state, t)}</> : !reason && project ? t("准备就绪", "Ready") : ""}</span>
-          {task && <AgentStats task={task} onDetails={() => setInfoPanel("status")} />}
-        </div>
+        {startHint && <p id="agent-start-hint" className="oc-agent-start-hint" role="status">
+          {startHint}
+          {status && !engineReady && <> <Link to="/setup">{t("检查运行环境", "Check runtime")}</Link></>}
+        </p>}
+        {task && <div className="oc-agent-status">
+          <span role="status">{running ? <LoaderCircle size={13} className="animate-spin" /> : task.state === "completed" ? <Check size={13} /> : <Square size={12} />}{label(task.state, t)}</span>
+          <AgentStats task={task} onDetails={() => setInfoPanel("status")} />
+        </div>}
       </div>
     </div>
     <AnimatePresence initial={false}>
@@ -451,11 +478,11 @@ export function AgentPage() {
         <Button onClick={() => setInfoPanel(null)}>{t("完成", "Done")}</Button>
       </div> : infoPanel === "history" ? <AgentHistory /> : infoPanel === "help" ? <div className="oc-agent-command-help">
         {agentCommands.map(([name, zh, en]) => <button type="button" key={name} onClick={() => { setInfoPanel(null); chooseCommand(name); }}><code>/{name}</code><span>{t(zh, en)}</span></button>)}
-        <p className="oc-agent-note">{t("使用内置官方 Codex App Server。项目读写、命令执行、审查、计划、压缩和技能在项目沙箱中运行。云端账户、外部 MCP / Apps、多 Agent 和任意外网访问尚未接入。", "Uses the bundled official Codex App Server. Files, commands, review, plan, compaction and skills run in the project sandbox. Cloud accounts, external MCP / Apps, multiple agents and unrestricted networking are not connected.")}</p>
+          <p className="oc-agent-note">{t("Codex 与 PI 是并列引擎。PI 通过固定版本的原生 RPC 接入；蜂群数量、批量和并发策略由 PI 配置决定，Studio 只展示事件和速度。", "Codex and PI are sibling engines. PI is connected through native RPC at a pinned version; PI owns swarm size, batching and concurrency while Studio exposes events and speed.")}</p>
       </div> : <div className="oc-agent-details">
         <dl><dt>{t("当前模型", "Current model")}</dt><dd>{status?.model.label || status?.model.name || "—"}</dd>
           {task && <><dt>{t("本任务上次使用", "Last used for this task")}</dt><dd>{task.model_label || task.model}</dd></>}
-          <dt>Codex</dt><dd>{task?.codex_version || status?.version || "—"}</dd>
+          <dt>{agentEngine === "pi" ? "PI" : "Codex"}</dt><dd>{task?.runtime_version || task?.codex_version || selectedRuntime?.version || "—"}</dd>
           <dt>{task ? t("本轮执行权限", "Turn permissions") : t("权限", "Permissions")}</dt><dd>{(task ? task.execution_permission : mode === "plan" ? "read-only" : permission) === "read-only" ? t("只读项目 · 外网关闭", "Read-only project · Network off") : t("可写当前项目 · 外网关闭", "Writable project · Network off")}</dd>
           <dt>{t("总上下文", "Context window")}</dt><dd>{format(task?.context_window || status?.model.context_window, 0)} tokens</dd>
           <dt>{t("Agent 上下文预算", "Agent context budget")}</dt><dd>{task?.context_usage?.modelContextWindow ? format(task.context_usage.modelContextWindow, 0) + " tokens" : "—"}</dd>

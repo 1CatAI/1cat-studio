@@ -545,6 +545,17 @@ export function ProfileEditor({
           onChange={(v) => set("max_num_seqs", v)}
           min={1}
         />
+        <div className="oc-field oc-concurrency-presets">
+          <span className="oc-field-label">{t("服务并发预设", "Service concurrency presets")}</span>
+          <div className="oc-actions">
+            {[1, 2, 4, 8].map((value) => (
+              <Button key={value} type="button" size="sm" variant={p.max_num_seqs === value ? "secondary" : "outline"} onClick={() => set("max_num_seqs", value)}>
+                {value}
+              </Button>
+            ))}
+          </div>
+          <small className="oc-muted">{t("这是整个 vLLM 服务的最大并发序列数。PI task.maxConcurrency 与它分开；修改后保存并重新加载模型生效。", "Maximum concurrent sequences for the whole vLLM service. PI task.maxConcurrency is separate; save the preset and reload the model to apply changes.")}</small>
+        </div>
 
         <Field label={t("计算精度", "Compute precision")}>
           <select

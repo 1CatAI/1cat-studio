@@ -63,6 +63,7 @@ def main():
     subprocess.run([npm, "run", "build:onecat"], cwd=STUDIO / "frontend", check=True)
     subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/check-source.py")], check=True)
     subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/prepare-agent.py")], check=True)
+    subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/prepare-pi.py")], check=True)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     base = args.base.resolve()
@@ -120,6 +121,7 @@ def main():
         )
     shutil.copytree(STUDIO / "frontend/dist", stage / "studio/frontend/dist")
     shutil.copytree(STUDIO / "vendor/codex", stage / "studio/vendor/codex", symlinks=True)
+    shutil.copytree(STUDIO / "vendor/oh-my-pi", stage / "studio/vendor/oh-my-pi", symlinks=True)
     shutil.copytree(
         STUDIO / "scripts", stage / "scripts", ignore=shutil.ignore_patterns("__pycache__")
     )

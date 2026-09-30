@@ -21,8 +21,9 @@ class Relay(http.server.BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path != "/v1/responses":
-            self.send_error(404, "Only the local model Responses endpoint is available")
+        allowed = {"/internal/agent/v1/chat/completions", "/internal/agent/v1/completions"} if "--pi" in sys.argv else {"/v1/responses"}
+        if self.path not in allowed:
+            self.send_error(404, "Only the local model endpoint is available")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -33,11 +34,12 @@ class Relay(http.server.BaseHTTPRequestHandler):
             connection = ModelConnection("local-model")
             connection.request(
                 "POST",
-                "/v1/responses",
+                self.path,
                 body,
                 {
                     "Content-Type": "application/json",
                     "Content-Encoding": self.headers.get("Content-Encoding", "identity"),
+                    "Authorization": self.headers.get("Authorization", ""),
                 },
             )
             response = connection.getresponse()
@@ -63,7 +65,7 @@ if __name__ == "__main__":
     # stdio stays attached to Studio. The PID namespace kills all children when
     # its supervisor exits, including commands still running after cancellation.
     process = subprocess.Popen(
-        ["/opt/codex/bin/codex", "app-server"],
+        sys.argv[2:] if len(sys.argv) > 1 and sys.argv[1] == "--pi" else ["/opt/codex/bin/codex", "app-server"],
         stdin=sys.stdin,
         stdout=sys.stdout,
         stderr=sys.stderr,

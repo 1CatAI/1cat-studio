@@ -24,6 +24,8 @@ include = ["onecat", "onecat.*"]
 
 [tool.setuptools.package-data]
 onecat = ["data/*.json", "creative/*.json"]
+"onecat._vendor.omp_rpc" = ["LICENSE", "UPSTREAM.json", "py.typed"]
+"onecat.agent" = ["*.ts"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/onecat_tests"]
@@ -32,3 +34,4 @@ asyncio_mode = "auto"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["backend/onecat/_vendor"]

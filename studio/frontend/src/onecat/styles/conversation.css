@@ -44,7 +44,7 @@
   font-size: 12px;
 }
 .oc-chat-composer:focus-within,
-.oc-agent-composer:focus-within {
+.oc-agent-composer:has(textarea:focus-visible) {
   border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
   box-shadow:
     var(--oc-shadow-float),

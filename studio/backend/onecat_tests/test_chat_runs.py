@@ -197,3 +197,97 @@ def test_status_endpoint_requires_admin_and_reports_unknown_run(client):
     assert result.json() == {"run": record, "message": None}
     client.cookies.clear()
     assert client.get("/api/chat/threads/chat/generation").status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("second_action", ["cancel", "shutdown", "disconnect"])
+async def test_repeated_stop_does_not_interrupt_stream_cleanup(monkeypatch, second_action):
+    id = thread()
+    streaming, cleaning, release, closed = (asyncio.Event() for _ in range(4))
+
+    async def forward(*args):
+        async def events():
+            try:
+                yield 'data: {"choices":[{"delta":{"content":"Keep this reply"}}]}\n\n'
+                streaming.set()
+                await asyncio.Event().wait()
+            finally:
+                cleaning.set()
+                await release.wait()
+                closed.set()
+
+        return StreamingResponse(events())
+
+    monkeypatch.setattr(proxy, "forward", forward)
+    chat_runs.recover()
+    chat_runs.start(id, {"message_id": "answer", "request": {}})
+    await asyncio.wait_for(streaming.wait(), 1)
+    first = asyncio.create_task(chat_runs.cancel(id))
+    await asyncio.wait_for(cleaning.wait(), 1)
+    if second_action == "disconnect":
+        first.cancel()
+        second = chat_runs._tasks[id]
+    else:
+        second = asyncio.create_task(chat_runs.cancel(id) if second_action == "cancel" else chat_runs.shutdown())
+    await asyncio.sleep(0)
+    release.set()
+    await asyncio.gather(first, second, return_exceptions=True)
+    assert closed.is_set(), "A repeated stop must not abort connection cleanup"
+    assert chat_runs.current(id)["state"] == "cancelled"
+    assert studio_db.get_chat_message(id, "answer")["content"] == [
+        {"type": "text", "text": "Keep this reply"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_close_failure_still_saves_reply_and_releases_conversation(monkeypatch):
+    id = thread()
+
+    async def forward(*args):
+        async def events():
+            try:
+                yield 'data: {"choices":[{"delta":{"content":"Saved despite disconnect"}}]}\n\n'
+                yield 'data: [DONE]\n\n'
+            finally:
+                raise RuntimeError("Connection close failed")
+
+        return StreamingResponse(events())
+
+    monkeypatch.setattr(proxy, "forward", forward)
+    chat_runs.recover()
+    chat_runs.start(id, {"message_id": "answer", "request": {}})
+    await asyncio.gather(chat_runs._tasks[id], return_exceptions=True)
+    assert chat_runs.current(id)["state"] == "completed"
+    assert studio_db.get_chat_message(id, "answer")["content"] == [
+        {"type": "text", "text": "Saved despite disconnect"}
+    ]
+    chat_runs.require_idle(id)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_settles_chat_cancelled_before_coroutine_starts(monkeypatch):
+    fixture(monkeypatch)
+    id = thread()
+    chat_runs.recover()
+    chat_runs.start(id, {"message_id": "answer", "request": {}})
+    await chat_runs.shutdown()
+    assert chat_runs.current(id)["state"] == "cancelled"
+    assert not chat_runs.active()
+    assert not chat_runs._tasks
+
+
+@pytest.mark.asyncio
+async def test_delayed_stop_is_bound_to_its_generation(monkeypatch):
+    fixture(monkeypatch)
+    id = thread()
+    chat_runs.recover()
+    first = chat_runs.start(id, {"message_id": "first", "request": {}})
+    await chat_runs.cancel(id, first["id"])
+    second = chat_runs.start(id, {"message_id": "second", "request": {}})
+    try:
+        result = await chat_runs.cancel(id, first["id"])
+        assert result["id"] == second["id"]
+        assert result["state"] == "running"
+        assert not chat_runs._tasks[id].cancelling()
+    finally:
+        await chat_runs.cancel(id, second["id"])

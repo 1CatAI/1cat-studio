@@ -58,3 +58,22 @@ test("copy selects the newest plan/review and export includes command and output
  assert.equal(latestAgentAnswer([...items, {id:"review",type:"exitedReviewMode",review:"Latest review"}]), "Latest review");
  assert.equal(agentItemText({id:"tool",type:"commandExecution",command:"pytest",aggregatedOutput:"passed"}), "pytest\n\npassed");
 });
+
+
+test("native PI events update the child tree in place and keep Decode separate", () => {
+ const started = reduceAgent(snapshot, { type: "subagent_started", subagent: { id: "child", name: "scout", status: "running" } })!;
+ const progressed = reduceAgent(started, { type: "subagent_progress", subagent: { id: "child", request_count: 2, progress: { lastIntent: "Inspect" } } })!;
+ const nested = reduceAgent(progressed, { type: "subagent_started", subagent: { id: "nested", parent_id: "child", status: "running" } })!;
+ const done = reduceAgent(nested, { type: "subagent_finished", subagent: { id: "child", status: "completed" } })!;
+ assert.equal(done.subagents?.length, 2);
+ assert.equal(done.subagents?.[0].request_count, 2);
+ assert.equal(done.subagents?.[0].name, "scout");
+ assert.equal(done.subagents?.[0].status, "completed");
+ assert.equal(done.subagents?.[1].parent_id, "child");
+ assert.equal(done.items, snapshot.items);
+ const aggregate = { at: 1, window_s: 2, decode_tokens_s: 120, active_requests: 2, waiting_requests: 1, buckets: { total: 120, pi: 120, codex: 0, chat: 0, api: 0 }, source: "local_token_stream", quality: "complete" };
+ const measured = reduceAgent(done, { type: "decode_aggregate", decode_aggregate: aggregate })!;
+ assert.equal(measured.decode_aggregate?.decode_tokens_s, 120);
+ assert.equal(measured.subagents, done.subagents);
+ assert.equal(measured.usage, snapshot.usage);
+});

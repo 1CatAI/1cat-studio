@@ -11,7 +11,7 @@ from . import db
 def summary(days: int, *, model: str = "", source: str = "", now: float | None = None) -> dict:
     if days not in (1, 3, 7):
         raise ValueError("Choose 1, 3 or 7 days")
-    if source not in {"", "studio", "api"}:
+    if source not in {"", "studio", "api", "agent"}:
         raise ValueError("Unknown request source")
     until = time.time() if now is None else now
     since = until - days * 86400
@@ -21,7 +21,7 @@ def summary(days: int, *, model: str = "", source: str = "", now: float | None =
               SELECT *, json_extract(metrics, '$.cached_tokens') AS cached,
                 json_type(metrics, '$.cached_tokens') AS cache_type
               FROM requests WHERE started>=? AND started<=? AND status IS NOT NULL
-                AND source IN ('studio','api')
+                AND source IN ('studio','api','agent')
                 AND (?='' OR model=?) AND (?='' OR source=?)
             ), valid AS (
               SELECT *,
@@ -66,7 +66,7 @@ def summary(days: int, *, model: str = "", source: str = "", now: float | None =
         }
         active = conn.execute(
             """SELECT count(*) FROM requests WHERE status IS NULL
-            AND (?='' OR model=?) AND (?='' OR source=?) AND source IN ('studio','api')""",
+            AND (?='' OR model=?) AND (?='' OR source=?) AND source IN ('studio','api','agent')""",
             (model, model, source, source),
         ).fetchone()[0]
         model_options = [
@@ -74,7 +74,7 @@ def summary(days: int, *, model: str = "", source: str = "", now: float | None =
             for r in conn.execute(
                 """SELECT model AS id,
             coalesce(max(json_extract(metrics,'$.model_name')),model) AS name
-            FROM requests WHERE started>=? AND source IN ('studio','api')
+            FROM requests WHERE started>=? AND source IN ('studio','api','agent')
             GROUP BY model ORDER BY max(started) DESC""",
                 (until - 7 * 86400,),
             )

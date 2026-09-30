@@ -527,8 +527,9 @@ async def test_shutdown_does_not_interrupt_cleanup_of_stopped_task(project, mode
     assert tasks.get(record["id"])["settled"]
 
 
-def test_api_auth_and_project_flow():
+def test_api_auth_and_project_flow(monkeypatch):
     from onecat.app import create_app
+    monkeypatch.setattr(runtime, "info", lambda: {"installed": True, "sandbox_ready": True})
 
     # No lifespan: no telemetry, no hardware monitor, no model reconciliation.
     client = TestClient(create_app())

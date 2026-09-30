@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
+import type { DecodeAggregate } from "./api";
+
+export type Subagent = {
+  id: string; name?: string; status?: string; parent_id?: string | null;
+  elapsed_s?: number; request_count?: number; error?: string; assignment?: string;
+  progress?: { lastIntent?: string; currentTool?: string; recentOutput?: string[]; requests?: number; durationMs?: number };
+};
 export type AgentItem = {
   id: string; type: string; text?: string; status?: string; command?: string; finished?: boolean;
   aggregatedOutput?: string; exitCode?: number | null; summary?: string[]; review?: string;
@@ -23,6 +30,12 @@ export type AgentTask = {
   permission?: "workspace-write" | "read-only"; mode?: "default" | "plan"; turn_count?: number;
   thinking?: boolean; thinking_effort?: "low" | "medium" | "high" | "xhigh" | null; current_turn?: string; operation?: string;
   execution_permission?: "workspace-write" | "read-only";
+  engine?: "codex" | "pi";
+  collaboration?: "single" | "auto" | "swarm";
+  runtime_version?: string;
+  swarm_id?: string | null;
+  subagents?: Subagent[];
+  decode_aggregate?: DecodeAggregate;
   timing_missing_calls?: number;
   metrics?: { llm_s: number; tool_s: number; tool_calls: number; ttft_s: number; ttft_count: number;
     decode_s: number; decode_tokens: number; decode_calls: number };
@@ -32,13 +45,19 @@ export type AgentTask = {
   plan?: { step: string; status: string }[];
 };
 export type AgentEvent = { type: string; task?: AgentTask; events?: AgentEvent[];
-  item?: AgentItem; id?: string; field?: string; delta?: string } & Partial<AgentTask>;
+  item?: AgentItem; subagent?: Subagent; id?: string; field?: string; delta?: string } & Partial<AgentTask>;
 export const activeAgent = (state?: string) => ["starting", "running", "waiting", "stopping"].includes(state || "");
 
 export function reduceAgent(task: AgentTask | undefined, event: AgentEvent): AgentTask | undefined {
   if (event.type === "snapshot") return event.task;
   if (event.type === "batch") return (event.events || []).reduce<AgentTask | undefined>(reduceAgent, task);
   if (!task) return task;
+  if (event.type.startsWith("subagent_") && event.subagent) {
+    const child = event.subagent;
+    const children = task.subagents || [];
+    return { ...task, subagents: children.some(item => item.id === child.id)
+      ? children.map(item => item.id === child.id ? { ...item, ...child } : item) : [...children, child] };
+  }
   if (event.type === "item" && event.item) {
     const exists = task.items.some(item => item.id === event.item!.id);
     return { ...task, items: exists ? task.items.map(item => item.id === event.item!.id ? event.item! : item) : [...task.items, event.item] };

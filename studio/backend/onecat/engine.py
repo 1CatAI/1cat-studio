@@ -239,13 +239,28 @@ def operation_lock(job: Job):
 
 
 @contextlib.contextmanager
-def maintenance(job: Job):
-    with operation_lock(job):
+def text_maintenance(job: Job):
+    from .model_switch import admission, affects_text, require_agent_idle
+
+    # Recheck at execution time too: automatic creative loads can spend a long
+    # time downloading before they reach the GPU lifecycle worker.
+    with admission():
+        if affects_text(job.record["kind"], job.payload) and not (
+            job.record["kind"] == "stop_model" and job.payload.get("force")
+        ):
+            require_agent_idle()
         db.put("engine", "maintenance", {"job_id": job.id, "kind": job.record["kind"]})
-        try:
-            yield
-        finally:
+    try:
+        yield
+    finally:
+        if db.get("engine", "maintenance", {}).get("job_id") == job.id:
             db.delete("engine", "maintenance")
+
+
+@contextlib.contextmanager
+def maintenance(job: Job):
+    with operation_lock(job), text_maintenance(job):
+        yield
 
 
 def active_requests() -> int:

@@ -26,5 +26,6 @@
 .oc-thinking-levels button { padding:4px 2px; font-size:12px; color:var(--muted-foreground); }
 .oc-thinking-levels button[aria-pressed=true] { color:var(--primary); font-weight:600; }
 .oc-thinking-popover p { margin:10px 0 0; font-size:12px; line-height:1.6; color:var(--muted-foreground); }
+@container workspace (max-width:639px) { .oc-agent-model .oc-model-publisher-tag { display:none; } }
 @media (max-width:420px) { .oc-agent-permission span { display:none; } .oc-agent-permission { padding-inline:4px; gap:3px; } .oc-agent-compose-actions .oc-thinking-control { padding-inline:5px; } .oc-agent-compose-actions .oc-thinking-control span { display:none; } }
 @media (max-width:420px) { .oc-model-choice { flex-wrap:wrap; gap:8px; } .oc-model-choice-name { flex-basis:100%; } .oc-model-choice-actions { margin-left:auto; } }

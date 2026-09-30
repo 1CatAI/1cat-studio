@@ -458,9 +458,6 @@ select.oc-select {
 /* Readiness and contextual actions: update in place without layout animation. */
 .oc-readiness { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: var(--muted); font-size: 13px; }
 .oc-readiness a { color: var(--oc-accent-text); white-space: nowrap; }
-.oc-readiness-steps { display: flex; flex-wrap: wrap; gap: 12px; }
-.oc-readiness-steps span { display: inline-flex; align-items: center; gap: 6px; }
-.oc-readiness-steps [data-ready="true"] { color: var(--oc-success); }
 .oc-readiness p { flex-basis: 100%; margin: 0; }
 .oc-profile-more { z-index: 80; width: 210px; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--popover); box-shadow: var(--oc-shadow-float); }
 .oc-profile-more button { justify-content: flex-start; }

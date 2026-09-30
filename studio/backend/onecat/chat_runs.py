@@ -8,6 +8,7 @@ import codecs
 import copy
 import json
 import hashlib
+import logging
 import time
 from collections import deque
 
@@ -18,6 +19,7 @@ from . import db, proxy
 
 _runs: dict[str, Run] = {}
 _tasks: dict[str, asyncio.Task] = {}
+logger = logging.getLogger(__name__)
 
 
 def current(thread: str) -> dict | None:
@@ -74,8 +76,10 @@ def recover():
 
 async def shutdown():
     tasks = list(_tasks.values())
-    for task in tasks:
-        task.cancel("Studio is restarting")
+    for thread, task in list(_tasks.items()):
+        run = _runs.get(thread)
+        if not task.cancelling() and run and run.record["state"] == "running":
+            task.cancel("Studio is restarting")
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -90,6 +94,25 @@ class Run:
         self.answer = ""
         self.thought = ""
         self.thinking_started: float | None = None
+
+    def finish(self):
+        self.record["updated_at"] = time.time()
+        self.message["metadata"]["generation_state"] = self.record["state"]
+        self.message["metadata"].setdefault("finish_reason", "stop")
+        self.save()
+        self.emit({"onecat_run": self.record, "onecat_message": self.message})
+
+    def worker_finished(self, task):
+        # A task cancelled before execute() starts never enters its finally block.
+        error = None if task.cancelled() else task.exception()
+        if self.record["state"] == "running":
+            state = "cancelled" if task.cancelled() else "failed"
+            self.record.update(state=state, error=str(error) if error else None)
+            self.message["metadata"]["finish_reason"] = "cancelled" if task.cancelled() else "error"
+            self.finish()
+        thread = self.record["thread_id"]
+        if _tasks.get(thread) is task:
+            _tasks.pop(thread, None)
 
     def emit(self, event: dict):
         self.revision += 1
@@ -218,12 +241,11 @@ class Run:
             self.message["metadata"].update(finish_reason="error", error=str(detail))
         finally:
             if response is not None and hasattr(response, "body_iterator"):
-                await response.body_iterator.aclose()
-            self.record["updated_at"] = time.time()
-            self.message["metadata"]["generation_state"] = self.record["state"]
-            self.message["metadata"].setdefault("finish_reason", "stop")
-            self.save()
-            self.emit({"onecat_run": self.record, "onecat_message": self.message})
+                try:
+                    await response.body_iterator.aclose()
+                except Exception:
+                    logger.exception("Unable to close chat stream %s", self.record["id"])
+            self.finish()
 
 
 def start(thread: str, payload: dict) -> dict:
@@ -342,23 +364,22 @@ def start(thread: str, payload: dict) -> dict:
     _runs[thread] = run
     task = asyncio.create_task(run.execute(request))
     _tasks[thread] = task
-    task.add_done_callback(
-        lambda task: _tasks.pop(thread, None) if _tasks.get(thread) is task else None
-    )
+    task.add_done_callback(run.worker_finished)
     return record
 
 
-async def cancel(thread: str):
+async def cancel(thread: str, run_id: str | None = None):
+    record = current(thread)
+    if run_id and (record or {}).get("id") != run_id:
+        return record
     task = _tasks.get(thread)
+    run = _runs.get(thread)
     if task:
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
-        run = _runs.get(thread)
-        if run and run.record["state"] == "running":
-            run.record.update(state="cancelled", updated_at=time.time())
-            run.message["metadata"].update(generation_state="cancelled", finish_reason="cancelled")
-            run.save()
-            run.emit({"onecat_run": run.record, "onecat_message": run.message})
+        if not task.cancelling() and run and run.record["state"] == "running":
+            task.cancel()
+        # Repeated stops and a disconnected HTTP caller must not interrupt saving
+        # the reply or releasing the model connection in the worker's finally.
+        await asyncio.shield(asyncio.gather(task, return_exceptions=True))
     return current(thread)
 
 

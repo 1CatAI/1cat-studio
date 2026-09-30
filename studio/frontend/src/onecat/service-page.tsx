@@ -84,10 +84,10 @@ export function ServicePage() {
           <div>
             <span
               className={
-                engine?.state === "ready" ? "oc-status-good" : "oc-muted"
+                !error && engine?.state === "ready" ? "oc-status-good" : "oc-muted"
               }
             >
-              {engine?.state === "ready"
+              {error ? t("连接中断", "Disconnected") : engine?.state === "ready"
                 ? t("模型就绪", "Ready")
                 : jobLabel(engine?.state || "", t) || "—"}
             </span>

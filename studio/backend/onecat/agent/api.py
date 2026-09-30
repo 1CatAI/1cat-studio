@@ -19,7 +19,7 @@ from starlette.responses import StreamingResponse
 from .. import auth, db
 from ..config import state_root
 from ..schemas import StrictModel
-from . import projects, runtime, tasks
+from . import pi_runtime, projects, runtime, tasks
 
 router = APIRouter(prefix="/api/agent", dependencies=[Depends(auth.require_admin)])
 
@@ -39,6 +39,8 @@ class NewTask(StrictModel):
     thinking: bool | None = None
     thinking_effort: Literal["low", "medium", "high", "xhigh"] | None = None
     mode: Literal["default", "plan"] = "default"
+    engine: Literal["codex", "pi"] = "codex"
+    collaboration: Literal["single", "auto", "swarm"] = "single"
 
 
 class ContinueTask(StrictModel):
@@ -51,6 +53,8 @@ class ContinueTask(StrictModel):
     thinking: bool | None = None
     thinking_effort: Literal["low", "medium", "high", "xhigh"] | None = None
     mode: Literal["default", "plan"] | None = None
+    engine: Literal["codex", "pi"] | None = None
+    collaboration: Literal["single", "auto", "swarm"] | None = None
 
 
 class SteerTask(StrictModel):
@@ -67,6 +71,8 @@ class Decision(StrictModel):
 @router.get("/status")
 async def status():
     result = await asyncio.to_thread(runtime.info)
+    codex = result.copy()
+    pi = await asyncio.to_thread(pi_runtime.info)
     from .. import engine
 
     state = engine.private_state()
@@ -80,7 +86,16 @@ async def status():
         "label": profile.get("name"),
         "tool_calling": bool(profile.get("tool_calling")),
         "context_window": profile.get("max_model_len"),
+        "max_num_seqs": profile.get("max_num_seqs", 1),
     }
+    from ..decode_metrics import aggregator
+
+    aggregate = aggregator.snapshot(2)
+    result["model"]["running_requests"] = aggregate["active_requests"]
+    result["model"]["waiting_requests"] = aggregate["waiting_requests"]
+    result["engines"] = {"codex": codex, "pi": pi}
+    # These top-level Codex fields are kept for existing Studio clients.
+    result["pi"] = pi
     return result
 
 
@@ -240,6 +255,8 @@ async def new_task(data: NewTask):
         data.prompt,
         data.request_id,
         source_thread=data.source_thread,
+        engine=data.engine,
+        collaboration=data.collaboration,
         operation=data.operation,
         permission=data.permission,
         mode=data.mode,
@@ -263,6 +280,8 @@ async def continue_task(task_id: str, data: ContinueTask):
         data.prompt,
         data.request_id,
         task_id=task_id,
+        engine=data.engine or record.get("engine", "codex"),
+        collaboration=data.collaboration or record.get("collaboration", "single"),
         operation=data.operation,
         permission=data.permission,
         mode=data.mode,
@@ -302,6 +321,7 @@ async def events(task_id: str, request: Request):
         )
         if run is None:
             return
+        last_aggregate = 0.0
         while not await request.is_disconnected():
             run.changed.clear()
             events = list(run.events)
@@ -323,6 +343,11 @@ async def events(task_id: str, request: Request):
                         + json.dumps({"type": "batch", "events": batch}, ensure_ascii=False)
                         + "\n\n"
                     )
+            if time.monotonic() - last_aggregate >= 0.5:
+                from ..decode_metrics import aggregator
+
+                last_aggregate = time.monotonic()
+                yield "data: " + json.dumps({"type": "decode_aggregate", "decode_aggregate": aggregator.snapshot(2, task_id)}) + "\n\n"
             if task_id not in tasks.workers:
                 yield (
                     "data: "
@@ -333,7 +358,7 @@ async def events(task_id: str, request: Request):
                 )
                 return
             try:
-                await asyncio.wait_for(run.changed.wait(), 15)
+                await asyncio.wait_for(run.changed.wait(), 0.5)
                 await asyncio.sleep(0.08)
             except TimeoutError:
                 yield ": keepalive\n\n"

@@ -7,9 +7,11 @@ Use the chat toolbar's "Create an Agent task from this chat" action to explicitl
 include a conversation as task context; ordinary mode switching does not copy it.
 Existing /chat?thread= and /agent?task= links remain supported.
 
-Both modes share Studio's model management. Agent mode
-uses the unmodified official Codex 0.153.4 app-server, bundled by prepare-agent.py.
-There is no separate Codex login and no access to the operator's CODEX_HOME.
+Both modes share Studio's model management. Agent offers sibling Codex and PI
+engines. Codex uses the unmodified official 0.153.4 app-server; PI uses unmodified
+Oh My Pi at commit `061f21ef011c72df891678ce489b02edee676738`, via its official
+Python `omp-rpc` client from the same commit (protocol v2). No cloud login is needed.
+Neither runtime can read the operator's home or global agent configuration.
 
 ## Use
 
@@ -21,7 +23,7 @@ Codex thread and model instance. Refreshing or leaving the page does not stop it
 Stop terminates only the task's isolated process tree. Continue resumes the saved
 Codex thread; Studio restarts mark active work interrupted, with partial results
 retained. One task may write a project at a time, and at most two projects run at
-once. A turn is limited to 30 minutes / 64 model calls, with explicit failure and
+once. A Codex turn is limited to 30 minutes / 64 model calls, with explicit failure and
 continuation rather than silent truncation. Never infer model quality from the
 mock-provider integration tests.
 
@@ -39,6 +41,9 @@ and arbitrary model endpoints are outside this first integration.
 Type `/` for the keyboard-accessible command menu. Arrow keys select, Tab or Enter
 completes the command, a subsequent Enter runs it, and Escape dismisses the menu.
 Unknown commands stay in the composer with an explanation rather than reaching the model.
+
+The following native command details describe Codex. PI's adapter-specific
+behavior is documented under PI runtime and collaboration below.
 
 | Command | Implementation |
 | --- | --- |
@@ -157,3 +162,96 @@ Checked against the pinned 0.153.4 generated schemas and official sources:
 Validation covers native RPC/tool execution with a deterministic provider plus
 separate real local-model acceptance. Fixture tests prove integration and isolation,
 not that every model reasons, writes code, or uses every tool equally well.
+
+
+## PI runtime and collaboration
+
+Build the exact audited source with `python studio/scripts/prepare-pi.py` from the
+repository root (Bun >= 1.4, Git and network access are needed for the build).
+`--source /absolute/checkout` accepts an existing clean checkout of that exact
+commit. The binary and MIT license are kept under
+`studio/vendor/oh-my-pi/061f21ef011c72df891678ce489b02edee676738/`; a manifest records
+the source commit, protocol version, builder version and binary SHA256. Runtime
+status rejects a missing, changed or unverified binary. A PATH `omp` is not used.
+The native addon is pinned separately to official `pi-natives-linux-x64@18.3.2`
+with SHA512 verification. Its npm provenance points to `7853b4e499936f9dcc13c9b64adb55f6b342aabf`;
+the native package, Rust crates, Cargo lock and Bazel inputs are identical to the
+audited commit. The manifest records this dependency's source and integrity.
+The offline packager prepares both engines and refuses to publish without them.
+The official Python client is vendored unchanged, with its own license and hashes.
+
+New requests default to `engine=codex, collaboration=single`. For PI:
+
+- `single` prevents native child spawns. This commit exposes `spawns` on child
+  definitions/SDK sessions, not as a root CLI flag. Studio's separate, read-only
+  `pi_single.ts` extension uses the official `before_subagent_spawn` hook to
+  enforce `spawns: false` semantics on both task and eval agent() calls. The
+  trusted-extension allowlist makes a failure to load this policy fatal and
+  disables ambient extensions in single mode.
+- `auto` sets `task.eager=preferred`.
+- `swarm` sets `task.eager=always`, with batch/async enabled as mode defaults.
+  Explicit native PI configuration remains authoritative for batch/async.
+
+PI's project `.omp/config.yml` and optional Studio-state `agent/pi/config.yml`
+control `task.maxConcurrency`, recursion, isolation, patch and merge policy.
+Studio does not write these settings or impose a child-agent count limit. Only
+two Studio parent tasks may run at once, with one writer per project, as before.
+PI does not inherit Codex's 64-call cap. A PI foreground turn and subsequent
+background-settlement wait each have a 30-minute operational timeout.
+
+PI sessions persist per Studio task at `agent/tasks/<task-id>/pi/sessions`.
+Continue calls official `open_session`, keeping the same task and session; engine
+and collaboration selection stay fixed for that task. Cancel sends RPC abort,
+stops/reaps the process group, cancels model streams/queued calls, and revokes the
+one-hour task token. Restart marks unfinished tasks interrupted for explicit resume.
+`prompt_result` is a yield; the adapter also waits for `session_settled` when PI
+has background work. Child nodes use native lifecycle/progress events, including
+nested parent relationships, native request counts, elapsed time, and errors.
+No child percentage or per-child decode speed is inferred from text/usage totals.
+
+PI `/compact` uses native RPC compaction. `/skills` lists the native skill
+commands from `get_available_commands`; invoke them with the displayed
+`/skill:<name>` command. PI plan and review use explicit instructions plus the
+read-only project mount. They do not invoke Codex's collaboration/review RPCs.
+
+The same bubblewrap boundary mounts the project read-only for read-only/plan/review
+turns. A task-local loopback relay exposes only the internal OpenAI-compatible model
+routes through a private Unix socket. A short-lived bearer token binds every PI
+model request to its Studio parent and model instance. Missing PI or a provider
+error never selects Codex automatically. Model identity changes require resuming.
+
+## Concurrency and Decode aggregation
+
+Save `Profile.max_num_seqs` (1/2/4/8 presets or a custom value) and reload the model
+to change total model-service capacity. Launch has no temporary override. This is
+separate from PI's delegation settings. Studio's inference proxy admits up to the
+running profile's capacity and queues additional requests FIFO, across PI, Codex,
+chat and API. It records actual proxy waiting time, not inferred vLLM scheduler
+queue time; `queue_source=studio_proxy` makes this boundary explicit. Direct calls
+to a vLLM port outside Studio are outside this measurement.
+
+`GET /api/requests/aggregate?window_s=2&agent_task_id=<optional>` requires admin
+access and returns rolling Decode rate, active/waiting requests, observed tokens,
+quality/reason, and total/PI/Codex/chat/API buckets. Only full token-ID stream
+observations count; each request's first batch is excluded. Missing IDs or usage
+mismatches make the affected bucket and total unavailable while retaining valid
+other buckets. Idle rates decay to zero; missing data is never estimated from
+characters, stream chunks, or engine-wide counters. Samples live only in memory
+and clear at Studio startup.
+
+Agent SSE emits `decode_aggregate` on a periodic heartbeat as well as token updates,
+so queue counts and decaying rates remain live between model calls. The global
+header shows aggregate Decode next to GPU power; clicking the rate reveals
+PI/Codex/chat/API buckets and active/queued requests. The PI task card scopes its
+rate to that parent.
+Request history and usage filters include source `agent`, with engine/task/swarm
+attribution and `queue_s` in each request's metrics.
+
+## PI validation
+
+Run the tests in `test_pi_runtime.py`, `test_pi_proxy.py`, `test_pi_native.py`, and `test_decode_metrics.py`
+with pytest-asyncio installed, then the existing Agent/observability suites.
+`python studio/scripts/check-pi.py` checks browser controls/SSE and responsive
+layouts after a frontend build (Playwright required). Its deterministic task double,
+the RPC/proxy contract doubles, and `test_pi_native.py`'s CPU provider are **not** GPU throughput or model-quality proof. A release still needs the built pinned OMP against vLLM at capacity 1 and
+>=2, confirming model requests overlap and reporting measured aggregate Decode.
