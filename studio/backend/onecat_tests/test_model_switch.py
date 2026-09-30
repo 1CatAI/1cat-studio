@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
+import asyncio
 import os
 import signal
 import subprocess
@@ -7,10 +8,12 @@ import time
 
 import psutil
 import pytest
+from fastapi import HTTPException
 
 from onecat import db, engine, gpu, model_switch
 from onecat.creative import services
 from onecat.jobs import Job, same_process
+from onecat.agent import projects, runtime, tasks
 
 
 def record_job(kind, payload, **fields):
@@ -83,6 +86,116 @@ def test_queued_text_load_is_visible_while_hardware_lock_is_busy(queue):
     assert view["state"] == "loading" and view["phase"] == "queued"
     assert view["actions"]["cancel"] and view["profile_id"] == "text"
     assert engine.private_state()["state"] == "stopped"
+
+
+@pytest.mark.parametrize("task_state,settled", [("running", False), ("waiting", False), ("completed", False)])
+@pytest.mark.parametrize("entry", ["preset", "picker", "retry"])
+def test_all_text_launch_entries_protect_unfinished_agents(client, queue, monkeypatch, task_state, settled, entry):
+    db.put("agent_tasks", "busy", {"id": "busy", "state": task_state, "settled": settled})
+    if entry == "retry":
+        previous = record_job("start_model", {"profile_id": "text"})
+        db.patch("jobs", previous["id"], {"state": "failed"})
+        endpoint, payload = f"/api/jobs/{previous['id']}/retry", {}
+    elif entry == "picker":
+        from onecat import model_controls
+
+        monkeypatch.setattr(model_controls, "resolve_profile", lambda *args: {"id": "text"})
+        endpoint, payload = "/api/inference/load-model", {"model_id": "model"}
+    else:
+        endpoint, payload = "/api/inference/load", {"profile_id": "text"}
+    before = db.all_records("jobs")
+    response = client.post(endpoint, json=payload)
+    assert response.status_code == 409, response.text
+    assert "Agent" in response.json()["detail"]
+    assert db.all_records("jobs") == before
+
+    db.patch("agent_tasks", "busy", {"state": "completed", "settled": True})
+    assert client.post(endpoint, json=payload).status_code == 200
+
+
+@pytest.mark.parametrize("kind,payload", [
+    ("stop_model", {}),
+    ("creative_load", {"service_id": "h3"}),
+])
+def test_unload_and_overlapping_creative_load_protect_agent_between_calls(queue, kind, payload):
+    db.put("engine", "active", {"state": "ready", "profile": {"gpu_uuids": ["g1"]}})
+    db.put("agent_tasks", "working", {"id": "working", "state": "running", "settled": False})
+    with pytest.raises(HTTPException) as error:
+        model_switch.schedule(kind, payload)
+    assert error.value.status_code == 409
+    assert not db.all_records("jobs")
+    assert model_switch.schedule("creative_load", {"service_id": "other"})
+    assert model_switch.schedule("stop_model", {"force": True})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind,payload", [
+    ("start_model", {"profile_id": "text"}),
+    ("stop_model", {}),
+    ("creative_load", {"service_id": "h3"}),
+])
+async def test_queued_model_change_prevents_agent_from_binding_old_model(queue, monkeypatch, kind, payload):
+    monkeypatch.setattr(runtime, "info", lambda: {"installed": True, "sandbox_ready": True})
+
+    async def wait(self):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(tasks.Run, "execute", wait)
+    project = {"id": db.uid(), "name": "Admission race"}
+    db.put("agent_projects", project["id"], project)
+    projects.root(project["id"]).mkdir(parents=True)
+    db.put("engine", "active", {"state": "ready", "port": 1, "profile_id": "text", "profile": {
+        "gpu_uuids": ["g1"], "tool_calling": True, "served_model_name": "local",
+    }})
+    model_switch.schedule(kind, payload)
+    try:
+        with pytest.raises(HTTPException) as error:
+            tasks.start(project["id"], "Do not use an about-to-be-unloaded model", "queued-model-race")
+        assert error.value.status_code == 409
+        assert not db.all_records("agent_tasks")
+    finally:
+        await tasks.shutdown()
+
+
+@pytest.mark.parametrize("kind,payload", [
+    ("start_model", {"profile_id": "text"}),
+    ("stop_model", {}),
+    ("creative_load", {"service_id": "h3"}),
+])
+def test_background_worker_rechecks_agent_before_disabling_text_requests(queue, kind, payload):
+    db.put("engine", "active", {"state": "ready", "profile": {"gpu_uuids": ["g1"]}})
+    job = Job(record_job(kind, payload)["id"])
+    # The creative preparation/download was submitted before this task began.
+    db.put("agent_tasks", "working", {"id": "working", "state": "waiting", "settled": False})
+    with pytest.raises(HTTPException, match="Agent"):
+        with engine.text_maintenance(job):
+            pytest.fail("The worker must not unload a model used by an Agent")
+    assert not db.get("engine", "maintenance")
+    assert db.get("engine", "active")["state"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_disjoint_or_finished_model_jobs_do_not_block_agent(queue, monkeypatch):
+    monkeypatch.setattr(runtime, "info", lambda: {"installed": True, "sandbox_ready": True})
+
+    async def wait(self):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(tasks.Run, "execute", wait)
+    project = {"id": db.uid(), "name": "Independent GPUs"}
+    db.put("agent_projects", project["id"], project)
+    projects.root(project["id"]).mkdir(parents=True)
+    db.put("engine", "active", {"state": "ready", "port": 1, "profile_id": "text", "profile": {
+        "gpu_uuids": ["g1"], "tool_calling": True, "served_model_name": "local",
+    }})
+    old = record_job("stop_model", {})
+    db.patch("jobs", old["id"], {"state": "cancelled"})
+    model_switch.schedule("creative_load", {"service_id": "other"})
+    result = tasks.start(project["id"], "Use the unaffected GPU", "independent-gpu")
+    try:
+        assert result["state"] == "starting"
+    finally:
+        await tasks.shutdown()
 
 
 def test_shared_gpu_release_ignores_disjoint_services(queue, monkeypatch):

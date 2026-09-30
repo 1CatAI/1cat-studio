@@ -115,7 +115,7 @@ export function TokenUsage({ days = 1, onDaysChange, model = "", onModelChange, 
           {query.data?.models?.map(item => <option key={item.id} value={item.id}>{modelLabel(item.name)}</option>)}
         </select>
         <select aria-label={t("请求来源", "Request source")} value={source} onChange={event => onSourceChange?.(event.target.value)}>
-          <option value="">{t("聊天与 API", "Chat and API")}</option><option value="studio">{t("聊天", "Chat")}</option><option value="api">API</option>
+          <option value="">{t("聊天、API 与 Agent", "Chat, API and Agent")}</option><option value="studio">{t("聊天", "Chat")}</option><option value="api">API</option><option value="agent">Agent</option>
         </select>
         <span className="oc-muted">{t("进行中（含排队）", "In flight (including queued)")}: {data?.active ?? "—"}</span>
         <span className="oc-muted" title={t("取消请求不计入成功率", "Cancelled requests are excluded")}>

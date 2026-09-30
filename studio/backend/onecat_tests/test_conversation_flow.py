@@ -206,6 +206,9 @@ async def test_rejected_regeneration_preserves_history_and_settings(monkeypatch)
 async def test_accepted_generation_commits_once_and_thinking_reaches_agent(
     project, model, monkeypatch, tmp_path
 ):
+    (tmp_path / "chat_template.jinja").write_text("{% if enable_thinking %}<think>{% endif %}")
+    model["profile"]["model_path"] = str(tmp_path)
+    db.put("engine", "active", model)
     tid = thread()
     original = studio_db.list_chat_messages(tid)
 
@@ -226,9 +229,6 @@ async def test_accepted_generation_commits_once_and_thinking_reaches_agent(
     assert chat_runs.current(tid)["pending_commit"] is False
     assert studio_db.list_chat_messages(tid)[-1]["content"][0]["text"] == "new answer"
     assert studio_db.get_chat_thread(tid)["settings"]["thinking"] is True
-    (tmp_path / "chat_template.jinja").write_text("{% if enable_thinking %}<think>{% endif %}")
-    model["profile"]["model_path"] = str(tmp_path)
-    db.put("engine", "active", model)
     seen = []
 
     async def fake(request):

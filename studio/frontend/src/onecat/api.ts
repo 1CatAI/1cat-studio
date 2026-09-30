@@ -34,6 +34,17 @@ export function mutation<T>(path: string, body?: unknown, method = "POST") {
 export function refreshData() {
   window.dispatchEvent(new Event("onecat:refresh"));
 }
+// Live polling has a deadline; slow catalog reads, uploads and user mutations
+// keep their own lifetimes and are never resent after an uncertain result.
+async function readQuery<T>(path: string, signal: AbortSignal): Promise<T> {
+  const request = new AbortController();
+  const cancel = () => request.abort(signal.reason);
+  if (signal.aborted) cancel();
+  else signal.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(() => request.abort(new Error("连接超时，请重试 / Connection timed out; please retry")), 15000);
+  try { return await api<T>(path, { signal: request.signal }); }
+  finally { clearTimeout(timer); signal.removeEventListener("abort", cancel); }
+}
 let engineSnapshot: { data?: Engine; error: string } = { error: "" };
 const engineListeners = new Set<() => void>();
 let engineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -43,7 +54,7 @@ function readEngine() {
   engineRequest?.abort();
   const controller = new AbortController();
   engineRequest = controller;
-  void api<Engine>("/api/inference/status", { signal: controller.signal })
+  void readQuery<Engine>("/api/inference/status", controller.signal)
     .then((data) => {
       if (!controller.signal.aborted) engineSnapshot = { data, error: "" };
     })
@@ -102,7 +113,9 @@ export function useQuery<T>(path: string | null, interval = 0) {
     const controller = new AbortController();
     async function read() {
       try {
-        const value = await api<T>(path!, { signal: controller.signal });
+        const value = interval
+          ? await readQuery<T>(path!, controller.signal)
+          : await api<T>(path!, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setResult({ path: path!, data: value, error: "" });
         }
@@ -184,6 +197,10 @@ export type RequestMetrics = {
   average_gpu_w?: number | null;
   energy_wh?: number | null;
   concurrent?: boolean;
+  agent_engine?: "codex" | "pi" | null;
+  agent_task_id?: string | null;
+  swarm_id?: string | null;
+  queue_s?: number | null;
 };
 export type RequestRecord = {
   id: string;
@@ -199,6 +216,20 @@ export type RequestRecord = {
   metrics: RequestMetrics;
 };
 export type RequestHistory = { active: number; items: RequestRecord[]; scope?: { days: number | null; model: string; source: string } };
+export type DecodeAggregate = {
+  at: number;
+  window_s: number;
+  decode_tokens_s: number | null;
+  active_requests: number;
+  waiting_requests: number;
+  observed_tokens?: number;
+  decode_tokens?: number;
+  queue_source?: string;
+  buckets: { total: number | null; pi: number | null; codex: number | null; chat: number | null; api: number | null };
+  source: string;
+  quality: string;
+  reason?: string | null;
+};
 export type Runtime = {
   id: string;
   name: string;
@@ -266,6 +297,9 @@ export type Profile = {
 };
 export type Engine = {
   state: string;
+  model?: { name: string; repo_id?: string | null; source?: string | null } | null;
+  listen_host?: string;
+  lan_api_urls?: string[];
   profile_id?: string;
   profile?: Profile;
   port?: number;

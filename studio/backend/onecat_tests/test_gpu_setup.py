@@ -58,7 +58,7 @@ def test_preinstall_binds_a_compute_class_not_this_machine(installer):
     # The whole point: nothing machine-specific is written, so the same package
     # installs everywhere and re-binds itself when the cards change.
     assert json.loads(installer.CONFIG.read_text())["users"] == {
-        "tester": {"mode": "class", "compute_capability": [[7, 0]]}
+        "tester": {"mode": "class", "compute_capability": [7, 0], "min_memory_mib": 15360}
     }
     rules = installer.SUDOERS.read_text()
     assert " check," in rules and " snapshot," in rules and rules.endswith(" apply\n")

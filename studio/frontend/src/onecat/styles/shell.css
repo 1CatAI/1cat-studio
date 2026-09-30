@@ -207,6 +207,7 @@ textarea {
 }
 .oc-header-stats {
   display: flex;
+  flex-shrink: 0;
   justify-self: end;
   align-items: center;
   gap: 14px;
@@ -215,6 +216,46 @@ textarea {
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
+.oc-header-decode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.oc-header-decode:hover,
+.oc-header-decode[data-state="open"] {
+  color: var(--foreground);
+}
+.oc-decode-popover {
+  z-index: 80;
+  width: min(260px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--oc-shadow-float);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.oc-decode-popover p { margin: 6px 0 12px; }
+.oc-decode-popover dl { display: grid; gap: 8px; margin: 0; }
+.oc-decode-popover dl > div { display: flex; justify-content: space-between; gap: 16px; }
+.oc-decode-popover dt { color: var(--muted-foreground); }
+.oc-decode-popover dd { margin: 0; }
+.oc-decode-popover .oc-decode-requests {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.oc-decode-popover small { display: block; margin-top: 8px; }
 .oc-conversation-modes.oc-segments {
   justify-self: center;
   display: flex;
@@ -510,7 +551,8 @@ textarea {
     padding: 6px 12px;
     gap: 4px 8px;
   }
-  .oc-header-stats > span:last-child {
+  .oc-header-engine-state,
+  .oc-header-power {
     display: none;
   }
   .oc-header-model {

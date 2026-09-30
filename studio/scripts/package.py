@@ -9,6 +9,8 @@ import os
 import shutil
 import subprocess
 import tarfile
+import time
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +51,9 @@ def source_archive(destination, root=ROOT):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / ".artifacts/releases")
+    parser.add_argument("--base", type=Path, default=ROOT / ".artifacts/package-base")
+    parser.add_argument("--sequence", type=int, default=int(time.time()))
+    parser.add_argument("--source-commit", help="Original commit when rebuilding an exported source archive")
     args = parser.parse_args()
     # Never publish an old dist beside newer source/backend code. The installer
     # must receive assets built from the same working tree being archived below.
@@ -58,9 +63,10 @@ def main():
     subprocess.run([npm, "run", "build:onecat"], cwd=STUDIO / "frontend", check=True)
     subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/check-source.py")], check=True)
     subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/prepare-agent.py")], check=True)
+    subprocess.run([shutil.which("python3"), str(STUDIO / "scripts/prepare-pi.py")], check=True)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    base = ROOT / ".artifacts/package-base"
+    base = args.base.resolve()
     uv = shutil.which("uv")
     if not uv:
         raise SystemExit("uv is required to build the offline bundle")
@@ -89,7 +95,17 @@ def main():
     for path in source_paths():
         digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())
-    version = "0.4.0-" + digest.hexdigest()[:10]
+    version = tomllib.loads((STUDIO / "pyproject.toml").read_text())["project"]["version"] + "-" + digest.hexdigest()[:10]
+    source_commit = args.source_commit
+    if not source_commit:
+        try:
+            source_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            # Exported corresponding source remains buildable without Git.
+            # The signed OTA publisher requires a known original commit.
+            source_commit = None
     stage = output / ("onecat-studio-" + version)
     if stage.exists():
         shutil.rmtree(stage)
@@ -105,6 +121,7 @@ def main():
         )
     shutil.copytree(STUDIO / "frontend/dist", stage / "studio/frontend/dist")
     shutil.copytree(STUDIO / "vendor/codex", stage / "studio/vendor/codex", symlinks=True)
+    shutil.copytree(STUDIO / "vendor/oh-my-pi", stage / "studio/vendor/oh-my-pi", symlinks=True)
     shutil.copytree(
         STUDIO / "scripts", stage / "scripts", ignore=shutil.ignore_patterns("__pycache__")
     )
@@ -124,6 +141,8 @@ def main():
     manifest = {
         "format": "onecat-studio-linux-v1",
         "version": version,
+        "source_commit": source_commit,
+        "sequence": args.sequence,
         "original_prefix": str(base),
         "python_home": str(home.relative_to(base)),
         "source_license": "LicenseRef-1Cat-Community-1.0",

@@ -2400,10 +2400,10 @@ details[data-expanding="false"] > summary .lucide-chevron-down {
     border-color var(--oc-motion-state),
     box-shadow var(--oc-motion-state);
 }
-.oc-agent-composer:focus-within {
+.oc-agent-composer:has(textarea:focus-visible) {
   border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
 }
-.oc-agent-composer textarea {
+.oc-agent-composer textarea.oc-kit-textarea {
   border: 0;
   box-shadow: none;
   resize: none;
@@ -2418,6 +2418,14 @@ details[data-expanding="false"] > summary .lucide-chevron-down {
   outline: none;
   box-shadow: none;
 }
+.oc-agent-start-hint {
+  margin: 8px 4px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.oc-agent-start-hint a { color: var(--oc-accent-text); }
 .oc-agent-compose-actions > span {
   flex: 1;
   font-size: 12px;
@@ -2453,7 +2461,7 @@ details[data-expanding="false"] > summary .lucide-chevron-down {
   border: 0; background: transparent; color: var(--muted-foreground);
   font-size: 12px; padding: 6px; border-radius: 10px;
 }
-.oc-agent-model { justify-content: flex-end; flex: 1; min-width: 50px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-agent-model { justify-content: flex-end; flex: 0 1 auto; margin-left: auto; min-width: 50px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oc-agent-model span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oc-agent-model svg, .oc-agent-permission svg { flex-shrink: 0; }
 .oc-agent-model:hover, .oc-agent-permission:hover { color: var(--foreground); background: var(--secondary); }
@@ -2729,3 +2737,30 @@ details[data-expanding="false"] > summary .lucide-chevron-down {
 .oc-agent-file-tools small {
   color: var(--muted-foreground);
 }
+.oc-agent-engine-picker {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  overflow: hidden;
+}
+.oc-agent-engine-picker button {
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+.oc-agent-engine-picker button:last-child { border-right: 0; }
+.oc-agent-engine-picker button.is-active { background: var(--primary); color: var(--primary-foreground); }
+.oc-agent-engine-picker button:disabled { opacity: 0.5; cursor: not-allowed; }
+.oc-agent-collaboration { max-width: 10rem; }
+.oc-agent-swarm-card { margin: 1rem 0; padding: 0.9rem; border: 1px solid var(--border); border-radius: 0.8rem; background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.oc-agent-swarm-card .oc-request-stats { margin-top: 0.75rem; }
+.oc-agent-subagents { display: grid; gap: 0.6rem; margin-top: 0.7rem; list-style: none; padding-left: 0.6rem; border-left: 1px solid var(--border); }
+.oc-agent-subagents > li { font-size: 0.85rem; overflow-wrap: anywhere; }
+.oc-agent-subagents p { margin: 0.3rem 0; white-space: pre-wrap; }
+.oc-agent-toolbar-actions { flex-wrap: wrap; }
+.oc-agent-subagents small { color: var(--muted-foreground); }
+.oc-concurrency-presets { display: grid; gap: 0.4rem; align-content: start; }

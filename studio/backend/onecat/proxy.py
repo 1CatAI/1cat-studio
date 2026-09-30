@@ -12,9 +12,34 @@ from fastapi import HTTPException, Request
 from starlette.responses import JSONResponse, StreamingResponse
 
 from . import db, engine, telemetry
+from .decode_metrics import aggregator as decode_aggregator
 from .request_metrics import TokenTiming, engine_metrics, isolated_metrics, usage_cache
+from .schemas import DEFAULT_MAX_NUM_SEQS
 
 pending: set[asyncio.Task] = set()
+agent_pending: dict[str, set[asyncio.Task]] = {}
+
+
+async def cancel_agent(task_id):
+    tasks = list(agent_pending.get(task_id, ()))
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def track_agent(context):
+    if not context:
+        return lambda: None
+    task_id, task = context["task_id"], asyncio.current_task()
+    agent_pending.setdefault(task_id, set()).add(task)
+
+    def release():
+        owners = agent_pending.get(task_id)
+        if owners is not None:
+            owners.discard(task)
+            if not owners:
+                agent_pending.pop(task_id, None)
+    return release
 
 
 def connection() -> tuple[str, dict, dict]:
@@ -39,7 +64,12 @@ def instance_identity(state: dict) -> tuple:
 
 
 def begin(
-    model: str, source: str, expected_port: int, *, expected_instance=None
+    model: str,
+    source: str,
+    expected_port: int,
+    *,
+    expected_instance=None,
+    agent_context: dict | None = None,
 ) -> tuple[str, float]:
     id, now = db.uid(), time.time()
     with db.connect() as conn:
@@ -71,11 +101,25 @@ def begin(
         conn.execute(
             "UPDATE requests SET metrics=json_set(metrics, '$.window_overlap', json('true')) WHERE status IS NOT NULL AND json_extract(metrics,'$.pending')=1"
         )
+        context = agent_context or {}
+        metrics = {"agent_engine": context.get("engine"), "agent_task_id": context.get("task_id"),
+                   "swarm_id": context.get("swarm_id"), "queue_s": None, "queue_source": "studio_proxy"}
         conn.execute(
-            "INSERT INTO requests(id,started,model,source,overlapped) VALUES(?,?,?,?,?)",
-            (id, now, model, source, int(overlap)),
+            "INSERT INTO requests(id,started,model,source,overlapped,metrics) VALUES(?,?,?,?,?,?)",
+            (id, now, model, source, int(overlap), json.dumps(metrics)),
         )
     db.patch("engine", "active", {"last_request_at": now})
+    context = agent_context or {}
+    bucket = context.get("engine") if source == "agent" else source
+    if bucket not in {"pi", "codex"}:
+        bucket = "chat" if source == "studio" else "api"
+    decode_aggregator.begin(
+        id,
+        source=source,
+        bucket=bucket,
+        task_id=context.get("task_id"),
+        capacity=int(state.get("profile", {}).get("max_num_seqs") or DEFAULT_MAX_NUM_SEQS),
+    )
     return id, now
 
 
@@ -90,6 +134,12 @@ def finish(
     elapsed=None,
     metrics=None,
 ):
+    context = metrics if metrics is not None else {}
+    queue_s = decode_aggregator.queue_seconds(id)
+    if queue_s is not None and context.get("queue_s") is None:
+        context["queue_s"] = queue_s
+        context["queue_source"] = "studio_proxy"
+    decode_aggregator.finish(id, usage=usage)
     with db.connect() as conn:
         conn.execute(
             "UPDATE requests SET status=?,elapsed=?,ttft=?,prompt_tokens=?,completion_tokens=?,error=?,metrics=? WHERE id=?",
@@ -100,7 +150,7 @@ def finish(
                 usage.get("prompt_tokens"),
                 usage.get("completion_tokens"),
                 str(error)[:500] if error else None,
-                json.dumps({**(metrics or {}), **usage_cache(usage)}),
+                json.dumps({**context, **usage_cache(usage)}),
                 id,
             ),
         )
@@ -165,7 +215,45 @@ async def enrich(id, base, headers, before, usage, state, start, end, status, re
 
 
 async def forward(request: Request, endpoint: str, source: str = "api"):
+    context = getattr(request.state, "onecat_agent_context", None)
+    if source == "studio" and not context:
+        # Studio chat runs intentionally survive browser disconnection.
+        return await _forward(request, endpoint, source)
+    # While waiting for a capacity slot or upstream response headers there is
+    # no StreamingResponse yet to observe disconnects. Cancel these calls too.
+    await request.body()
+    release = track_agent(context)
+    generation = asyncio.create_task(_forward(request, endpoint, source))
+
+    async def disconnected():
+        while True:
+            message = await request.receive()
+            if message["type"] == "http.disconnect":
+                return
+            await asyncio.sleep(0)
+
+    monitor = asyncio.create_task(disconnected())
+    try:
+        completed, _ = await asyncio.wait([generation, monitor], return_when=asyncio.FIRST_COMPLETED)
+        if generation in completed:
+            return await generation
+        raise asyncio.CancelledError("Model client disconnected")
+    finally:
+        monitor.cancel()
+        if not generation.done():
+            generation.cancel()
+        await asyncio.gather(generation, monitor, return_exceptions=True)
+        release()
+
+
+async def _forward(request: Request, endpoint: str, source: str):
     base, headers, state = connection()
+    agent_context = getattr(request.state, "onecat_agent_context", None)
+    if agent_context:
+        source = "agent"
+        identity = agent_context.get("engine_identity")
+        if identity is not None and tuple(identity) != instance_identity(state):
+            raise HTTPException(409, "模型实例已切换，请继续任务 / Model changed; resume the task")
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(422, "Request body must be an object")
@@ -184,12 +272,29 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
         # accounting to vLLM, which knows the actual remaining context budget.
         if body.get("max_tokens") is None:
             body.pop("max_tokens", None)
+    if agent_context:
+        from .agent import tasks as agent_tasks
+        from .model_controls import thinking_kwargs
+
+        run = agent_tasks.runs.get(agent_context["task_id"])
+        if not run or run.cancel_requested or run.shutdown_requested:
+            raise HTTPException(409, "Agent task is no longer running")
+        body["chat_template_kwargs"] = {
+            **(body.get("chat_template_kwargs") or {}),
+            **thinking_kwargs(state["profile"], run.record.get("thinking"), run.record.get("thinking_effort")),
+        }
     stream = body.get("stream", False)
     requested_ids = body.get("return_token_ids", False)
     if stream:
         body["stream_options"] = {**(body.get("stream_options") or {}), "include_usage": True}
         body["return_token_ids"] = True
-    id, started_wall = begin(alias, source, state["port"])
+    id, started_wall = begin(
+        alias,
+        source,
+        state["port"],
+        expected_instance=instance_identity(state),
+        agent_context=agent_context,
+    )
     client = httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=10), trust_env=False)
     before = {}
     started = time.monotonic()
@@ -217,6 +322,10 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
             if timing.summary(usage).get("decode_tokens_s")
             else "尚无完整 token 计数及有效时间区间 / Incomplete token counts or timing interval",
             "gpu_uuids": state["profile"]["gpu_uuids"],
+            "agent_engine": agent_context.get("engine") if agent_context else None,
+            "agent_task_id": agent_context.get("task_id") if agent_context else None,
+            "swarm_id": agent_context.get("swarm_id") if agent_context else None,
+            "queue_s": None,
         }
         if status != 200:
             result.update(
@@ -237,6 +346,46 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
             elapsed=end - started,
             metrics=result,
         )
+        if agent_context and agent_context.get("task_id"):
+            from .agent import tasks as agent_tasks
+
+            run = agent_tasks.runs.get(agent_context["task_id"])
+            if run:
+                run.record["model_calls"] = run.record.get("model_calls", 0) + 1
+                totals = run.record.setdefault(
+                    "usage",
+                    {
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "cached_tokens": 0,
+                        "missing_calls": 0,
+                        "cache_missing_calls": 0,
+                    },
+                )
+                if usage.get("prompt_tokens") is None or usage.get("completion_tokens") is None:
+                    totals["missing_calls"] += 1
+                else:
+                    totals["input_tokens"] += usage["prompt_tokens"]
+                    totals["output_tokens"] += usage["completion_tokens"]
+                cached = usage_cache(usage).get("cached_tokens")
+                if cached is None:
+                    totals["cache_missing_calls"] += 1
+                else:
+                    totals["cached_tokens"] += cached
+                task_metrics = run.record.setdefault(
+                    "metrics",
+                    {"llm_s": 0, "tool_s": 0, "tool_calls": 0, "ttft_s": 0, "ttft_count": 0, "decode_s": 0, "decode_tokens": 0, "decode_calls": 0},
+                )
+                task_metrics["llm_s"] += result.get("elapsed_s", 0)
+                if result.get("ttft_s") is not None:
+                    task_metrics["ttft_s"] += result["ttft_s"]
+                    task_metrics["ttft_count"] += 1
+                if result.get("decode_s"):
+                    task_metrics["decode_s"] += result["decode_s"]
+                    task_metrics["decode_tokens"] += max(0, timing.tokens - timing.first_tokens)
+                    task_metrics["decode_calls"] += 1
+                run.record["live_metrics"] = None
+                run.emit({"type": "usage", "usage": dict(totals), "model_calls": run.record["model_calls"], "metrics": task_metrics})
         task = asyncio.create_task(
             enrich(id, base, headers, before, usage, state, started, end, status, result)
         )
@@ -245,14 +394,13 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
         return result
 
     try:
+        await decode_aggregator.wait_for_capacity(id)
         with db.connect() as conn:
             unflushed = conn.execute(
                 "SELECT count(*) FROM requests WHERE id<>? AND json_extract(metrics,'$.pending')=1",
                 (id,),
             ).fetchone()[0]
         before = await engine_metrics(client, base, headers) if not unflushed else {}
-        started = time.monotonic()
-        timing = TokenTiming(started)
         upstream = await client.send(
             client.build_request("POST", base + endpoint, json=body, headers=headers), stream=True
         )
@@ -281,10 +429,12 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
             await client.aclose()
 
     async def events():
+        release = track_agent(agent_context)
         usage, status, error = {}, 200, None
         done = False
         result = None
         last_live = 0.0
+        last_aggregate = 0.0
         live_update = None
         try:
             async for line in upstream.aiter_lines():
@@ -301,6 +451,24 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
                             usage = event["usage"]
                         now = time.monotonic()
                         timing.observe(event, now)
+                        decode_aggregator.observe(id, event, now)
+                        if agent_context and agent_context.get("task_id"):
+                            from .agent import tasks as agent_tasks
+
+                            run = agent_tasks.runs.get(agent_context["task_id"])
+                            if run and now - last_aggregate >= 0.25:
+                                last_aggregate = now
+                                run.record["decode_aggregate"] = decode_aggregator.snapshot(
+                                    2, agent_context["task_id"]
+                                )
+                                run.record["live_metrics"] = timing.live(now)
+                                run.emit(
+                                    {
+                                        "type": "decode_aggregate",
+                                        "decode_aggregate": run.record["decode_aggregate"],
+                                        "live_metrics": run.record["live_metrics"],
+                                    }
+                                )
                         if source == "studio" and now - last_live >= 0.25 and status == 200:
                             live_update = {
                                 "onecat_live_metrics": timing.live(now),
@@ -333,6 +501,7 @@ async def forward(request: Request, endpoint: str, source: str = "api"):
             result = record(status, usage, error)
             await upstream.aclose()
             await client.aclose()
+            release()
         if source == "studio":
             yield (
                 "data: " + json.dumps({"onecat_metrics": result, "request_id": id}) + "\n\n"

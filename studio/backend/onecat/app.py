@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import json
+import os
 import platform
 import re
 import shutil
@@ -18,9 +20,10 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry
+from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry, updates
 from .config import automatic_gpu_actions, frontend_dist, initialize_paths, state_root
 from .jobs import TERMINAL, create_job, list_jobs, request_cancel
+from .network import lan_api_urls
 from .schemas import (
     BenchmarkRequest,
     HardwareSetting,
@@ -38,7 +41,33 @@ def public_runtime(record: dict) -> dict:
     return {k: v for k, v in record.items() if k != "environment"}
 
 
+def startup_state() -> dict:
+    if platform.system() != "Linux":
+        return {"service_enabled": False, "linger_enabled": False, "user": ""}
+    import pwd
+
+    user = pwd.getpwuid(os.getuid()).pw_name
+    try:
+        service = subprocess.run(
+            ["systemctl", "--user", "is-enabled", "onecat-studio.service"],
+            capture_output=True, text=True, timeout=3,
+        )
+        linger = subprocess.run(
+            ["loginctl", "show-user", user, "--property=Linger", "--value"],
+            capture_output=True, text=True, timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {"service_enabled": False, "linger_enabled": False, "user": user}
+    return {
+        "service_enabled": service.returncode == 0 and service.stdout.strip() == "enabled",
+        "linger_enabled": linger.returncode == 0 and linger.stdout.strip() == "yes",
+        "user": user,
+    }
+
+
 def scheduled_job(kind: str, payload: dict) -> dict:
+    if updates.activating():
+        raise ValueError("Studio 正在更新 / Studio is updating")
     from .model_switch import KINDS, schedule
 
     if kind in KINDS:
@@ -62,6 +91,8 @@ def scheduled_job(kind: str, payload: dict) -> dict:
 
 async def lifecycle_monitor():
     await asyncio.sleep(2)
+    while updates.activating():
+        await asyncio.sleep(2)
     await asyncio.to_thread(runtimes.refresh_incomplete_metadata)
     from .catalog import backfill_default_profiles
 
@@ -84,6 +115,8 @@ async def lifecycle_monitor():
             scheduled_job("start_model", {"profile_id": automatic})
     while True:
         await asyncio.sleep(2)
+        if updates.activating():
+            continue
         from .lifecycle import reconcile_owned
 
         if automatic_gpu_actions():
@@ -109,6 +142,9 @@ async def lifecycle_monitor():
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_paths()
+    from .decode_metrics import aggregator as decode_aggregator
+
+    decode_aggregator.reset()
     from .migrations import upgrade
 
     upgrade()
@@ -156,6 +192,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="1Cat Studio", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None
     )
+    listener = db.settings()
+    app.state.listen_host = listener["host"]
+    app.state.listen_port = listener["port"]
     from .agent.api import router as agent_router
 
     app.include_router(agent_router)
@@ -166,6 +205,21 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def serialize_management(request, call_next):
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            with (updates.updates_root() / "admission.lock").open("a") as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    if updates.activating():
+                        raise BlockingIOError
+                except BlockingIOError:
+                    return JSONResponse(
+                        {"detail": "Studio 正在更新，请稍后重试 / Studio is updating"},
+                        status_code=503, headers={"Retry-After": "5"},
+                    )
+                return await management(request, call_next)
+        return await call_next(request)
+
+    async def management(request, call_next):
         if (
             request.method not in {"GET", "HEAD", "OPTIONS"}
             and request.url.path.startswith("/api/")
@@ -195,7 +249,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "product": "1Cat Studio", "version": __version__}
+        return {"status": "ok", "product": "1Cat Studio", "version": __version__,
+                "release": updates.installed_version()}
 
     @app.get("/api/auth/status")
     def auth_status(request: Request):
@@ -278,6 +333,7 @@ def create_app() -> FastAPI:
             "single_active_model": True,
             "gpu_control": gpu.control_available(),
             "automatic_gpu_actions": automatic_gpu_actions(),
+            "startup": startup_state(),
             "upstream_commit": "afeb2778f4a7e43dc3a0bdf2d2323b8dba6fd13d",
         }
 
@@ -407,6 +463,11 @@ def create_app() -> FastAPI:
         db.put("secrets", "modelscope", {"token": str(payload.get("token", "")) or None})
         return {"configured": bool(payload.get("token"))}
 
+    @admin.get("/updates/progress")
+    def update_progress():
+        return {"current": updates.installed_version(), "status": updates.read_status(),
+                "blocked_reason": updates.busy_reason()}
+
     @admin.get("/updates")
     def update_status(force: bool = False):
         from .updates import check
@@ -421,13 +482,15 @@ def create_app() -> FastAPI:
             manifest = updates.fetch(force=True)
         except Exception as error:  # noqa: BLE001 - the channel is operator input
             raise HTTPException(409, "更新通道不可用 / Update channel failed: " + str(error)[:200])
-        if manifest.get("version") == updates.installed_version():
-            raise HTTPException(409, "已是最新版本 / Already running " + str(manifest.get("version")))
+        payload = payload or {}
+        if payload.get("release_id") != updates.protocol.release_id(manifest):
+            raise HTTPException(409, "版本信息已变化，请重新检查更新 / Check the release again")
         port = int(db.settings().get("port") or 8888)
         try:
-            started = updates.start(manifest, port=port)
-        except Exception as error:  # noqa: BLE001
-            raise HTTPException(500, "无法启动更新 / Could not start the update: " + str(error)[:200])
+            started = updates.start(manifest, port=port,
+                                    switch_to_release=payload.get("switch_to_release") is True)
+        except ValueError as error:
+            raise HTTPException(409, str(error))
         return {"started": started, "check": updates.check()}
 
     @admin.get("/runtimes")
@@ -617,8 +680,19 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     @admin.get("/inference/status")
-    def inference_status():
-        return engine.status()
+    def inference_status(request: Request):
+        from .model_controls import profile_identity
+
+        status = engine.status()
+        return {
+            **status,
+            "model": profile_identity(status.get("profile") or {}),
+            "listen_host": request.app.state.listen_host,
+            "lan_api_urls": (
+                lan_api_urls(request.app.state.listen_port)
+                if request.app.state.listen_host == "0.0.0.0" else []
+            ),
+        }
 
     @admin.post("/inference/load")
     def load(payload: dict):
@@ -640,11 +714,6 @@ def create_app() -> FastAPI:
     @admin.post("/inference/load-model")
     def load_model(payload: dict):
         from .model_controls import resolve_profile
-        from .agent.tasks import ACTIVE
-
-        # An Agent can be between model requests while its tools still run.
-        if any(t.get("state") in ACTIVE or t.get("settled") is False for t in db.all_records("agent_tasks")):
-            raise HTTPException(409, "Agent 正在执行，请先完成或停止任务 / Finish or stop the Agent task before switching models")
         profile = resolve_profile(str(payload.get("model_id", "")), payload.get("profile_id"), payload.get("agent") is True)
         return load({"profile_id": profile["id"]})
 
@@ -756,7 +825,7 @@ def create_app() -> FastAPI:
     def requests_list(days: int | None = None, model: str = "", source: str = ""):
         if days is not None and days not in {1, 3, 7}:
             raise ValueError("Choose 1, 3 or 7 days")
-        if source not in {"", "studio", "api"}:
+        if source not in {"", "studio", "api", "agent"}:
             raise ValueError("Unknown request source")
         with db.connect() as conn:
             rows = [
@@ -776,6 +845,12 @@ def create_app() -> FastAPI:
             "active": in_flight,
             "scope": {"days": days, "model": model, "source": source},
         }
+
+    @admin.get("/requests/aggregate")
+    def requests_aggregate(window_s: float = Query(default=2.0, ge=0.1, le=60.0), agent_task_id: str | None = None):
+        from .decode_metrics import aggregator
+
+        return aggregator.snapshot(window_s, agent_task_id)
 
     @admin.get("/requests/usage")
     def request_usage(days: int = 1, model: str = "", source: str = ""):
@@ -882,10 +957,10 @@ def create_app() -> FastAPI:
         return JSONResponse(status(id), headers={"Cache-Control": "no-store"})
 
     @admin.post("/chat/threads/{id}/cancel")
-    async def cancel_chat_run(id: str):
+    async def cancel_chat_run(id: str, payload: dict | None = None):
         from .chat_runs import cancel
 
-        return await cancel(id)
+        return await cancel(id, (payload or {}).get("run_id"))
 
     @admin.post("/chat/threads")
     def create_thread(payload: dict):
@@ -1126,6 +1201,39 @@ def create_app() -> FastAPI:
         return restore(str(payload.get("path", "")))
 
     app.include_router(admin)
+
+    # PI receives a short-lived bearer token from the task adapter.  These
+    # endpoints are intentionally separate from the public OpenAI routes so a
+    # PI request is attributed to its parent task in request history and in the
+    # rolling Decode aggregate.
+    async def internal_pi_context(request: Request):
+        from .agent.pi_runtime import model_context
+
+        authorization = request.headers.get("authorization", "")
+        token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        context = model_context(token)
+        if not context:
+            raise HTTPException(401, "PI model token is missing or expired")
+        request.state.onecat_agent_context = context
+        return context
+
+    @app.get("/internal/agent/v1/models")
+    async def internal_pi_models(request: Request):
+        await internal_pi_context(request)
+        state = engine.status()
+        if state.get("state") != "ready":
+            raise HTTPException(503, "No model is ready")
+        return {"object": "list", "data": [{"id": state["profile"]["served_model_name"], "object": "model", "owned_by": "1cat"}]}
+
+    @app.post("/internal/agent/v1/chat/completions")
+    async def internal_pi_chat(request: Request):
+        await internal_pi_context(request)
+        return await proxy.forward(request, "/v1/chat/completions", "agent")
+
+    @app.post("/internal/agent/v1/completions")
+    async def internal_pi_completion(request: Request):
+        await internal_pi_context(request)
+        return await proxy.forward(request, "/v1/completions", "agent")
 
     @app.get("/v1/models", dependencies=[Depends(auth.require_inference)])
     async def api_models():

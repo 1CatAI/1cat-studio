@@ -15,7 +15,7 @@ import httpx
 import psutil
 
 from . import db, engine, gpu, models, runtimes
-from .schemas import Profile
+from .schemas import DEFAULT_MAX_NUM_SEQS, Profile
 
 
 def adopt_service(unit: str) -> dict:
@@ -53,7 +53,7 @@ def adopt_service(unit: str) -> dict:
         "--kv-cache-dtype": (str, "auto"),
         "--max-model-len": (int, 32768),
         "--max-num-batched-tokens": (int, 4096),
-        "--max-num-seqs": (int, 1),
+        "--max-num-seqs": (int, DEFAULT_MAX_NUM_SEQS),
         "--gpu-memory-utilization": (float, 0.8),
         "--attention-backend": (str, None),
         "--speculative-config": (str, None),

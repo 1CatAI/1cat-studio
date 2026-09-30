@@ -79,14 +79,27 @@ def info() -> dict:
             error = str(exc)[:400]
         _sandbox_checked = (identity, error, time.monotonic())
     return {
+        "engine": "codex",
         "version": VERSION,
+        "runtime_version": VERSION,
+        "protocol": "codex-app-server-rpc",
         "installed": installed,
+        "ready": installed and _sandbox_checked[1] is None,
         "sandbox_ready": _sandbox_checked[1] is None,
         "sandbox_error": _sandbox_checked[1],
         "source": f"https://github.com/openai/codex/releases/tag/rust-v{VERSION}",
         "network": "isolated",
         "model_protocol": "responses-to-chat",
         "model_verified": False,
+        "collaboration_modes": ["single"],
+        "capabilities": {
+            "rpc": True,
+            "resume": True,
+            "subagents": False,
+            "progress": True,
+            "batch": False,
+            "native_concurrency": False,
+        },
     }
 
 

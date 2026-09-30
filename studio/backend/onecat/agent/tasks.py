@@ -19,9 +19,9 @@ from pathlib import Path
 import httpx
 from fastapi import HTTPException
 
-from .. import db, proxy
+from .. import db, model_switch, proxy
 from ..request_metrics import TokenTiming, usage_cache
-from . import projects, runtime
+from . import engines, pi_runtime, projects, runtime
 from .protocol import ResponseStream, convert_input
 
 ACTIVE = {"starting", "running", "waiting", "stopping"}
@@ -31,11 +31,19 @@ uploading: set[str] = set()
 
 
 def get(task_id):
+    from ..decode_metrics import aggregator
+
     if task_id in runs:
-        return copy.deepcopy(runs[task_id].record)
-    record = db.get("agent_tasks", task_id)
+        record = copy.deepcopy(runs[task_id].record)
+    else:
+        record = db.get("agent_tasks", task_id)
     if not record:
         raise HTTPException(404, "Agent task not found")
+    record.setdefault("engine", "codex")
+    record.setdefault("collaboration", "single")
+    record.setdefault("runtime_version", record.get("codex_version"))
+    record.setdefault("subagents", [])
+    record["decode_aggregate"] = aggregator.snapshot(2, task_id)
     return record
 
 
@@ -87,7 +95,13 @@ def recover():
                 approvals=[],
                 updated_at=time.time(),
                 settled=True,
+                current_turn=None,
             )
+            for child in record.get("subagents", []):
+                if child.get("status") in {"running", "active", "pending", "queued"}:
+                    child["status"] = "interrupted"
+                    if isinstance(child.get("progress"), dict):
+                        child["progress"]["status"] = "interrupted"
             db.put("agent_tasks", record["id"], record)
 
 
@@ -106,6 +120,11 @@ async def shutdown():
 
 def model_state():
     _, _, state = proxy.connection()
+    if model_switch.text_change_pending():
+        raise HTTPException(
+            409,
+            "模型正在切换，请完成或取消切换后重试；草稿已保留 / Model change is pending; finish or cancel it before starting the Agent",
+        )
     if not state["profile"].get("tool_calling"):
         raise HTTPException(
             409,
@@ -114,26 +133,36 @@ def model_state():
     return state
 
 
+@model_switch.admission()
 def start(
     project_id,
     prompt,
     request_id,
     task_id=None,
     source_thread=None,
+    engine="codex",
+    collaboration="single",
     operation="turn",
     permission=None,
     mode=None,
     thinking=None,
+    thinking_effort=None,
 ):
     if operation not in {"turn", "review", "compact", "skills"}:
         raise ValueError("Unsupported Agent operation")
+    if engine not in {"codex", "pi"}:
+        raise ValueError("Unsupported Agent engine")
+    if collaboration not in {"single", "auto", "swarm"}:
+        raise ValueError("Unsupported collaboration mode")
+    if engine == "codex" and collaboration != "single":
+        raise ValueError("Codex 当前仅支持单 Agent / Codex currently supports single-agent mode only")
     if permission not in {None, "workspace-write", "read-only"} or mode not in {
         None,
         "default",
         "plan",
     }:
         raise ValueError("Unsupported Agent mode or permission")
-    if operation == "compact" and (not task_id or not get(task_id).get("thread_id")):
+    if operation == "compact" and (not task_id or not (get(task_id).get("thread_id") or get(task_id).get("pi_session_id"))):
         raise ValueError("先开始一个任务，再压缩上下文 / Start a task before compacting context")
     project = projects.get(project_id)
     # A retry after a lost HTTP response must return the same task/turn.
@@ -144,9 +173,16 @@ def start(
             "(SELECT 1 FROM json_each(records.data,'$.request_ids') WHERE value=?) LIMIT 1",
             (project_id, request_id),
         ).fetchone()
+    signature_parts = [task_id, prompt, operation, permission, mode, thinking, source_thread]
+    # Keep retries accepted before the strength control was introduced compatible.
+    if thinking_effort is not None:
+        signature_parts.append(thinking_effort)
+    # Preserve pre-dual-engine idempotency signatures for legacy requests.
+    if engine != "codex" or collaboration != "single":
+        signature_parts += [engine, collaboration]
     signature = hashlib.sha256(
         json.dumps(
-            [task_id, prompt, operation, permission, mode, thinking, source_thread],
+            signature_parts,
             ensure_ascii=False,
         ).encode()
     ).hexdigest()
@@ -164,11 +200,11 @@ def start(
         raise HTTPException(
             409, "最多同时运行两个 Agent 任务 / At most two Agent tasks may run at once"
         )
-    component = runtime.info()
-    if not component["installed"] or not component["sandbox_ready"]:
-        raise HTTPException(
-            409, "Agent 组件或执行沙箱尚未就绪 / Agent component or sandbox is not ready"
-        )
+    selected = engines.adapter(engine)
+    component = selected.info()
+    if not component["installed"] or not component.get("sandbox_ready", component.get("ready", False)):
+        label = "Codex" if engine == "codex" else "PI"
+        raise HTTPException(409, f"{label} 组件或执行环境尚未就绪 / {label} runtime is unavailable")
     if operation == "skills":
         state = db.get("engine", "active", {})
         state = {
@@ -201,17 +237,35 @@ def start(
                 "missing_calls": 0,
                 "cache_missing_calls": 0,
             },
-            "codex_version": runtime.VERSION,
+            "codex_version": runtime.VERSION if engine == "codex" else None,
+            "engine": engine,
+            "collaboration": collaboration,
+            "runtime_version": component.get("runtime_version", component.get("version")),
+            "subagents": [],
+            "swarm_id": db.uid() if collaboration == "swarm" else None,
             "source_thread": source_thread,
             "elapsed_s": 0,
         }
-    if record["codex_version"] != runtime.VERSION:
+    record_engine = record.get("engine", "codex")
+    if record_engine != engine and task_id:
+        raise HTTPException(409, "继续任务时不能切换 Agent 引擎 / Engine cannot change while resuming a task")
+    if task_id and record.get("collaboration", "single") != collaboration:
+        raise HTTPException(409, "继续任务时不能切换协作模式 / Collaboration mode cannot change while resuming")
+    engine = record_engine
+    collaboration = record.get("collaboration", "single")
+    expected_version = selected.version
+    if engine == "codex" and record.get("codex_version") != expected_version:
         raise HTTPException(
             409,
             "请使用创建此任务的 Codex 版本继续 / Resume with the original Codex component version",
         )
+    if engine == "pi" and record.get("runtime_version") not in {None, expected_version}:
+        raise HTTPException(
+            409,
+            "请使用创建此任务的 PI 固定版本继续 / Resume with the original pinned PI runtime",
+        )
     if operation != "skills":
-        from ..model_controls import thinking_kwargs
+        from ..model_controls import thinking_kwargs, thinking_support
 
         chosen_thinking = (
             thinking
@@ -220,7 +274,13 @@ def start(
                 "thinking", state["profile"].get("default_sampling", {}).get("thinking")
             )
         )
-        thinking_kwargs(state["profile"], chosen_thinking)
+        chosen_effort = thinking_effort or record.get("thinking_effort")
+        if (
+            thinking_effort is None
+            and chosen_effort not in thinking_support(state["profile"])["efforts"]
+        ):
+            chosen_effort = None
+        thinking_kwargs(state["profile"], chosen_thinking, chosen_effort)
         record.update(
             model=state["profile"]["served_model_name"],
             profile_id=state.get("profile_id"),
@@ -230,6 +290,7 @@ def start(
             context_window=state["profile"].get("max_model_len", 32768),
             model_label=state["profile"].get("name", state["profile"]["served_model_name"]),
             thinking=chosen_thinking,
+            thinking_effort=chosen_effort,
             plan=[],
             changes=[],
             diff="",
@@ -248,6 +309,9 @@ def start(
         live_metrics=None,
         permission=permission or record.get("permission", "workspace-write"),
         mode=mode or record.get("mode", "default"),
+        engine=engine,
+        collaboration=collaboration,
+        runtime_version=expected_version,
     )
     record.setdefault("request_signatures", {})[request_id] = signature
     record.setdefault("turn_count", sum(item["type"] == "userMessage" for item in record["items"]))
@@ -269,7 +333,7 @@ def start(
     if operation == "turn":
         record["turn_count"] = record.get("turn_count", 0) + 1
     db.put("agent_tasks", record["id"], record)
-    run = Run(record, project, prompt)
+    run = selected.create_run(record, project, prompt)
     runs[record["id"]] = run
     worker = asyncio.create_task(run.execute())
     workers[record["id"]] = worker
@@ -278,6 +342,8 @@ def start(
 
 
 async def steer(task_id, prompt, request_id, turn_id):
+    from .._vendor.omp_rpc.client import RpcCommandError
+
     run = runs.get(task_id)
     if not run:
         raise HTTPException(
@@ -311,24 +377,26 @@ async def steer(task_id, prompt, request_id, turn_id):
         entries[request_id] = {"prompt": prompt, "turn_id": turn_id, "state": "pending"}
         run.save()
         try:
-            await run.rpc(
-                "turn/steer",
-                {
-                    "threadId": record["thread_id"],
-                    "expectedTurnId": turn_id,
-                    "input": [{"type": "text", "text": prompt}],
-                },
-            )
+            if isinstance(run, PiRun):
+                await asyncio.to_thread(run.client.steer, prompt)
+            else:
+                await run.rpc(
+                    "turn/steer",
+                    {"threadId": record["thread_id"], "expectedTurnId": turn_id,
+                     "input": [{"type": "text", "text": prompt}]},
+                )
+        except (ValueError, RpcCommandError) as error:
+            # An explicit rejection is safe to retry; a lost RPC response is not.
+            entries.pop(request_id, None)
+            run.save()
+            if isinstance(error, RpcCommandError):
+                raise HTTPException(409, f"PI 未接受补充要求 / PI rejected instructions: {error.error[:2000]}") from error
+            raise
         except (TimeoutError, ConnectionError, RuntimeError) as error:
             raise HTTPException(
                 409,
                 "补充要求接收结果未知，请检查进展后再操作 / Delivery is unconfirmed; check task progress before resending",
             ) from error
-        except ValueError:
-            # A native RPC rejection is definitive, unlike a connection timeout.
-            entries.pop(request_id, None)
-            run.save()
-            raise
         item = {"id": db.uid(), "type": "userMessage", "text": prompt, "steered": True}
         record["items"].append(item)
         entries[request_id]["state"] = "accepted"
@@ -344,7 +412,10 @@ async def cancel(task_id):
         return record
     run.cancel_requested = True
     run.status("stopping")
-    if run.record.get("current_turn"):
+    if isinstance(run, PiRun):
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(run.abort(), 2)
+    elif run.record.get("current_turn"):
         with contextlib.suppress(Exception):
             await asyncio.wait_for(
                 run.rpc(
@@ -767,6 +838,12 @@ class Run:
             "agent",
             state["port"],
             expected_instance=proxy.instance_identity(state),
+            agent_context={
+                "engine": "codex",
+                "task_id": self.record["id"],
+                "project_id": self.project["id"],
+                "swarm_id": self.record.get("swarm_id"),
+            },
         )
         usage, first, error, status = {}, None, None, 499
         clock = time.monotonic()
@@ -777,10 +854,15 @@ class Run:
         payload = {
             **payload,
             "return_token_ids": True,
-            "chat_template_kwargs": thinking_kwargs(state["profile"], self.record.get("thinking")),
+            "chat_template_kwargs": thinking_kwargs(
+                state["profile"], self.record.get("thinking"), self.record.get("thinking_effort")
+            ),
         }
         self.record["model_calls"] += 1
         try:
+            from ..decode_metrics import aggregator as decode_aggregator
+
+            await decode_aggregator.wait_for_capacity(request_id)
             async with (
                 httpx.AsyncClient(
                     timeout=httpx.Timeout(1800, connect=10), trust_env=False
@@ -808,6 +890,19 @@ class Run:
                         usage = event["usage"]
                     now = time.monotonic()
                     timing.observe(event, now)
+                    from ..decode_metrics import aggregator as decode_aggregator
+
+                    decode_aggregator.observe(request_id, event, now)
+                    if now - last_live >= 0.25:
+                        self.record["decode_aggregate"] = decode_aggregator.snapshot(
+                            2, self.record["id"]
+                        )
+                        self.emit(
+                            {
+                                "type": "decode_aggregate",
+                                "decode_aggregate": self.record["decode_aggregate"],
+                            }
+                        )
                     if now - last_live >= 0.25:
                         last_live = now
                         self.record["live_metrics"] = timing.live(now)
@@ -860,6 +955,8 @@ class Run:
                 elapsed=elapsed,
                 metrics={
                     **measured,
+                    "agent_engine": "codex",
+                    "swarm_id": self.record.get("swarm_id"),
                     "agent_task_id": self.record["id"],
                     "agent_project_id": self.project["id"],
                     "pending": False,
@@ -1159,3 +1256,304 @@ class Run:
             "diff": "\n".join(diffs),
             "files_truncated": listing["truncated"] or getattr(self, "baseline_truncated", False),
         }
+
+
+class PiRun(Run):
+    """OMP owns delegation and sessions; its pinned official client owns RPC."""
+
+    def __init__(self, record, project, prompt):
+        super().__init__(record, project, prompt)
+        self.record.setdefault("subagents", [])
+        self.client = None
+        self._pi_token = None
+        self._abort_sent = False
+        self._tool_owners = {}
+
+    def _subagent_event(self, message):
+        payload = message.get("payload") or {}
+        progress = payload.get("progress") or {}
+        child_id = payload.get("id") or progress.get("id")
+        if not child_id:
+            return
+        item = next((s for s in self.record["subagents"] if s["id"] == child_id), None)
+        if item is None:
+            item = {"id": child_id, "name": payload.get("agent") or "PI",
+                    "status": "running", "started_at": time.time(), "elapsed_s": 0,
+                    "request_count": 0, "request_count_source": "native_pi_progress"}
+            self.record["subagents"].append(item)
+        kind = message["type"]
+        parent_tool = payload.get("parentToolCallId")
+        if parent_tool:
+            item["parent_tool_call_id"] = parent_tool
+            item["parent_id"] = self._tool_owners.get(parent_tool)
+        item["name"] = progress.get("description") or payload.get("description") or payload.get("agent") or item["name"]
+        if payload.get("task"):
+            item["assignment"] = payload["task"]
+        state = progress.get("status") or payload.get("status")
+        if state:
+            item["status"] = "running" if state in {"started", "active"} else state
+        item["elapsed_s"] = max(0, time.time() - item["started_at"])
+        if progress:
+            # Retain PI's progress rather than inventing a percentage.
+            item["progress"] = copy.deepcopy(progress)
+            item["request_count"] = progress.get("requests", item["request_count"])
+            item["elapsed_s"] = progress.get("durationMs", item["elapsed_s"] * 1000) / 1000
+            failure = progress.get("retryFailure") or {}
+            if failure.get("errorMessage"):
+                item["error"] = failure["errorMessage"][:4000]
+        event = payload.get("event") or {}
+        if kind == "subagent_event":
+            if event.get("type") == "tool_execution_start":
+                self._tool_owners[event.get("toolCallId")] = child_id
+                for child in self.record["subagents"]:
+                    if child.get("parent_tool_call_id") == event.get("toolCallId"):
+                        child["parent_id"] = child_id
+            if event.get("type") == "message_end":
+                msg = event.get("message") or {}
+                if msg.get("errorMessage"):
+                    item["error"] = msg["errorMessage"][:4000]
+        terminal = item["status"] in {"completed", "failed", "aborted", "cancelled"}
+        event_type = "subagent_finished" if terminal else "subagent_started" if state == "started" else "subagent_progress"
+        self.emit({"type": event_type, "subagent": copy.deepcopy(item)})
+
+    async def ingest_pi(self, message):
+        kind = message.get("type")
+        if kind in {"subagent_lifecycle", "subagent_progress", "subagent_event"}:
+            self._subagent_event(message)
+            return
+        if kind == "message_update":
+            event = message.get("assistantMessageEvent") or {}
+            if event.get("type") not in {"text_delta", "thinking_delta"}:
+                return
+            text = event.get("delta")
+            if not isinstance(text, str):
+                return
+            mid = message.get("messageId") or "reply"
+            item_id = f"pi:{self.record['current_turn']}:{mid}:{event['type']}"
+            item = self.item(item_id)
+            if item is None:
+                item = {"id": item_id, "type": "agentMessage" if event["type"] == "text_delta" else "reasoning",
+                        "text": "", "finished": False}
+                self.record["items"].append(item)
+                self.emit({"type": "item", "item": item})
+            delta = text[:max(0, 512000 - len(item["text"]))]
+            item["text"] += delta
+            self.emit({"type": "delta", "id": item_id, "field": "text", "delta": delta})
+        elif kind == "message_end":
+            mid = message.get("messageId") or "reply"
+            for item in self.record["items"]:
+                if item["id"].startswith(f"pi:{self.record['current_turn']}:{mid}:"):
+                    item["finished"] = True
+                    self.emit({"type": "item", "item": item})
+        elif kind in {"tool_execution_start", "tool_execution_update", "tool_execution_end"}:
+            tool_id = message.get("toolCallId")
+            item_id = f"pi:{self.record['current_turn']}:tool:{tool_id}"
+            item = self.item(item_id)
+            if item is None:
+                item = {"id": item_id, "type": "commandExecution", "command": message.get("toolName", "tool"), "finished": False}
+                self.record["items"].append(item)
+            if kind == "tool_execution_start":
+                self.tool_started[item_id] = time.monotonic()
+                self._tool_owners[tool_id] = None
+            result = message.get("result") or message.get("partialResult")
+            if result:
+                item["aggregatedOutput"] = json.dumps(result, ensure_ascii=False)[:64000]
+            if kind == "tool_execution_end":
+                item.update(finished=True, exitCode=1 if message.get("isError") else 0)
+                started = self.tool_started.pop(item_id, None)
+                if started is not None:
+                    self.record["metrics"]["tool_s"] += time.monotonic() - started
+                    self.record["metrics"]["tool_calls"] += 1
+            self.emit({"type": "item", "item": item})
+        elif kind == "command_output":
+            text = message.get("text") or message.get("output")
+            if text:
+                item = {"id": db.uid(), "type": "agentMessage", "text": str(text)[:64000], "finished": True}
+                self.record["items"].append(item)
+                self.emit({"type": "item", "item": item})
+        elif kind == "extension_error":
+            self.emit({"type": "error", "error": str(message.get("error", "PI extension error"))[:4000]})
+
+    async def bridge(self, reader, writer):
+        """Concurrent, task-scoped HTTP relay; no Codex model-lock/call cap."""
+        current = asyncio.current_task()
+        self.bridge_clients.add(current)
+        pending = []
+        try:
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
+            lines = head.decode("ascii").split("\r\n")
+            method, path, *_ = lines[0].split()
+            if method != "POST" or path not in {"/internal/agent/v1/chat/completions", "/internal/agent/v1/completions"}:
+                raise ValueError("Only the task model endpoint is available")
+            headers = dict(line.lower().split(":", 1) for line in lines[1:] if ":" in line)
+            length = int(headers.get("content-length", "0"))
+            if not 0 < length <= 8 * 1024 * 1024 or headers.get("transfer-encoding"):
+                raise ValueError("Invalid model request length")
+            data = await asyncio.wait_for(reader.readexactly(length), 15)
+
+            async def generate():
+                listener = db.settings()
+                host = os.environ.get("ONECAT_STUDIO_LISTEN_HOST", listener["host"])
+                host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+                if ":" in host:
+                    host = f"[{host}]"
+                port = os.environ.get("ONECAT_STUDIO_LISTEN_PORT", str(listener["port"]))
+                async with httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=10), trust_env=False) as client:
+                    async with client.stream("POST", f"http://{host}:{port}" + path,
+                                             content=data, headers={"Content-Type": "application/json",
+                                                                    "Authorization": f"Bearer {self._pi_token}"}) as response:
+                        writer.write(f"HTTP/1.0 {response.status_code} Response\r\nContent-Type: {response.headers.get('content-type', 'text/event-stream')}\r\nConnection: close\r\n\r\n".encode())
+                        async for chunk in response.aiter_bytes():
+                            writer.write(chunk)
+                            await writer.drain()
+
+            generation = asyncio.create_task(generate())
+            disconnected = asyncio.create_task(reader.read(1))
+            pending = [generation, disconnected]
+            completed, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            if generation in completed:
+                await generation
+        except (OSError, ValueError, httpx.HTTPError, asyncio.IncompleteReadError):
+            pass
+        finally:
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            writer.close()
+            with contextlib.suppress(OSError):
+                await writer.wait_closed()
+            self.bridge_clients.discard(current)
+
+    async def abort(self):
+        if self.client and not self._abort_sent:
+            self._abort_sent = True
+            await asyncio.to_thread(self.client.abort)
+
+    async def execute(self):
+        from dataclasses import asdict
+        from .._vendor.omp_rpc import RpcClient
+        from .._vendor.omp_rpc.protocol import UnknownNotification
+
+        started, server = time.monotonic(), None
+        temporary = tempfile.TemporaryDirectory(prefix="onecat-pi-")
+        socket_path = Path(temporary.name) / "model.sock"
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        consumer = None
+        calls = []
+        startup = None
+
+        def notification(value):
+            raw = value.payload if isinstance(value, UnknownNotification) else asdict(value)
+            aliases = {"message_id": "messageId", "assistant_message_event": "assistantMessageEvent",
+                       "tool_call_id": "toolCallId", "tool_name": "toolName", "partial_result": "partialResult", "is_error": "isError"}
+            raw = {aliases.get(k, k): v for k, v in raw.items()}
+            loop.call_soon_threadsafe(queue.put_nowait, raw)
+
+        async def consume():
+            while True:
+                message = await queue.get()
+                try:
+                    await self.ingest_pi(message)
+                finally:
+                    queue.task_done()
+
+        async def call(fn, *args, **kwargs):
+            pending = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+            calls.append(pending)
+            return await asyncio.shield(pending)
+
+        try:
+            await asyncio.to_thread(self.snapshot_files)
+            server = await asyncio.start_unix_server(self.bridge, path=str(socket_path))
+            os.chmod(socket_path, 0o600)
+            args, env, self._pi_token = pi_runtime.prepare(self.project, self.record, socket_path)
+            self.client = RpcClient(command=args, env=env, startup_timeout=30, request_timeout=30, max_event_history=512)
+            self.client.on_notification(notification)
+            consumer = asyncio.create_task(consume())
+            startup = asyncio.create_task(asyncio.to_thread(self.client.start))
+            await asyncio.shield(startup)
+            opened = await call(self.client.open_session, self.record["pi_session_dir"])
+            if opened.cancelled:
+                raise RuntimeError("PI declined to open the saved session")
+            self.record["pi_session_id"] = opened.session_id
+            self.record["rpc_protocol_version"] = pi_runtime.PROTOCOL_VERSION
+            await call(self.client.set_model, "onecat", self.record["model"])
+            await call(self.client.request_raw, "set_subagent_subscription", level="events")
+            restored = await call(self.client.request_raw, "get_subagents")
+            for child in restored.get("subagents", []):
+                self._subagent_event({"type": "subagent_lifecycle", "payload": child})
+            self.record["current_turn"] = db.uid()
+            self.status("running", current_turn=self.record["current_turn"])
+            operation = self.record.get("operation")
+            if operation == "compact":
+                await call(self.client.compact, self.prompt)
+            elif operation == "skills":
+                available = await call(self.client.request_raw, "get_available_commands")
+                skills = [command for command in available.get("commands", []) if command.get("source") == "skill"]
+                text = "\n".join(f"- /{skill['name']}: {skill.get('description', '')}" for skill in skills)
+                await self.ingest_pi({"type": "command_output", "text": text or "项目没有可用的 PI 技能 / No PI project skills available"})
+            else:
+                prompt = self.prompt
+                if operation == "review":
+                    prompt = "Review this project and report concrete findings. Do not modify files.\n" + ("" if prompt == "/review" else prompt)
+                elif self.record.get("mode") == "plan":
+                    prompt = "Analyze the project and propose an implementation plan. Do not modify files.\n" + prompt
+                result = await call(self.client.prompt_and_wait, prompt, timeout=1800)
+                if result.result and result.result.status == "error":
+                    raise RuntimeError(str(result.result.error))
+                if result.result and result.result.status == "aborted":
+                    self.cancel_requested = True
+                    raise asyncio.CancelledError()
+                if result.result and not result.result.session_settled:
+                    await call(self.client.wait_for_settled, timeout=1800)
+            drained = asyncio.create_task(queue.join())
+            completed, _ = await asyncio.wait([drained, consumer], return_when=asyncio.FIRST_COMPLETED)
+            if consumer in completed:
+                drained.cancel()
+                await consumer
+            await drained
+            if consumer.done():
+                await consumer
+            self.status("completed")
+        except asyncio.CancelledError:
+            self.status("interrupted" if self.shutdown_requested else "cancelled")
+        except Exception as error:  # noqa: BLE001 — external process boundary
+            self.status("failed", error=str(error)[:4000])
+        finally:
+            # Startup is shielded so cancellation cannot leave a newly created
+            # Popen process orphaned while its worker thread waits for ready.
+            if startup:
+                await asyncio.gather(startup, return_exceptions=True)
+            if self.client:
+                if self.cancel_requested or self.shutdown_requested:
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait_for(self.abort(), 2)
+                await asyncio.to_thread(self.client.stop)
+            if calls:
+                await asyncio.gather(*calls, return_exceptions=True)
+            if consumer:
+                consumer.cancel()
+                await asyncio.gather(consumer, return_exceptions=True)
+            if server:
+                server.close()
+                await server.wait_closed()
+            for client in list(self.bridge_clients):
+                client.cancel()
+            await asyncio.gather(*list(self.bridge_clients), return_exceptions=True)
+            await proxy.cancel_agent(self.record["id"])
+            pi_runtime.revoke_model_token(self._pi_token)
+            temporary.cleanup()
+            self.record["approvals"] = []
+            self.record["elapsed_s"] = self.record.get("elapsed_s", 0) + time.monotonic() - started
+            for child in self.record["subagents"]:
+                if child["status"] in {"running", "active", "pending", "queued"}:
+                    child["status"] = "interrupted" if self.shutdown_requested else "cancelled"
+            try:
+                changes = await asyncio.to_thread(self.file_changes)
+                self.record.update(changes)
+                self.emit({"type": "changes", **changes})
+            except (OSError, ValueError, HTTPException) as error:
+                self.record["file_error"] = str(error)
+            self.status(self.record["state"], settled=True, current_turn=None)
+            self.done.set()

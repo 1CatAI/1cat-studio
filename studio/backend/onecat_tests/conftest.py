@@ -16,6 +16,8 @@ def state(tmp_path, monkeypatch):
     # Nor do they read the host's real binding policy.
     monkeypatch.setattr(gpu_setup, "POLICY", tmp_path / "gpu-helper.json")
     from onecat.config import initialize_paths
+    from onecat.decode_metrics import aggregator
+    aggregator.reset()
     auth._attempts.clear()
     return initialize_paths()
 

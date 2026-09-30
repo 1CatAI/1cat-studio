@@ -1,0 +1,14 @@
+{
+  "upstream_commit": "061f21ef011c72df891678ce489b02edee676738",
+  "version": "0.1.0",
+  "source": "https://github.com/can1357/oh-my-pi/tree/061f21ef011c72df891678ce489b02edee676738/python/omp-rpc",
+  "files": {
+    "host_tools.py": "7e0036b1fcf5fdedec9c7011d6a428a9dd0de670d4ed700aa9d788dad35b4797",
+    "host_uris.py": "2b5c73c6ca528d2be705e6020c1768856fd76b67641eafd33109dbacbed63ade",
+    "__init__.py": "34b72a76a9a9c75aa5431c395550ddcda62568bd041a412d386e212a03cda020",
+    "protocol.py": "ea4d2213eb76444d5cb2cdf3727c6ed4cb5429c6e8a5471552798d3abb6d59d8",
+    "client.py": "f8c384f1d19ad5837ab2474db4609c2c93f05e21ab8c03be07f524daed6ca6a6",
+    "LICENSE": "048c9ebb09976a1c2e895d23f91dbe9114bd7858bfd7ff3b6a8f957feccbdfeb",
+    "py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

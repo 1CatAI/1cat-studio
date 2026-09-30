@@ -39,6 +39,16 @@ The Apache-2.0 license and NOTICE are included with the verified runtime at
 `studio/vendor/codex/0.153.4/`. Studio does not include OpenAI model weights,
 Codex cloud, or the proprietary IDE extension.
 
+## Oh My Pi and omp-rpc
+
+Oh My Pi is built without source changes from
+`061f21ef011c72df891678ce489b02edee676738` (https://github.com/can1357/oh-my-pi).
+Its MIT license travels with the component in `studio/vendor/oh-my-pi/`.
+The official Python `omp-rpc` 0.1.0 client from the same commit is vendored,
+unmodified, in `backend/onecat/_vendor/omp_rpc/`, with its MIT LICENSE and
+UPSTREAM.json file hashes. It has no third-party Python dependencies. Studio's
+adapters and extension policy remain separate from the upstream implementation.
+
 ## Creative canvas
 
 `frontend/src/onecat/canvas/viewport.tsx` is adapted from basketikun/infinite-canvas,

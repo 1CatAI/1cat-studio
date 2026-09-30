@@ -17,6 +17,7 @@ import {
   FileDown,
   Search,
   MoreHorizontal,
+  Power,
 } from "lucide-react";
 import { Button } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
@@ -35,6 +36,7 @@ import {
   type Runtime,
   type GPU,
   type Engine,
+  type Settings,
 } from "./api";
 import {
   Page,
@@ -69,7 +71,7 @@ export function newProfile(model: Model, runtimeId: string): Profile {
     kv_cache_dtype: "auto",
     max_model_len: model.max_context || 32768,
     max_num_batched_tokens: 4096,
-    max_num_seqs: 1,
+    max_num_seqs: 4,
     gpu_memory_utilization: 0.8,
     attention_backend: null,
     enforce_eager: false,
@@ -543,6 +545,17 @@ export function ProfileEditor({
           onChange={(v) => set("max_num_seqs", v)}
           min={1}
         />
+        <div className="oc-field oc-concurrency-presets">
+          <span className="oc-field-label">{t("服务并发预设", "Service concurrency presets")}</span>
+          <div className="oc-actions">
+            {[1, 2, 4, 8].map((value) => (
+              <Button key={value} type="button" size="sm" variant={p.max_num_seqs === value ? "secondary" : "outline"} onClick={() => set("max_num_seqs", value)}>
+                {value}
+              </Button>
+            ))}
+          </div>
+          <small className="oc-muted">{t("这是整个 vLLM 服务的最大并发序列数。PI task.maxConcurrency 与它分开；修改后保存并重新加载模型生效。", "Maximum concurrent sequences for the whole vLLM service. PI task.maxConcurrency is separate; save the preset and reload the model to apply changes.")}</small>
+        </div>
 
         <Field label={t("计算精度", "Compute precision")}>
           <select
@@ -679,6 +692,7 @@ export function ModelsPage() {
   const { data: profiles } = useQuery<{ items: Profile[] }>("/api/profiles");
   const { data: runtimes } = useQuery<{ items: Runtime[] }>("/api/runtimes");
   const { data: engine } = useQuery<Engine>("/api/inference/status", 3000);
+  const { data: settings } = useQuery<Settings>("/api/settings");
   const [importOpen, setImportOpen] = useState(false),
     [path, setPath] = useState(""),
     [editor, setEditor] = useState<Profile | null>(null),
@@ -831,6 +845,9 @@ export function ModelsPage() {
                       {p.max_model_len.toLocaleString()} context ·{" "}
                       {accelerationLabel(p) || t("基础推理", "Target only")}
                     </p>
+                    {settings?.autostart_profile === p.id && (
+                      <p className="oc-status-good">{t("已选为开机加载预设", "Selected for boot loading")}</p>
+                    )}
                   </div>
                   <span
                     className={
@@ -863,6 +880,19 @@ export function ModelsPage() {
                     <Settings2 />
                     {t("配置", "Configure")}
                   </Button>
+                  <Action
+                    variant="outline"
+                    disabled={!settings}
+                    run={() => mutation("/api/settings", {
+                      autostart_profile: settings?.autostart_profile === p.id ? null : p.id,
+                    }, "PUT")}
+                    success={t("开机加载预设已更新", "Boot loading profile updated")}
+                  >
+                    <Power />
+                    {settings?.autostart_profile === p.id
+                      ? t("取消开机加载", "Disable boot loading")
+                      : t("开机自动加载", "Load on boot")}
+                  </Action>
                   <Popover.Root><Popover.Trigger asChild><Button variant="ghost" aria-label={t("更多预设操作", "More profile actions")}><MoreHorizontal />{t("更多", "More")}</Button></Popover.Trigger><Popover.Portal><Popover.Content className="oc-profile-more" sideOffset={8} align="start">
                   <Button
                     variant="ghost"

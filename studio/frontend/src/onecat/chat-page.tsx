@@ -33,7 +33,7 @@ import { Input } from "@/onecat/ui";
 import { Switch } from "@/onecat/ui";
 import { TooltipIconButton } from "@/onecat/ui";
 import { latestRun, observeRun, type ChatRun } from "./chat-run";
-import { ThinkingToggle, ModelPicker, type ThinkingSupport } from "./model-controls";
+import { ThinkingToggle, ModelPicker, thinkingEffort, type ThinkingSupport, type ThinkingEffort } from "./model-controls";
 import { useBrowserState } from "./browser-state";
 import { toast } from "sonner";
 import {
@@ -93,15 +93,16 @@ export function ChatPage() {
   const { data: runs } = useQuery<{ items: ChatRun[] }>("/api/chat/runs", 1500);
   const [activeRun, setActiveRun] = useState<ChatRun>();
   const [reconnecting, setReconnecting] = useState(false);
-  const { data: engine } = useQuery<Engine>("/api/inference/status", 3000);
+  const { data: engine, error: engineError } = useQuery<Engine>("/api/inference/status", 3000);
   const { data: options } = useQuery<{ thinking: ThinkingSupport }>("/api/inference/options?profile=" + (engine?.profile_id || ""));
   const [hydratedThread, setHydratedThread] = useState<string>();
   const [input, setInput] = useBrowserState("onecat:chat-draft:" + (threadId || "new"), "");
   const [messages, setMessages] = useState<Message[]>([]),
     [busy, setBusy] = useState(false),
+    [stopping, setStopping] = useState(false),
     [error, setError] = useState(""),
     [config, setConfig] = useState(false);
-  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean };
+  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort };
   const [settingsDraft, setSettingsDraft] = useBrowserState<Settings | null>("onecat:chat-settings:" + (threadId || "new"), null);
   const settings = settingsDraft || { system_prompt: "", temperature: 0.7, top_p: 0.9, max_tokens: null, thinking: false,
     ...(threadId && loaded?.thread.id === threadId ? loaded.thread.settings : engine?.profile?.default_sampling) } as Settings;
@@ -110,7 +111,8 @@ export function ChatPage() {
   const setTemperature = (value: number) => setSettingsDraft({ ...settings, temperature: value });
   const setTopP = (value: number) => setSettingsDraft({ ...settings, top_p: value });
   const setMaxTokens = (value: number | null) => setSettingsDraft({ ...settings, max_tokens: value });
-  const setThinking = (value: boolean) => setSettingsDraft({ ...settings, thinking: value });
+  const effort = thinkingEffort(options?.thinking, settings.thinking_effort);
+  const setThinking = (value: boolean, level?: ThinkingEffort) => setSettingsDraft({ ...settings, thinking: value, thinking_effort: level });
   const [submission, setSubmission] = useBrowserState<{ identity: string; thread: string; assistant: string; user: string; createdAt: number } | null>("onecat:chat-submission:" + (threadId || "new"), null);
   const scopeRef = useRef(threadId); scopeRef.current = threadId;
   const [preview, setPreview] = useState<{
@@ -187,6 +189,8 @@ export function ChatPage() {
     }
   }
   const controller = useRef<AbortController | null>(null),
+    pendingGeneration = useRef<Promise<ChatRun> | null>(null),
+    stopAttempt = useRef<{ controller: AbortController | null } | null>(null),
     runObserver = useRef<AbortController | null>(null),
     running = useRef(false),
     view = useRef<HTMLDivElement>(null),
@@ -213,6 +217,9 @@ export function ChatPage() {
     if (lastThread.current !== threadId) {
       controller.current?.abort();
       controller.current = null;
+      pendingGeneration.current = null;
+      stopAttempt.current = null;
+      setStopping(false);
       running.current = false;
       setBusy(false);
       setMessages([]);
@@ -237,7 +244,7 @@ export function ChatPage() {
 
     }
   }, [loaded, threadId]);
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => () => { controller.current?.abort(); stopAttempt.current = null; }, []);
   const trackedRun = latestRun(threadId,
     activeRun, runs?.items.find(run => run.thread_id === threadId),
     loaded?.thread.id === threadId ? loaded?.generation : undefined);
@@ -328,11 +335,12 @@ export function ChatPage() {
     );
   }, []);
   const ready =
+    !engineError &&
     engine?.state === "ready" &&
     !engine.maintenance &&
     (!threadId || hydratedThread === threadId);
   async function generate(base: Message[], userText?: string, images = attachments, outputLimit = maxTokens) {
-    if (!ready || running.current) return;
+    if (!ready || running.current || Boolean(stopAttempt.current)) return;
     runObserver.current?.abort();
     running.current = true; setBusy(true); setError(""); follow.current = true; setShowBottom(false);
     const abort = new AbortController(); controller.current = abort;
@@ -340,7 +348,7 @@ export function ChatPage() {
     let accepted = false;
     try {
       const requestSettings = { system_prompt: systemPrompt, temperature, top_p: topP,
-        max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking };
+        max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking: !!options?.thinking.supported && thinking, thinking_effort: effort };
       const identity = JSON.stringify({ base, userText, images, settings: requestSettings, model: engine?.profile_id });
       let pending = submission?.identity === identity ? submission : null;
       if (!pending) {
@@ -358,13 +366,14 @@ export function ChatPage() {
       }];
       const requestMessages = current.map(m => ({ role: m.role, content: m.content.filter(part => part.type !== "reasoning") }));
       if (systemPrompt) requestMessages.unshift({ role: "system", content: [{ type: "text", text: systemPrompt }] });
-      const run = await mutation<ChatRun>(`/api/chat/threads/${id}/generate`, {
+      const result = mutation<ChatRun>(`/api/chat/threads/${id}/generate`, {
         message_id: pending.assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
         request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP,
           max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual",
-          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking } : {} },
+          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
       });
-      if (abort.signal.aborted && abort.signal.reason === "cancelled") await mutation(`/api/chat/threads/${id}/cancel`);
+      pendingGeneration.current = result;
+      const run = await result;
       refreshData();
       if (abort.signal.aborted || scopeRef.current !== originalScope) return;
       // Keep the draft until the inference server accepts the request. A rejected
@@ -374,10 +383,11 @@ export function ChatPage() {
       try {
         await observeRun(id, run.id, wait.signal, (_message, update) => {
           if (update.pending_commit === false) wait.abort("accepted");
-          else if (update.state !== "running") wait.abort(update.error || "Generation was not accepted");
+          else if (update.state !== "running") wait.abort(update.state === "cancelled" ? "cancelled" : update.error || "Generation was not accepted");
         }, () => {});
       } finally { abort.signal.removeEventListener("abort", aborted); }
       if (abort.signal.aborted || scopeRef.current !== originalScope) return;
+      if (wait.signal.reason === "cancelled") { setSubmission(null); return; }
       if (wait.signal.reason !== "accepted") { setSubmission(null); throw new Error(String(wait.signal.reason || "Generation was not accepted")); }
       accepted = true;
       if (userText !== undefined) { setInput(value => value.trim() === userText ? "" : value); setAttachments([]); }
@@ -391,7 +401,47 @@ export function ChatPage() {
     } catch (error) {
       if (!abort.signal.aborted && scopeRef.current === originalScope) setError((error as Error).message);
     } finally {
-      if (controller.current === abort) { controller.current = null; if (!accepted) { running.current = false; setBusy(false); } }
+      if (controller.current === abort) {
+        controller.current = null;
+        pendingGeneration.current = null;
+        if (!accepted && stopAttempt.current?.controller !== abort) { running.current = false; setBusy(false); }
+      }
+    }
+  }
+  async function stopGeneration() {
+    if (stopAttempt.current) return;
+    const attempt = { controller: controller.current };
+    stopAttempt.current = attempt;
+    setStopping(true);
+    setError("");
+    const pending = pendingGeneration.current;
+    let target = trackedRun;
+    try {
+      // A new chat has no route ID yet. Bind Stop to the submitted generation,
+      // including when its POST response has not arrived or its first token is delayed.
+      if (pending) target = await pending;
+      if (target?.state === "running") {
+        const result = await api<ChatRun>(`/api/chat/threads/${target.thread_id}/cancel`, {
+          method: "POST", body: JSON.stringify({ run_id: target.id }), signal: AbortSignal.timeout(15000),
+        });
+        refreshData();
+        if (stopAttempt.current !== attempt) return;
+        setActiveRun(result);
+        running.current = result.state === "running";
+        setBusy(running.current);
+      } else if (stopAttempt.current === attempt) {
+        running.current = false; setBusy(false);
+      }
+      attempt.controller?.abort("cancelled");
+    } catch (error) {
+      if (stopAttempt.current === attempt) {
+        setError((error as Error).name === "TimeoutError"
+          ? t("停止结果尚未确认，可以重试；后台状态会继续同步。", "Stop is unconfirmed; retry while status sync continues.")
+          : (error as Error).message);
+        if (!target || target.state !== "running") { running.current = false; setBusy(false); }
+      }
+    } finally {
+      if (stopAttempt.current === attempt) { stopAttempt.current = null; setStopping(false); }
     }
   }
   async function submit() {
@@ -652,8 +702,8 @@ export function ChatPage() {
               </AnimatePresence>
             </div>
             {!ready && <div className="oc-readiness" role="status">
-              <span>{engine?.state === "loading" ? t("模型正在准备，草稿会保留。", "Model preparing. Your draft is saved.") : engine?.state === "failed" ? t("模型启动未完成，草稿已保留。", "Model startup failed. Your draft is saved.") : t("模型尚未就绪，可以先写草稿。", "No model is ready. You can still draft a message.")}</span>
-              <Link to={engine?.state === "loading" || engine?.state === "failed" ? "/service" : "/models"}>{engine?.state === "loading" || engine?.state === "failed" ? t("查看状态", "View status") : t("准备模型", "Prepare a model")}</Link>
+              <span>{engineError ? t("连接中断，正在重新确认模型状态。草稿已保留。", "Reconnecting to the model service. Your draft is saved.") : engine?.state === "loading" ? t("模型正在准备，草稿会保留。", "Model preparing. Your draft is saved.") : engine?.state === "failed" ? t("模型启动未完成，草稿已保留。", "Model startup failed. Your draft is saved.") : t("模型尚未就绪，可以先写草稿。", "No model is ready. You can still draft a message.")}</span>
+              <Link to={engineError || engine?.state === "loading" || engine?.state === "failed" ? "/service" : "/models"}>{engineError || engine?.state === "loading" || engine?.state === "failed" ? t("查看状态", "View status") : t("准备模型", "Prepare a model")}</Link>
             </div>}
             <Textarea
               onPaste={(event) => {
@@ -714,18 +764,11 @@ export function ChatPage() {
                   </TooltipIconButton>
                 </>
               )}
-              <ThinkingToggle value={thinking} onChange={setThinking} support={options?.thinking} disabled={busy} />
+              <ThinkingToggle value={thinking} effort={effort} onChange={setThinking} support={options?.thinking} disabled={busy} />
               <ModelPicker compact disabled={busy} />
-              <Button type={busy ? "button" : "submit"} size="icon" disabled={!busy && (!ready || uploading || (!input.trim() && !attachments.length))}
+              <Button type={busy ? "button" : "submit"} size="icon" disabled={stopping || (!busy && (!ready || uploading || (!input.trim() && !attachments.length)))}
                 aria-label={busy ? t("停止生成", "Stop generation") : t("发送消息", "Send message")}
-                onClick={busy ? async () => {
-                  controller.current?.abort("cancelled");
-                  if (threadId) {
-                    try { await mutation(`/api/chat/threads/${threadId}/cancel`); refreshData(); }
-                    catch (error) { setError((error as Error).message); }
-                  }
-                  running.current = false; setBusy(false);
-                } : undefined}>
+                onClick={busy ? stopGeneration : undefined}>
                 <Phase phase={busy ? "stop" : "send"} className="oc-action-icon">{busy ? <Square /> : <ArrowUp />}</Phase>
               </Button>
             </div>

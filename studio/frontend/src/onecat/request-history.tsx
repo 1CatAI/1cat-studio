@@ -48,8 +48,8 @@ export function RequestHistory({ data }: { data?: History }) {
       </div>
       <p className="oc-muted">
         {t(
-          "包括聊天与 API 请求。速度按真实 token 数计算，预填充、解码与总耗时分别记录。",
-          "Chat and API requests, with actual token counts and separate prefill, decode, and total timing.",
+          "包括聊天、Agent 与 API 请求。速度按真实 token 数计算，预填充、解码与总耗时分别记录。",
+          "Chat, Agent and API requests, with actual token counts and separate prefill, decode, and total timing.",
         )}
       </p>
       <div className="oc-request-stats">
@@ -152,7 +152,7 @@ export function RequestHistory({ data }: { data?: History }) {
                   <small>{modelLabel(r.metrics?.model_name || r.model)}</small>
                 </td>
                 <td>
-                  {r.source === "studio" ? t("聊天", "Chat") : "API"}
+                  {r.source === "studio" ? t("聊天", "Chat") : r.source === "agent" ? (r.metrics?.agent_engine === "pi" ? "PI" : r.metrics?.agent_engine === "codex" ? "Codex" : "Agent") : "API"}
                   <small>
                     {r.status ?? t("生成中", "Running")}
                     {r.metrics?.pending ? " · " + t("统计中", "Measuring") : ""}
