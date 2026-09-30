@@ -63,6 +63,11 @@ class RuntimeImport(StrictModel):
         return values
 
 
+# Concurrent sequences a new launch profile admits. Agent swarms and parallel
+# chats share this capacity, so a single-sequence default would serialize them.
+DEFAULT_MAX_NUM_SEQS = 4
+
+
 class Profile(StrictModel):
     id: str | None = None
     name: str = Field(min_length=1, max_length=120)
@@ -77,7 +82,7 @@ class Profile(StrictModel):
     kv_cache_dtype: str = "auto"
     max_model_len: int = Field(default=32768, ge=512, le=2097152)
     max_num_batched_tokens: int = Field(default=4096, ge=256, le=2097152)
-    max_num_seqs: int = Field(default=1, ge=1, le=4096)
+    max_num_seqs: int = Field(default=DEFAULT_MAX_NUM_SEQS, ge=1, le=4096)
     gpu_memory_utilization: float = Field(default=0.8, ge=0.1, le=0.98)
     attention_backend: str | None = None
     enforce_eager: bool = False

@@ -71,7 +71,7 @@ export function newProfile(model: Model, runtimeId: string): Profile {
     kv_cache_dtype: "auto",
     max_model_len: model.max_context || 32768,
     max_num_batched_tokens: 4096,
-    max_num_seqs: 1,
+    max_num_seqs: 4,
     gpu_memory_utilization: 0.8,
     attention_backend: null,
     enforce_eager: false,

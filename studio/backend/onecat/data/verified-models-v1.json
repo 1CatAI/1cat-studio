@@ -1082,7 +1082,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",
@@ -1245,7 +1245,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",
@@ -1403,7 +1403,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 32768,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",
@@ -1663,7 +1663,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",
@@ -2113,7 +2113,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",
@@ -2444,7 +2444,7 @@
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 4096,
-        "max_num_seqs": 1,
+        "max_num_seqs": 4,
         "gpu_memory_utilization": 0.88,
         "extra_args": [
           "--trust-remote-code",

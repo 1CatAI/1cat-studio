@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 from . import db, engine, telemetry
 from .decode_metrics import aggregator as decode_aggregator
 from .request_metrics import TokenTiming, engine_metrics, isolated_metrics, usage_cache
+from .schemas import DEFAULT_MAX_NUM_SEQS
 
 pending: set[asyncio.Task] = set()
 agent_pending: dict[str, set[asyncio.Task]] = {}
@@ -117,7 +118,7 @@ def begin(
         source=source,
         bucket=bucket,
         task_id=context.get("task_id"),
-        capacity=int(state.get("profile", {}).get("max_num_seqs") or 1),
+        capacity=int(state.get("profile", {}).get("max_num_seqs") or DEFAULT_MAX_NUM_SEQS),
     )
     return id, now
 

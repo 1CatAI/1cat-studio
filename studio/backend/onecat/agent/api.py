@@ -18,7 +18,7 @@ from starlette.responses import StreamingResponse
 
 from .. import auth, db
 from ..config import state_root
-from ..schemas import StrictModel
+from ..schemas import DEFAULT_MAX_NUM_SEQS, StrictModel
 from . import pi_runtime, projects, runtime, tasks
 
 router = APIRouter(prefix="/api/agent", dependencies=[Depends(auth.require_admin)])
@@ -86,7 +86,7 @@ async def status():
         "label": profile.get("name"),
         "tool_calling": bool(profile.get("tool_calling")),
         "context_window": profile.get("max_model_len"),
-        "max_num_seqs": profile.get("max_num_seqs", 1),
+        "max_num_seqs": profile.get("max_num_seqs", DEFAULT_MAX_NUM_SEQS),
     }
     from ..decode_metrics import aggregator
 
