@@ -169,7 +169,7 @@ def test_download_without_runtime_then_create_default_profile(checkpoint):
     assert profile["tensor_parallel_size"] == 4
     assert profile["gpu_uuids"] == ["GPU-" + str(i) * 36 for i in range(4)]
     assert profile["max_model_len"] == checkpoint["recommended"]["max_model_len"]
-    assert profile["kv_cache_dtype"] == "fp8_e5m2"
+    assert profile["kv_cache_dtype"] == checkpoint["recommended"]["kv_cache_dtype"]
     assert profile["default_sampling"]["max_tokens"] is None
     assert profile["speculative_config"] is None
     assert Profile.model_validate(profile)

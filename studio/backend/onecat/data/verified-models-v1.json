@@ -133,7 +133,7 @@
       "recommended": {
         "dtype": "half",
         "tensor_parallel_size": 4,
-        "kv_cache_dtype": "fp8_e5m2",
+        "kv_cache_dtype": "fp8_e4m3",
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 8192,
@@ -268,7 +268,7 @@
       "recommended": {
         "dtype": "half",
         "tensor_parallel_size": 4,
-        "kv_cache_dtype": "fp8_e5m2",
+        "kv_cache_dtype": "fp8_e4m3",
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
         "max_num_batched_tokens": 8192,

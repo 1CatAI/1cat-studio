@@ -111,6 +111,7 @@ def test_migration_only_offered_for_old_defaults():
     old = _profile({})
     old.update(
         catalog_id="QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4",
+        kv_cache_dtype="fp8_e5m2",
         max_num_batched_tokens=4096,
         gpu_memory_utilization=0.92,
         extra_args=[

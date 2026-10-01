@@ -7,9 +7,10 @@ Environment values explicitly configured in the runtime remain in effect.
 Runtime inspection reads `qwen38_27b_nvfp4_dflash2` from an installed wheel when
 available. The bundled copy is the fallback for older wheels. Recommended
 Qwen3.8-27B settings use an 8192-token prefill budget, 2048-token KV blocks,
-8192-token mamba blocks, prefix caching and 0.80 memory utilization. E5M2 stays
-unchanged until the release performance and quality comparison selects a KV
-default. The DFlash2 selector uses the same speculative recipe as the wheel.
+8192-token mamba blocks, prefix caching and 0.80 memory utilization. The release
+owner selected E4M3 as the recommended KV default. Performance and output-quality
+qualification remain release gates. The DFlash2 selector uses the same
+speculative recipe as the wheel.
 
 The draft's Hugging Face commit differs from its ModelScope mirror commit.
 Studio pins the mirror download to matching configuration and weight hashes,
