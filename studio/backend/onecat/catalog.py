@@ -279,6 +279,7 @@ def launch_defaults(repo, model_id=None):
     topology = item["gpu"]
     selected = recommended_devices(devices, topology)
     profile = None
+    recommended = item.get("recommended", {})
     if topology["pp"] == 1:
         values = Profile(
             name=item["name"] + " · 默认",
@@ -287,6 +288,10 @@ def launch_defaults(repo, model_id=None):
             served_model_name=repo.split("/")[-1],
         ).model_dump()
         values.update(item.get("recommended", {}))
+        from .sm70_profiles import MODEL_IDS, recommendation
+        if repo in MODEL_IDS:
+            recommended = recommendation(runtime)
+            values.update(recommended)
         values.update(
             {
                 "catalog_id": repo,
@@ -305,7 +310,7 @@ def launch_defaults(repo, model_id=None):
         "catalog_id": repo,
         "model_id": model["id"] if model else None,
         "profile": profile,
-        "recommended": item.get("recommended", {}),
+        "recommended": recommended,
         "gpu": topology,
         "runtime_versions": item["runtime_versions"],
         "runtime_options": [{"id": r["id"], "name": r["name"]} for r in installed],
@@ -393,6 +398,7 @@ def capabilities(path, runtime_id):
     runtime = db.get("runtimes", runtime_id, {})
     item = model_entry(path)
     if item and runtime_matches(item, runtime):
+        from .sm70_profiles import MODEL_IDS, recommendation, default_speculation
         accelerators = item.get("accelerators", [])
         return {
             "verified": True,
@@ -420,7 +426,8 @@ def capabilities(path, runtime_id):
             "accelerators": accelerators,
             "mtp_token_options": [1, 2, 3, 4] if "mtp" in accelerators else [],
             "draft_repo_id": item.get("draft_repo_id"),
-            "recommended": item.get("recommended", {}),
+            "recommended": recommendation(runtime) if item["id"] in MODEL_IDS else item.get("recommended", {}),
+            "draft_speculative_config": default_speculation(runtime, "") if item["id"] in MODEL_IDS else None,
             "reason": item.get("vision_reason", ""),
             "evidence": item["evidence"],
         }
@@ -561,7 +568,19 @@ def validate_features(profile):
             )
             if expected and registered.get("repo_id") != expected:
                 raise ValueError("Draft does not match the verified DFlash2 recipe")
-            spec.pop("revision", None)
+            from .sm70_profiles import MODEL_IDS, release_profile
+            if profile.get("catalog_id") in MODEL_IDS:
+                draft_recipe = release_profile(db.get("runtimes", profile["runtime_id"], {}))["draft"]
+                recorded = {f["path"]: f.get("sha256") for f in registered.get("manifest", [])}
+                same_verified_files = model_entry(str(draft)) is not None and all(
+                    recorded.get(path) == draft_recipe[key]
+                    for path, key in (("config.json", "config_sha256"), ("model.safetensors", "weights_sha256"))
+                )
+                if registered.get("revision") not in {draft_recipe["revision"], draft_recipe["modelscope_revision"]} and not same_verified_files:
+                    raise ValueError("Download the pinned release DFlash2 draft revision before starting")
+                spec["revision"] = draft_recipe["revision"]
+            else:
+                spec.pop("revision", None)
         elif spec.get("method") == "mtp":
             count = spec.get("num_speculative_tokens")
             if isinstance(count, bool) or count not in caps.get("mtp_token_options", []):

@@ -28,6 +28,7 @@ from packaging.version import Version
 from . import db
 from .config import state_root
 from .jobs import Job
+from .runtime_environment import runtime_environment
 
 RELEASE = {
     "id": "1cat-vllm-1.3.0",
@@ -39,9 +40,19 @@ RELEASE = {
     "compute_capabilities": [[7, 0]],
     "torch": "2.10.0",
     "cuda": "12.8",
+    "capabilities": {"prompt_token_details": True},
 }
 
 RELEASES = [
+    {
+        **RELEASE,
+        "id": "1cat-vllm-1.5.1",
+        "version": "1.5.1",
+        "url": "https://github.com/1CatAI/1Cat-vLLM/releases/download/v1.5.1/1cat_vllm-1.5.1-cp312-cp312-linux_x86_64.whl",
+        # Stage A main wheel; refresh after the final profile rebuild.
+        "sha256": "b3cd873677f17cc779dbf3bb7ffcc03d64d243378df331b9a3ab38e97c32a2f7",
+        "evidence": "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.1",
+    },
     {
         **RELEASE,
         "id": "1cat-vllm-1.5.0",
@@ -73,6 +84,10 @@ distributions={}
 for name in ['1cat-vllm','vllm']:
  try: distributions[name]=importlib.metadata.version(name)
  except importlib.metadata.PackageNotFoundError: pass
+sm70_profiles={}
+if (root/'sm70_profiles/profile.py').is_file():
+ from vllm.sm70_profiles import PROFILE_NAME, load_profile
+ sm70_profiles[PROFILE_NAME]=load_profile()
 creative_fastpath={}
 if (root/'video/fastpath.py').is_file():
  from vllm.video.fastpath import studio_capabilities
@@ -84,7 +99,7 @@ print('ONECAT_RUNTIME='+json.dumps({'python_version':sys.version.split()[0],
  'distributions':distributions,
  'torch_version':torch.__version__,'cuda_version':torch.version.cuda,
  'source_path':str(root),'source_fingerprints':fingerprints,'native_files':native,
- 'h3_fastpath':creative_fastpath}))
+ 'h3_fastpath':creative_fastpath,'sm70_profiles':sm70_profiles}))
 """
 
 
@@ -120,7 +135,7 @@ def inspect_runtime(record: dict) -> dict:
     python = Path(record["python_path"]).expanduser().absolute()
     if not python.is_file() or not os.access(python, os.X_OK):
         raise ValueError("Python executable does not exist or is not executable")
-    env = {**os.environ, **record.get("environment", {}), "PYTHONNOUSERSITE": "1"}
+    env = {**runtime_environment(record), "PYTHONNOUSERSITE": "1"}
     if "PYTHONPATH" not in record.get("environment", {}):
         env.pop("PYTHONPATH", None)
     result = subprocess.run(

@@ -120,6 +120,14 @@ export function ServicePage() {
             </Action>
           </div>
         </div>
+        {engine?.state === "ready" && engine.acceleration && (
+          <details className="oc-launch-history">
+            <summary>{t("加速：已启用", "Acceleration enabled:")} {engine.acceleration.enabled}/{engine.acceleration.total}</summary>
+            {Object.entries(engine.acceleration.paths).filter(([, row]) => !row.enabled).map(([name, row]) => (
+              <p className="oc-status-warn" key={name}>{name}: {row.reason}</p>
+            ))}
+          </details>
+        )}
         {engine?.maintenance && (
           <p className="oc-status-warn">
             {t(

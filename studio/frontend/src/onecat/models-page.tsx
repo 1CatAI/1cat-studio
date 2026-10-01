@@ -133,6 +133,7 @@ export function ProfileEditor({
     accelerators: string[];
     mtp_token_options?: number[];
     draft_repo_id?: string;
+    draft_speculative_config?: Record<string, unknown>;
     reason?: string;
     tool_reason?: string;
     vision_reason?: string;
@@ -388,9 +389,10 @@ export function ProfileEditor({
                         e.target.value === "dflash"
                           ? {
                               method: "dflash",
-                              model: drafts[0]?.path || "",
                               kv_cache_dtype: "auto",
                               draft_sample_method: "probabilistic",
+                              ...caps?.draft_speculative_config,
+                              model: drafts[0]?.path || "",
                             }
                           : { method: "mtp", num_speculative_tokens: 4 },
                         null,
@@ -689,7 +691,7 @@ export function ModelsPage() {
     "/api/models/list",
     5000,
   );
-  const { data: profiles } = useQuery<{ items: Profile[] }>("/api/profiles");
+  const { data: profiles } = useQuery<{ items: Profile[]; recommended_updates?: Record<string, Partial<Profile>> }>("/api/profiles");
   const { data: runtimes } = useQuery<{ items: Runtime[] }>("/api/runtimes");
   const { data: engine } = useQuery<Engine>("/api/inference/status", 3000);
   const { data: settings } = useQuery<Settings>("/api/settings");
@@ -876,6 +878,11 @@ export function ModelsPage() {
                       ? t("重新应用预设", "Apply profile")
                       : t("启动模型", "Start model")}
                   </Action>
+                  {p.id && profiles.recommended_updates?.[p.id] && (
+                    <Action variant="outline" run={() => mutation(`/api/profiles/${p.id}/recommended`, {})}>
+                      {t("一键更新到推荐配置", "Update to recommended settings")}
+                    </Action>
+                  )}
                   <Button variant="outline" onClick={() => setEditor({ ...p })}>
                     <Settings2 />
                     {t("配置", "Configure")}

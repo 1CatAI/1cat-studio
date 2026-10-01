@@ -187,7 +187,7 @@ def test_first_run_offline_uses_explicit_bundled_fallback(monkeypatch):
     )
     result = releases.catalog()
     assert result["source"] == "bundled" and result["stale"]
-    assert {r["version"] for r in result["items"]} == {"1.3.0", "1.5.0"}
+    assert {r["version"] for r in result["items"]} == {"1.3.0", "1.5.0", "1.5.1"}
 
 
 def test_checksum_sidecar_and_untrusted_checksum_urls(monkeypatch):

@@ -22,6 +22,7 @@ from . import db
 from .config import state_root
 from .jobs import Cancelled, Job, same_process
 from .schemas import Profile
+from .runtime_environment import runtime_environment
 
 
 _ENGINE_FAILURE_MARKERS = re.compile(
@@ -291,7 +292,7 @@ def drain(job: Job, timeout: float = 1800):
 def runtime_env(runtime: dict, profile: dict) -> dict:
     from . import gpu
 
-    env = {**os.environ, **runtime.get("environment", {})}
+    env = runtime_environment(runtime)
     env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     # PR417 parses CUDA_VISIBLE_DEVICES as integers. Preserve UUIDs in profiles
     # and resolve the current driver numbering immediately before execution.
@@ -335,6 +336,27 @@ def runtime_env(runtime: dict, profile: dict) -> dict:
         if key not in runtime.get("environment", {}):
             env[key] = str(cache / folder)
     return env
+
+
+def read_acceleration(data: dict, client) -> dict | None:
+    try:
+        response = client.get(
+            f"http://127.0.0.1:{data['port']}/v1/sm70/acceleration",
+            headers={"Authorization": "Bearer " + data["api_key"]},
+        )
+        response.raise_for_status()
+        report = response.json()
+        if not isinstance(report, dict) or not isinstance(report.get("paths"), dict):
+            return None
+        paths = {name: row for name, row in report["paths"].items()
+                 if isinstance(row, dict) and row.get("reason") != "not_applicable"
+                 and isinstance(row.get("enabled"), bool)}
+        if not paths:
+            return None
+        return {"paths": paths, "enabled": sum(row["enabled"] for row in paths.values()),
+                "total": len(paths)}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        return None
 
 
 def build_argv(profile: dict, runtime: dict, port: int, api_key: str | None) -> list[str]:
@@ -382,10 +404,9 @@ def build_argv(profile: dict, runtime: dict, port: int, api_key: str | None) -> 
     if p.speculative_config:
         command += ["--speculative-config", json.dumps(p.speculative_config)]
     capabilities = runtime.get("capabilities", {})
-    if (
-        capabilities.get("prompt_token_details")
-        or capabilities.get("source_snapshot") == "pr417-a09e332bcd"
-        or runtime.get("release", {}).get("version") in {"1.3.0", "1.5.0"}
+    if capabilities.get(
+        "prompt_token_details",
+        runtime.get("release", {}).get("capabilities", {}).get("prompt_token_details", False),
     ):
         command.append("--enable-prompt-tokens-details")
     if p.tool_calling:
@@ -668,6 +689,7 @@ def start(job: Job, profile_id: str):
                             "ready_at": time.time(),
                             "error": None,
                             "health_failures": 0,
+                            "acceleration": read_acceleration(data, client),
                         },
                     )
                     job.update("ready", 100)
