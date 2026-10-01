@@ -12,6 +12,10 @@ owner selected E4M3 as the recommended KV default. Performance and output-qualit
 qualification remain release gates. The DFlash2 selector uses the same
 speculative recipe as the wheel.
 
+Studio refreshes runtime capability records imported by older versions.
+Missing, unreadable or incomplete optional wheel recipes use the bundled
+fallback and do not block the core Torch/vLLM import check.
+
 The draft's Hugging Face commit differs from its ModelScope mirror commit.
 Studio pins the mirror download to matching configuration and weight hashes,
 while the serving recipe retains the upstream revision. Previously verified
@@ -21,6 +25,8 @@ Presets that exactly match the previous recommendation offer **Update to
 recommended settings**. Editing a preset manually prevents this migration
 from being offered. Applying an update saves the preset; restart the model to
 use it. Names, GPU selections, sampling settings and feature choices remain.
+An explicitly pinned draft revision outside the qualified release payload
+also prevents the migration from being offered.
 
 When the runtime implements `/v1/sm70/acceleration`, Studio reads the endpoint
 with the inference API key after startup and displays enabled/total capability

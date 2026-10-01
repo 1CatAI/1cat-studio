@@ -22,10 +22,21 @@ PROFILE_FIELDS = (
 
 
 def release_profile(runtime: dict) -> dict:
+    fallback = json.loads(
+        (Path(__file__).parent / "data/sm70-qwen38-release-profile.json").read_text()
+    )
     recipe = runtime.get("capabilities", {}).get("sm70_profiles", {}).get(PROFILE_NAME)
-    if isinstance(recipe, dict) and recipe.get("name") == PROFILE_NAME and "args" in recipe:
+    if (
+        isinstance(recipe, dict)
+        and recipe.get("name") == PROFILE_NAME
+        and isinstance(recipe.get("args"), dict)
+        and fallback["args"].keys() <= recipe["args"].keys()
+        and isinstance(recipe["args"].get("speculative_config"), dict)
+        and isinstance(recipe.get("draft"), dict)
+        and fallback["draft"].keys() <= recipe["draft"].keys()
+    ):
         return copy.deepcopy(recipe)
-    return json.loads((Path(__file__).parent / "data/sm70-qwen38-release-profile.json").read_text())
+    return fallback
 
 
 def recommendation(runtime: dict) -> dict:
@@ -99,6 +110,14 @@ def recommended_update(profile: dict, runtime: dict) -> dict | None:
         values.pop(key)
     if spec:
         wanted = default_speculation(runtime, spec["model"])
+        draft = release_profile(runtime)["draft"]
+        if spec.get("revision") not in {
+            None,
+            "master",
+            draft["revision"],
+            draft["modelscope_revision"],
+        }:
+            return None
         # Existing explicit draft tuning belongs to the user.
         if any(
             key not in {"model", "revision"} and value != wanted.get(key)

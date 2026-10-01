@@ -2,7 +2,10 @@
 import copy
 import json
 import re
+import sys
+from types import SimpleNamespace
 
+import pytest
 from onecat import engine, runtimes, sm70_profiles
 from onecat.runtime_environment import runtime_environment
 from onecat.schemas import Profile
@@ -167,3 +170,82 @@ def test_catalog_draft_pin_matches_upstream_payload():
     hashes = {f["path"]: f["sha256"] for f in entry["files"]}
     assert hashes["config.json"] == draft["config_sha256"]
     assert hashes["model.safetensors"] == draft["weights_sha256"]
+
+
+def test_upgrade_refreshes_existing_runtime_capabilities(monkeypatch):
+    from onecat import db
+
+    old = {"id": "old", "validated": True, "capabilities": {"distribution_version": "1.5.0"}}
+    complete = {
+        "id": "complete",
+        "validated": True,
+        "capabilities": {
+            "distribution_version": "1.5.1",
+            "prompt_token_details": False,
+            "sm70_profiles": {},
+        },
+    }
+    for row in (old, complete):
+        db.put("runtimes", row["id"], row)
+    seen = []
+    monkeypatch.setattr(runtimes, "inspect_runtime", lambda row: seen.append(row["id"]) or row)
+    assert runtimes.refresh_incomplete_metadata() == ["old"]
+    assert seen == ["old"]
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("recipe missing"), ValueError("invalid JSON")])
+def test_inspection_can_fall_back_when_optional_recipe_is_unreadable(
+    tmp_path, monkeypatch, capsys, error
+):
+    root = tmp_path / "vllm"
+    (root / "sm70_profiles").mkdir(parents=True)
+    (root / "sm70_profiles/profile.py").touch()
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(__version__="2.10.0", version=SimpleNamespace(cuda="12.8")),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "vllm",
+        SimpleNamespace(__file__=str(root / "__init__.py"), __version__="1.5.1"),
+    )
+
+    def fail():
+        raise error
+
+    monkeypatch.setitem(
+        sys.modules,
+        "vllm.sm70_profiles",
+        SimpleNamespace(PROFILE_NAME=sm70_profiles.PROFILE_NAME, load_profile=fail),
+    )
+    exec(runtimes.INSPECT, {})  # noqa: S102 - Exercise the repository-owned inspection program.
+    result = json.loads(capsys.readouterr().out.split("ONECAT_RUNTIME=", 1)[1])
+    assert result["vllm_version"] == "1.5.1"
+    assert result["sm70_profiles"] == {}
+
+
+@pytest.mark.parametrize("bad_recipe", [{"args": None}, {"args": {}}, {"args": {"dtype": "half"}}])
+def test_incomplete_wheel_recipe_uses_static_fallback(bad_recipe):
+    recipe = {"name": sm70_profiles.PROFILE_NAME, **bad_recipe}
+    runtime = {"capabilities": {"sm70_profiles": {sm70_profiles.PROFILE_NAME: recipe}}}
+    assert sm70_profiles.recommendation(runtime) == sm70_profiles.recommendation({})
+
+
+def test_migration_preserves_manual_draft_revision():
+    old = _profile({})
+    old.update(
+        catalog_id="QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4",
+        kv_cache_dtype="fp8_e5m2",
+        max_num_batched_tokens=4096,
+        gpu_memory_utilization=0.92,
+        extra_args=[
+            "--trust-remote-code",
+            "--mamba-cache-mode",
+            "align",
+            "--reasoning-parser",
+            "qwen3",
+        ],
+    )
+    old["speculative_config"]["revision"] = "b" * 40
+    assert sm70_profiles.recommended_update(old, {}) is None

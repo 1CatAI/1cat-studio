@@ -86,8 +86,11 @@ for name in ['1cat-vllm','vllm']:
  except importlib.metadata.PackageNotFoundError: pass
 sm70_profiles={}
 if (root/'sm70_profiles/profile.py').is_file():
- from vllm.sm70_profiles import PROFILE_NAME, load_profile
- sm70_profiles[PROFILE_NAME]=load_profile()
+ try:
+  from vllm.sm70_profiles import PROFILE_NAME, load_profile
+  sm70_profiles[PROFILE_NAME]=load_profile()
+ except (ImportError, AttributeError, OSError, ValueError):
+  pass
 creative_fastpath={}
 if (root/'video/fastpath.py').is_file():
  from vllm.video.fastpath import studio_capabilities
@@ -182,11 +185,15 @@ def inspect_runtime(record: dict) -> dict:
 
 
 def refresh_incomplete_metadata() -> list[str]:
-    """Backfill package versions for source-overlay runtimes imported by older Studio builds."""
+    """Backfill runtime capabilities imported by older Studio builds."""
     refreshed = []
     for record in db.all_records("runtimes"):
         capabilities = record.get("capabilities", {})
-        if not record.get("validated") or capabilities.get("distribution_version"):
+        if not record.get("validated") or (
+            capabilities.get("distribution_version")
+            and "prompt_token_details" in capabilities
+            and "sm70_profiles" in capabilities
+        ):
             continue
         try:
             refreshed.append(inspect_runtime(record)["id"])
