@@ -78,6 +78,34 @@ def default_speculation(runtime: dict, draft_model: str) -> dict:
     return spec
 
 
+def qualified_draft(runtime: dict, model_path: str | None = None) -> str | None:
+    """Reuse only the release payload whose verified files remain unchanged."""
+    from . import catalog, db
+
+    draft = release_profile(runtime)["draft"]
+    for record in db.all_records("models"):
+        path = record.get("path")
+        if not path or (model_path is not None and path != model_path):
+            continue
+        if record.get("repo_id") != draft["repo"]:
+            continue
+        item = catalog.model_entry(path)
+        hashes = {row["path"]: row.get("sha256") for row in record.get("manifest", [])}
+        if (
+            item
+            and item["id"] == draft["repo"]
+            and all(
+                hashes.get(name) == draft[key]
+                for name, key in (
+                    ("config.json", "config_sha256"),
+                    ("model.safetensors", "weights_sha256"),
+                )
+            )
+        ):
+            return path
+    return None
+
+
 def recommended_update(profile: dict, runtime: dict) -> dict | None:
     if profile.get("catalog_id") not in MODEL_IDS:
         return None
@@ -99,12 +127,14 @@ def recommended_update(profile: dict, runtime: dict) -> dict | None:
             "qwen3",
         ],
     }
-    if any(profile.get(key) != value for key, value in legacy.items()):
-        return None
+    values = recommendation(runtime)
+    is_legacy = all(profile.get(key) == value for key, value in legacy.items())
     spec = profile.get("speculative_config")
+    is_current = not spec and all(profile.get(key) == values[key] for key in legacy)
+    if not is_legacy and not is_current:
+        return None
     if spec and (spec.get("method") != "dflash" or spec.get("num_speculative_tokens") != 7):
         return None
-    values = recommendation(runtime)
     # Preserve names and feature choices; migration only updates the recipe fields.
     for key in ("served_model_name", "tool_calling", "tool_parser"):
         values.pop(key)
@@ -125,4 +155,10 @@ def recommended_update(profile: dict, runtime: dict) -> dict | None:
         ):
             return None
         values["speculative_config"] = wanted
+    else:
+        draft_path = qualified_draft(runtime)
+        if draft_path:
+            values["speculative_config"] = default_speculation(runtime, draft_path)
+        elif is_current:
+            return None
     return values

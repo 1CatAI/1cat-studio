@@ -2,6 +2,8 @@
 
 Studio filters inherited `VLLM_*`, `PYTHONPATH` and
 `ONECAT_VLLM_EXTENSION_DIR` settings before inspecting or starting a runtime.
+It also filters inherited `FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH`, which could
+otherwise replace the wheel's FlashQLA kernel with a developer's external DSO.
 Environment values explicitly configured in the runtime remain in effect.
 
 Runtime inspection reads `qwen38_27b_nvfp4_dflash2` from an installed wheel when
@@ -11,6 +13,13 @@ Qwen3.8-27B settings use an 8192-token prefill budget, 2048-token KV blocks,
 owner selected E4M3 as the recommended KV default. Performance and output-quality
 qualification remain release gates. The DFlash2 selector uses the same
 speculative recipe as the wheel.
+
+New 27B presets automatically select an already downloaded release DFlash2
+draft when its configuration/weight hashes match and the verified files remain
+unchanged. Missing or modified drafts leave the preset target-only and show a
+warning on the model card. Download the qualified draft to obtain the DFlash2
+recipe. Existing presets are preserved; an otherwise unchanged release preset
+offers an explicit update to pair the newly available draft.
 
 Studio refreshes runtime capability records imported by older versions.
 Missing, unreadable or incomplete optional wheel recipes use the bundled
@@ -32,6 +41,8 @@ When the runtime implements `/v1/sm70/acceleration`, Studio reads the endpoint
 with the inference API key after startup and displays enabled/total capability
 counts with reasons for disabled paths. An unavailable endpoint hides this
 optional display and does not prevent the model from starting.
+Counts use the endpoint's `expected_acceleration` list when available. Unrelated
+Flash-Next routes and compile-cache diagnostics do not inflate the denominator.
 
 The bundled 1.5.1 URL and checksum currently describe the stage-A candidate.
 They must be refreshed to the final wheel after release changes are merged and

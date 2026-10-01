@@ -8,6 +8,12 @@ def runtime_environment(record: dict) -> dict[str, str]:
     inherited = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith("VLLM_") and key not in {"PYTHONPATH", "ONECAT_VLLM_EXTENSION_DIR"}
+        if not key.startswith("VLLM_")
+        and key
+        not in {
+            "PYTHONPATH",
+            "ONECAT_VLLM_EXTENSION_DIR",
+            "FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH",
+        }
     }
     return {**inherited, **record.get("environment", {})}

@@ -20,11 +20,19 @@ def test_release151_is_concrete():
 
 
 def test_environment_filters_host_and_preserves_explicit(monkeypatch):
-    for key in ("VLLM_HOST_TUNING", "PYTHONPATH", "ONECAT_VLLM_EXTENSION_DIR"):
+    for key in (
+        "VLLM_HOST_TUNING",
+        "PYTHONPATH",
+        "ONECAT_VLLM_EXTENSION_DIR",
+        "FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH",
+    ):
         monkeypatch.setenv(key, "inherited")
     assert not any(key.startswith("VLLM_") for key in runtime_environment({}))
     assert "PYTHONPATH" not in runtime_environment({})
     assert "ONECAT_VLLM_EXTENSION_DIR" not in runtime_environment({})
+    assert "FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH" not in runtime_environment({})
+    explicit = {"environment": {"FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH": "explicit"}}
+    assert runtime_environment(explicit)["FLASH_QLA_SM70_PREBUILT_EXTENSION_PATH"] == "explicit"
     assert (
         runtime_environment({"environment": {"VLLM_EXPLICIT": "1", "PYTHONPATH": "explicit"}})[
             "VLLM_EXPLICIT"
@@ -249,3 +257,168 @@ def test_migration_preserves_manual_draft_revision():
     )
     old["speculative_config"]["revision"] = "b" * 40
     assert sm70_profiles.recommended_update(old, {}) is None
+
+
+def test_acceleration_count_uses_release_expected_paths():
+    import httpx
+
+    report = {
+        "expected_acceleration": ["dflash2_verifier", "long_context"],
+        "paths": {
+            "dflash2_verifier": {"enabled": True, "reason": None},
+            "long_context": {"enabled": False, "reason": "operator_missing"},
+            "compile_cache": {"enabled": False, "reason": "compile_cache_disabled"},
+        },
+    }
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=report))
+    ) as client:
+        status = engine.read_acceleration({"port": 8000, "api_key": "key"}, client)
+    assert status["enabled"] == 1 and status["total"] == 2
+    assert "compile_cache" not in status["paths"]
+
+
+@pytest.fixture
+def qualified_release_models(tmp_path, monkeypatch):
+    import hashlib
+
+    from onecat import db, gpu
+
+    recipe = sm70_profiles.release_profile({})
+    for role, repo in (
+        ("target", "QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4"),
+        ("draft", recipe["draft"]["repo"]),
+    ):
+        folder = tmp_path / role
+        folder.mkdir()
+        files = {"config.json": b"{}", "model.safetensors": role.encode()}
+        for name, data in files.items():
+            (folder / name).write_bytes(data)
+        manifest = [
+            {"path": name, "sha256": hashlib.sha256(data).hexdigest()}
+            for name, data in files.items()
+        ]
+        row = {
+            "id": role,
+            "path": str(folder),
+            "repo_id": repo,
+            "catalog_id": repo,
+            "verified": True,
+            "revision": "master",
+            "manifest": manifest,
+            "file_identity": {
+                name: [(folder / name).stat().st_size, (folder / name).stat().st_mtime_ns]
+                for name in files
+            },
+        }
+        db.put("models", role, row)
+        if role == "draft":
+            recipe["draft"]["config_sha256"] = manifest[0]["sha256"]
+            recipe["draft"]["weights_sha256"] = manifest[1]["sha256"]
+    monkeypatch.setattr(sm70_profiles, "release_profile", lambda _: copy.deepcopy(recipe))
+    runtime = {
+        "id": "test",
+        "name": "release",
+        "validated": True,
+        "python_path": "/venv/bin/python",
+        "release": {"version": "1.5.1"},
+        "capabilities": {"prompt_token_details": True},
+    }
+    db.put("runtimes", runtime["id"], runtime)
+    devices = [
+        {
+            "uuid": f"GPU-{i:036d}",
+            "index": i,
+            "compute_capability": [7, 0],
+            "memory_total_mib": 32768,
+        }
+        for i in range(4)
+    ]
+    monkeypatch.setattr(gpu, "snapshot", lambda: {"gpus": devices})
+    monkeypatch.setattr(gpu, "selected_devices", lambda _: devices)
+    return runtime, recipe, str(tmp_path / "draft")
+
+
+def test_real_catalog_default_automatically_selects_qualified_draft(qualified_release_models):
+    from onecat import catalog
+
+    runtime, recipe, draft_path = qualified_release_models
+    profile = catalog.create_default_profile("target")
+    assert profile["speculative_config"] == sm70_profiles.default_speculation(runtime, draft_path)
+    assert not catalog.launch_defaults(profile["catalog_id"], "target")["recommendations"]
+    args = _options(engine.build_argv(profile, runtime, 8000, None))
+    assert json.loads(args["--speculative-config"])["revision"] == recipe["draft"]["revision"]
+    for key in (
+        "kv_cache_dtype",
+        "max_num_batched_tokens",
+        "max_num_seqs",
+        "block_size",
+        "mamba_block_size",
+    ):
+        assert args["--" + key.replace("_", "-")] == str(recipe["args"][key])
+
+
+def test_draft_not_available_is_explicit_and_preserves_existing_choice(qualified_release_models):
+    from onecat import catalog, db
+
+    runtime, _, draft_path = qualified_release_models
+    profile = catalog.create_default_profile("target")
+    profile["speculative_config"] = None
+    db.put("profiles", profile["id"], profile)
+    assert catalog.create_default_profile("target")["speculative_config"] is None
+    # Offer a reviewable update, never silently restore speculation.
+    assert (
+        sm70_profiles.recommended_update(profile, runtime)["speculative_config"]["model"]
+        == draft_path
+    )
+    db.delete("models", "draft")
+    defaults = catalog.launch_defaults(profile["catalog_id"], "target")
+    assert defaults["profile"]["speculative_config"] is None
+    assert any("DFlash2" in note for note in defaults["recommendations"])
+    card = next(
+        row
+        for row in catalog.supported()["items"]
+        if row.get("catalog_id") == profile["catalog_id"]
+    )
+    assert any("DFlash2" in note for note in card["recommendations"])
+    assert sm70_profiles.recommended_update(profile, runtime) is None
+
+
+def test_changed_draft_weights_are_not_selected(qualified_release_models):
+    from pathlib import Path
+
+    from onecat import catalog
+
+    _, _, draft_path = qualified_release_models
+    (Path(draft_path) / "model.safetensors").write_bytes(b"modified weights")
+    defaults = catalog.launch_defaults("QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4", "target")
+    assert defaults["profile"]["speculative_config"] is None
+    assert any("DFlash2" in note for note in defaults["recommendations"])
+
+
+def test_pinned_revision_does_not_bypass_changed_payload(qualified_release_models):
+    from pathlib import Path
+
+    from onecat import catalog, db
+
+    _, recipe, draft_path = qualified_release_models
+    profile = catalog.create_default_profile("target")
+    db.patch("models", "draft", {"revision": recipe["draft"]["modelscope_revision"]})
+    (Path(draft_path) / "model.safetensors").write_bytes(b"changed pinned payload")
+    with pytest.raises(ValueError, match="pinned release DFlash2 draft"):
+        catalog.validate_features(profile)
+
+
+def test_incomplete_acceleration_report_cannot_claim_all_enabled():
+    import httpx
+
+    report = {
+        "expected_acceleration": ["present", "missing"],
+        "paths": {
+            "present": {"enabled": True, "reason": None},
+        },
+    }
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=report))
+    ) as client:
+        assert engine.read_acceleration({"port": 8000, "api_key": "key"}, client) is None

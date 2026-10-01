@@ -21,9 +21,8 @@ import psutil
 from . import db
 from .config import state_root
 from .jobs import Cancelled, Job, same_process
-from .schemas import Profile
 from .runtime_environment import runtime_environment
-
+from .schemas import Profile
 
 _ENGINE_FAILURE_MARKERS = re.compile(
     r"(?i)(cuda out of memory|outofmemoryerror|cuda error|nccl|illegal memory access|"
@@ -348,13 +347,32 @@ def read_acceleration(data: dict, client) -> dict | None:
         report = response.json()
         if not isinstance(report, dict) or not isinstance(report.get("paths"), dict):
             return None
-        paths = {name: row for name, row in report["paths"].items()
-                 if isinstance(row, dict) and row.get("reason") != "not_applicable"
-                 and isinstance(row.get("enabled"), bool)}
+        expected = report.get("expected_acceleration")
+        if expected is not None and (
+            not isinstance(expected, list) or not all(isinstance(name, str) for name in expected)
+        ):
+            return None
+        if expected is not None and any(
+            not isinstance(report["paths"].get(name), dict)
+            or not isinstance(report["paths"][name].get("enabled"), bool)
+            for name in expected
+        ):
+            return None
+        paths = {
+            name: row
+            for name, row in report["paths"].items()
+            if (expected is None or name in expected)
+            and isinstance(row, dict)
+            and row.get("reason") != "not_applicable"
+            and isinstance(row.get("enabled"), bool)
+        }
         if not paths:
             return None
-        return {"paths": paths, "enabled": sum(row["enabled"] for row in paths.values()),
-                "total": len(paths)}
+        return {
+            "paths": paths,
+            "enabled": sum(row["enabled"] for row in paths.values()),
+            "total": len(paths),
+        }
     except (httpx.HTTPError, ValueError, TypeError, KeyError):
         return None
 
