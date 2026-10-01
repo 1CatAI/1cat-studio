@@ -121,12 +121,21 @@ export function ServicePage() {
           </div>
         </div>
         {engine?.state === "ready" && engine.acceleration && (
-          <details className="oc-launch-history">
-            <summary>{t("加速：已启用", "Acceleration enabled:")} {engine.acceleration.enabled}/{engine.acceleration.total}</summary>
-            {Object.entries(engine.acceleration.paths).filter(([, row]) => !row.enabled).map(([name, row]) => (
-              <p className="oc-status-warn" key={name}>{name}: {row.reason}</p>
-            ))}
-          </details>
+          <div>
+            <details className="oc-launch-history">
+              <summary>{t("加速：已启用", "Acceleration enabled:")} {engine.acceleration.enabled}/{engine.acceleration.total}</summary>
+              {Object.entries(engine.acceleration.paths).filter(([, row]) => !row.enabled).map(([name, row]) => (
+                <p className="oc-status-warn" key={name}>{name}: {row.reason}</p>
+              ))}
+            </details>
+            {engine.acceleration.compile_cache && (
+              <p className={engine.acceleration.compile_cache.enabled ? undefined : "oc-status-warn"}>
+                {t("启动编译缓存：", "Startup compilation cache: ")}
+                {engine.acceleration.compile_cache.enabled ? t("已启用", "Enabled") : t("已关闭", "Disabled")}
+                {engine.acceleration.compile_cache.reason && ` (${engine.acceleration.compile_cache.reason})`}
+              </p>
+            )}
+          </div>
         )}
         {engine?.maintenance && (
           <p className="oc-status-warn">

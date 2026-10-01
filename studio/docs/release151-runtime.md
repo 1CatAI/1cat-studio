@@ -43,6 +43,9 @@ counts with reasons for disabled paths. An unavailable endpoint hides this
 optional display and does not prevent the model from starting.
 Counts use the endpoint's `expected_acceleration` list when available. Unrelated
 Flash-Next routes and compile-cache diagnostics do not inflate the denominator.
+Startup compilation-cache status is displayed separately, including the reported
+reason when disabled. A full decode-acceleration count must not hide repeated
+startup compilation. Older runtimes without a cache row omit this optional status.
 
 The bundled 1.5.1 URL and checksum currently describe the stage-A candidate.
 They must be refreshed to the final wheel after release changes are merged and

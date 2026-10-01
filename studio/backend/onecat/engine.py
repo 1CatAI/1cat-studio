@@ -368,11 +368,22 @@ def read_acceleration(data: dict, client) -> dict | None:
         }
         if not paths:
             return None
-        return {
+        status = {
             "paths": paths,
             "enabled": sum(row["enabled"] for row in paths.values()),
             "total": len(paths),
         }
+        cache = report["paths"].get("compile_cache")
+        if (
+            isinstance(cache, dict)
+            and isinstance(cache.get("enabled"), bool)
+            and cache.get("reason") != "not_applicable"
+        ):
+            status["compile_cache"] = {
+                "enabled": cache["enabled"],
+                "reason": cache.get("reason"),
+            }
+        return status
     except (httpx.HTTPError, ValueError, TypeError, KeyError):
         return None
 

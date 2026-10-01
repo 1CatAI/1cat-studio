@@ -276,6 +276,7 @@ def test_acceleration_count_uses_release_expected_paths():
         status = engine.read_acceleration({"port": 8000, "api_key": "key"}, client)
     assert status["enabled"] == 1 and status["total"] == 2
     assert "compile_cache" not in status["paths"]
+    assert status["compile_cache"] == report["paths"]["compile_cache"]
 
 
 @pytest.fixture
