@@ -167,6 +167,8 @@ def search(query="", runtime_id=None, all_verified=False):
 
 def supported():
     """Downloading weights does not require a compatible inference installation."""
+    from .sm70_profiles import MODEL_IDS
+
     devices = gpu.snapshot()["gpus"]
     downloads = sorted(
         (j for j in db.all_records("jobs") if j["kind"] == "download_model"),
@@ -196,13 +198,18 @@ def supported():
             ),
             None,
         )
+        notes = recommendations(checkpoint, devices) if checkpoint else []
+        if checkpoint and model and checkpoint["id"] in MODEL_IDS:
+            notes = launch_defaults(checkpoint["id"], model["id"], devices=devices)[
+                "recommendations"
+            ]
         result.append(
             {
                 **item,
                 "downloadable": bool(checkpoint),
                 "compatible": bool(checkpoint) and not reasons,
                 "reasons": reasons,
-                "recommendations": recommendations(checkpoint, devices) if checkpoint else [],
+                "recommendations": notes,
                 "bytes": sum(f["bytes"] for f in checkpoint["files"]) if checkpoint else None,
                 "recommended": checkpoint.get("recommended", {}) if checkpoint else None,
                 "gpu": checkpoint["gpu"] if checkpoint else None,
@@ -251,7 +258,7 @@ def require_download(repo, revision=None, runtime_id=None):
     return item
 
 
-def launch_defaults(repo, model_id=None):
+def launch_defaults(repo, model_id=None, *, devices=None):
     """Prepare a reviewable profile, selecting only a documented runtime/topology."""
     from .schemas import Profile
 
@@ -273,12 +280,13 @@ def launch_defaults(repo, model_id=None):
     runtime = next(
         (r for r in installed if r["id"] == active_id), installed[0] if installed else {}
     )
-    devices = gpu.snapshot()["gpus"]
+    devices = gpu.snapshot()["gpus"] if devices is None else devices
     reasons = compatibility(item, runtime.get("id"), devices)
     notes = recommendations(item, devices)
     topology = item["gpu"]
     selected = recommended_devices(devices, topology)
     profile = None
+    recommended = item.get("recommended", {})
     if topology["pp"] == 1:
         values = Profile(
             name=item["name"] + " · 默认",
@@ -287,6 +295,21 @@ def launch_defaults(repo, model_id=None):
             served_model_name=repo.split("/")[-1],
         ).model_dump()
         values.update(item.get("recommended", {}))
+        from .sm70_profiles import MODEL_IDS, default_speculation, qualified_draft, recommendation
+
+        speculative = None
+        if repo in MODEL_IDS:
+            recommended = recommendation(runtime)
+            values.update(recommended)
+            draft_path = qualified_draft(runtime)
+            if draft_path:
+                speculative = default_speculation(runtime, draft_path)
+            else:
+                notes.append(
+                    "DFlash2 未启用：请下载发布配置对应的草稿模型；当前仅目标模型推理，"
+                    "速度不等同于 DFlash2 发布配置 / DFlash2 is disabled: download the "
+                    "release draft; target-only speed differs from the DFlash2 profile"
+                )
         values.update(
             {
                 "catalog_id": repo,
@@ -297,7 +320,7 @@ def launch_defaults(repo, model_id=None):
                 # decide what it actually runs on.
                 "tensor_parallel_size": max(1, len(selected)),
                 "gpu_uuids": [d["uuid"] for d in selected],
-                "speculative_config": None,
+                "speculative_config": speculative,
             }
         )
         profile = values
@@ -305,7 +328,7 @@ def launch_defaults(repo, model_id=None):
         "catalog_id": repo,
         "model_id": model["id"] if model else None,
         "profile": profile,
-        "recommended": item.get("recommended", {}),
+        "recommended": recommended,
         "gpu": topology,
         "runtime_versions": item["runtime_versions"],
         "runtime_options": [{"id": r["id"], "name": r["name"]} for r in installed],
@@ -393,6 +416,8 @@ def capabilities(path, runtime_id):
     runtime = db.get("runtimes", runtime_id, {})
     item = model_entry(path)
     if item and runtime_matches(item, runtime):
+        from .sm70_profiles import MODEL_IDS, default_speculation, recommendation
+
         accelerators = item.get("accelerators", [])
         return {
             "verified": True,
@@ -420,7 +445,12 @@ def capabilities(path, runtime_id):
             "accelerators": accelerators,
             "mtp_token_options": [1, 2, 3, 4] if "mtp" in accelerators else [],
             "draft_repo_id": item.get("draft_repo_id"),
-            "recommended": item.get("recommended", {}),
+            "recommended": recommendation(runtime)
+            if item["id"] in MODEL_IDS
+            else item.get("recommended", {}),
+            "draft_speculative_config": default_speculation(runtime, "")
+            if item["id"] in MODEL_IDS
+            else None,
             "reason": item.get("vision_reason", ""),
             "evidence": item["evidence"],
         }
@@ -561,7 +591,24 @@ def validate_features(profile):
             )
             if expected and registered.get("repo_id") != expected:
                 raise ValueError("Draft does not match the verified DFlash2 recipe")
-            spec.pop("revision", None)
+            from .sm70_profiles import MODEL_IDS, qualified_draft, release_profile
+
+            if profile.get("catalog_id") in MODEL_IDS:
+                draft_recipe = release_profile(db.get("runtimes", profile["runtime_id"], {}))[
+                    "draft"
+                ]
+                if (
+                    qualified_draft(
+                        db.get("runtimes", profile["runtime_id"], {}), str(draft.resolve())
+                    )
+                    is None
+                ):
+                    raise ValueError(
+                        "Download the pinned release DFlash2 draft revision before starting"
+                    )
+                spec["revision"] = draft_recipe["revision"]
+            else:
+                spec.pop("revision", None)
         elif spec.get("method") == "mtp":
             count = spec.get("num_speculative_tokens")
             if isinstance(count, bool) or count not in caps.get("mtp_token_options", []):

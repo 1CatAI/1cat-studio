@@ -296,6 +296,7 @@ export type Profile = {
   vision_processor_kwargs?: Record<string, unknown>;
 };
 export type Engine = {
+  acceleration?: { enabled: number; total: number; paths: Record<string, { enabled: boolean; reason: string | null }>; compile_cache?: { enabled: boolean; reason: string | null } } | null;
   state: string;
   model?: { name: string; repo_id?: string | null; source?: string | null } | null;
   listen_host?: string;

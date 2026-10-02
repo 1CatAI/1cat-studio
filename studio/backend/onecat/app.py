@@ -636,7 +636,26 @@ def create_app() -> FastAPI:
 
     @admin.get("/profiles")
     def profiles():
-        return {"items": db.all_records("profiles")}
+        from .sm70_profiles import recommended_update
+        items = db.all_records("profiles")
+        updates = {p["id"]: recommended_update(p, db.get("runtimes", p["runtime_id"], {}))
+                   for p in items}
+        return {"items": items, "recommended_updates": {k: v for k, v in updates.items() if v}}
+
+    @admin.post("/profiles/{id}/recommended")
+    def update_recommended_profile(id: str):
+        from .sm70_profiles import recommended_update
+        from .catalog import validate_features
+        profile = db.get("profiles", id)
+        if not profile:
+            raise HTTPException(404, "Profile not found")
+        values = recommended_update(profile, db.get("runtimes", profile["runtime_id"], {}))
+        if not values:
+            raise ValueError("This profile has custom settings; edit it manually")
+        updated = Profile.model_validate({**profile, **values}).model_dump()
+        validate_features(updated)
+        db.put("profiles", id, updated)
+        return updated
 
     @admin.post("/profiles")
     def save_profile(payload: Profile):

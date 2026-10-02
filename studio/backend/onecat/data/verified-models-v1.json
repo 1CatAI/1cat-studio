@@ -105,7 +105,8 @@
       "quantization": "NVFP4",
       "runtime_versions": [
         "1.5.0",
-        "1.5.1.dev706+g4f8e5e674.cu128"
+        "1.5.1.dev706+g4f8e5e674.cu128",
+        "1.5.1"
       ],
       "gpu": {
         "compute_capability": [
@@ -132,19 +133,28 @@
       "recommended": {
         "dtype": "half",
         "tensor_parallel_size": 4,
-        "kv_cache_dtype": "fp8_e5m2",
+        "kv_cache_dtype": "fp8_e4m3",
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
-        "max_num_batched_tokens": 4096,
+        "max_num_batched_tokens": 8192,
         "max_num_seqs": 4,
-        "gpu_memory_utilization": 0.92,
+        "gpu_memory_utilization": 0.8,
         "extra_args": [
           "--trust-remote-code",
           "--mamba-cache-mode",
           "align",
           "--reasoning-parser",
-          "qwen3"
-        ]
+          "qwen3",
+          "--block-size",
+          "2048",
+          "--mamba-block-size",
+          "8192",
+          "--seed",
+          "0",
+          "--default-chat-template-kwargs",
+          "{\"enable_thinking\":false}"
+        ],
+        "enable_prefix_caching": true
       }
     },
     {
@@ -229,7 +239,8 @@
       "architecture": "Qwen3_5ForConditionalGeneration",
       "quantization": "NVFP4 / FP8",
       "runtime_versions": [
-        "1.5.0"
+        "1.5.0",
+        "1.5.1"
       ],
       "gpu": {
         "compute_capability": [
@@ -257,19 +268,28 @@
       "recommended": {
         "dtype": "half",
         "tensor_parallel_size": 4,
-        "kv_cache_dtype": "fp8_e5m2",
+        "kv_cache_dtype": "fp8_e4m3",
         "attention_backend": "FLASH_ATTN_V100",
         "max_model_len": 262144,
-        "max_num_batched_tokens": 4096,
+        "max_num_batched_tokens": 8192,
         "max_num_seqs": 4,
-        "gpu_memory_utilization": 0.92,
+        "gpu_memory_utilization": 0.8,
         "extra_args": [
           "--trust-remote-code",
           "--mamba-cache-mode",
           "align",
           "--reasoning-parser",
-          "qwen3"
-        ]
+          "qwen3",
+          "--block-size",
+          "2048",
+          "--mamba-block-size",
+          "8192",
+          "--seed",
+          "0",
+          "--default-chat-template-kwargs",
+          "{\"enable_thinking\":false}"
+        ],
+        "enable_prefix_caching": true
       }
     },
     {
@@ -278,7 +298,7 @@
       "name": "Qwen3.8-27B-DFlash2",
       "family": "Qwen3.8",
       "role": "draft",
-      "revision": "master",
+      "revision": "5cfe71fd56ed83d5ca27f04c1345cc7d862bbe4f",
       "files": [
         {
           "path": ".gitattributes",
@@ -341,7 +361,8 @@
       "recommended": {},
       "runtime_snapshots": [
         "pr417-a09e332bcd"
-      ]
+      ],
+      "upstream_revision": "dedf8df68adfb1afeaf7b7480c0a0243108177b4"
     },
     {
       "id": "LibertAIDAI/GLM-5.3-Flash-NVFP4",
