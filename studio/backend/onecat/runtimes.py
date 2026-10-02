@@ -50,7 +50,7 @@ RELEASES = [
         "version": "1.5.1",
         "url": "https://github.com/1CatAI/1Cat-vLLM/releases/download/v1.5.1/1cat_vllm-1.5.1-cp312-cp312-linux_x86_64.whl",
         # Final release/1.5.1 artifact; merge after the Release is published.
-        "sha256": "3a88184b784f4fa82b23b16099b5d8391dfbb7b547e4eabe41e39d1d1177c2c1",
+        "sha256": "95dffbf6dc02fa698d20d118fac5e0ec11a3049ae4e419604ff4ccb493e2109d",
         "evidence": "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.1",
     },
     {
