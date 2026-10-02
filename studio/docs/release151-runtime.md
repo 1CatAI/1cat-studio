@@ -47,9 +47,10 @@ Startup compilation-cache status is displayed separately, including the reported
 reason when disabled. A full decode-acceleration count must not hide repeated
 startup compilation. Older runtimes without a cache row omit this optional status.
 
-The bundled 1.5.1 URL and checksum currently describe the stage-A candidate.
-They must be refreshed to the final wheel after release changes are merged and
-rebuilt. The public asset is not published by this work.
+The bundled 1.5.1 URL and checksum identify the final release/1.5.1 wheel.
+SHA256: `3a88184b784f4fa82b23b16099b5d8391dfbb7b547e4eabe41e39d1d1177c2c1`.
+The wheel has been attached to an unpublished Release draft. Merge the runtime
+update only after the owner authorizes publication and the asset URL is public.
 
 After installing the final wheel, regenerate the bundled fallback and catalog
 from that wheel instead of editing KV defaults in two repositories:

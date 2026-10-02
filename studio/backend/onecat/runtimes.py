@@ -49,8 +49,8 @@ RELEASES = [
         "id": "1cat-vllm-1.5.1",
         "version": "1.5.1",
         "url": "https://github.com/1CatAI/1Cat-vLLM/releases/download/v1.5.1/1cat_vllm-1.5.1-cp312-cp312-linux_x86_64.whl",
-        # Stage A main wheel; refresh after the final profile rebuild.
-        "sha256": "b3cd873677f17cc779dbf3bb7ffcc03d64d243378df331b9a3ab38e97c32a2f7",
+        # Final release/1.5.1 artifact; merge after the Release is published.
+        "sha256": "3a88184b784f4fa82b23b16099b5d8391dfbb7b547e4eabe41e39d1d1177c2c1",
         "evidence": "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.1",
     },
     {

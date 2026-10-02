@@ -143,18 +143,21 @@
           "--trust-remote-code",
           "--mamba-cache-mode",
           "align",
-          "--reasoning-parser",
-          "qwen3",
           "--block-size",
           "2048",
           "--mamba-block-size",
           "8192",
-          "--seed",
-          "0",
+          "--reasoning-parser",
+          "qwen3",
           "--default-chat-template-kwargs",
-          "{\"enable_thinking\":false}"
+          "{\"enable_thinking\":false}",
+          "--seed",
+          "0"
         ],
-        "enable_prefix_caching": true
+        "enable_prefix_caching": true,
+        "served_model_name": "qwen3.8-27b-dflash2",
+        "tool_calling": true,
+        "tool_parser": "qwen3_coder"
       }
     },
     {
@@ -278,18 +281,21 @@
           "--trust-remote-code",
           "--mamba-cache-mode",
           "align",
-          "--reasoning-parser",
-          "qwen3",
           "--block-size",
           "2048",
           "--mamba-block-size",
           "8192",
-          "--seed",
-          "0",
+          "--reasoning-parser",
+          "qwen3",
           "--default-chat-template-kwargs",
-          "{\"enable_thinking\":false}"
+          "{\"enable_thinking\":false}",
+          "--seed",
+          "0"
         ],
-        "enable_prefix_caching": true
+        "enable_prefix_caching": true,
+        "served_model_name": "qwen3.8-27b-dflash2",
+        "tool_calling": true,
+        "tool_parser": "qwen3_coder"
       }
     },
     {
