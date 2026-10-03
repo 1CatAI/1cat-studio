@@ -48,9 +48,9 @@ reason when disabled. A full decode-acceleration count must not hide repeated
 startup compilation. Older runtimes without a cache row omit this optional status.
 
 The bundled 1.5.1 URL and checksum identify the final release/1.5.1 wheel.
-SHA256: `3a88184b784f4fa82b23b16099b5d8391dfbb7b547e4eabe41e39d1d1177c2c1`.
-The wheel has been attached to an unpublished Release draft. Merge the runtime
-update only after the owner authorizes publication and the asset URL is public.
+SHA256: `757f2200ba6bd20f7e3e5c8fc68c7e05461df6d284baf676ac0c16ce19434959`.
+The runtime entry uses the stable public `v1.5.1` Release asset URL. Verify the
+download against this checksum before installation.
 
 After installing the final wheel, regenerate the bundled fallback and catalog
 from that wheel instead of editing KV defaults in two repositories:
