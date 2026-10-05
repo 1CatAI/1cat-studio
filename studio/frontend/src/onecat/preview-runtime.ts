@@ -6,6 +6,8 @@ import * as ReactDOMClient from "react-dom/client";
 import * as JSXRuntime from "react/jsx-runtime";
 import * as Lucide from "lucide-react";
 import * as Recharts from "recharts";
+import * as Three from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { transform } from "sucrase";
 
 // Generated games commonly save a score. Opaque frames cannot use origin
@@ -43,7 +45,12 @@ const modules: Record<string, unknown> = {
   "react/jsx-runtime": JSXRuntime,
   "lucide-react": Lucide,
   recharts: Recharts,
+  three: Three,
+  "three/addons/controls/OrbitControls.js": { OrbitControls },
+  "three/examples/jsm/controls/OrbitControls.js": { OrbitControls },
 };
+// Classic HTML scripts use the bundled library without fetching a CDN.
+Object.assign(window, { THREE: Three, OrbitControls });
 const report = (type: string, message = "") =>
   parent.postMessage({ onecat_preview: true, type, message }, "*");
 window.addEventListener("error", (e) => report("error", e.message));
@@ -74,7 +81,7 @@ function execute(code: string) {
   const require = (id: string) => {
     if (!Object.hasOwn(modules, id))
       throw new Error(
-        `Unsupported dependency: ${id}. Built in: React, ReactDOM, Lucide, Recharts.`,
+        `Unsupported dependency: ${id}. Built in: React, ReactDOM, Lucide, Recharts, Three.js, OrbitControls.`,
       );
     return modules[id];
   };
@@ -156,7 +163,7 @@ function run(source: string, language: string) {
         .map((script) => {
           if (script.src)
             throw new Error(
-              "External scripts are disabled. Use the built-in React dependencies.",
+              "External scripts are disabled. Use the built-in preview dependencies.",
             );
           const source = script.textContent || "";
           const module = ["module", "text/babel"].includes(script.type);

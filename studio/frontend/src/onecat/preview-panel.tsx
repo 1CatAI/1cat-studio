@@ -19,7 +19,7 @@ import { useBrowserState } from "./browser-state";
 
 let runtime: Promise<string> | undefined;
 function runtimeSource() {
-  runtime ||= fetch("/preview/runtime.js", { credentials: "omit" })
+  runtime ||= fetch("/preview/runtime.js", { credentials: "omit", cache: "no-store" })
     .then(async (r) => {
       if (!r.ok || !/javascript/i.test(r.headers.get("content-type") || ""))
         throw new Error("Preview runtime is unavailable. Retry or refresh Studio after an update.");
