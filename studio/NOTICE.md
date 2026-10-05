@@ -15,7 +15,7 @@ of this application.
 ## Frontend and fonts
 
 React/ReactDOM, Radix, TanStack Router, Streamdown, Shiki, KaTeX, Motion,
-Lucide, Recharts, Sucrase, Tailwind and other npm dependencies are independently
+Lucide, Recharts, Three.js (MIT), Sucrase, Tailwind and other npm dependencies are independently
 licensed packages. Their full notices are collected during the build in
 `/third-party-notices.txt`, including notices for browser code previews.
 The locked package versions are in `frontend/package-lock.json`.

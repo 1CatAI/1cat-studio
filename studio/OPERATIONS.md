@@ -109,7 +109,7 @@ python3 ~/.local/share/onecat-studio-app/current/scripts/rollback.py
 
 默认新增文字采用 280 ms 模糊渐显，延迟上限 70 ms，已显示文字不重复动画；组合 Emoji 保持同一字形。对话参数可关闭动画，系统减少动态效果设置优先。
 
-代码块的“预览 / 运行”支持 HTML/CSS/JS、SVG、单文件 JSX/TSX。点击后约每 500 ms 更新可解析版本，错误时保留上次成功画面。React、ReactDOM、Lucide、Recharts、Tailwind 内置；不下载未知 npm 依赖。编译和执行都在无同源权限的浏览器 iframe 沙箱中，外网资源、fetch、子 iframe、表单及父窗口访问受限制。预览不会在服务器运行生成代码。可查看源码、错误、重跑、暂停更新、全屏及下载；关闭或切换会话即释放实例。
+代码块的“预览 / 运行”支持 HTML/CSS/JS、SVG、单文件 JSX/TSX。点击后约每 500 ms 更新可解析版本，错误时保留上次成功画面。React、ReactDOM、Lucide、Recharts、Three.js、OrbitControls、Tailwind 内置；不下载未知 npm 依赖。编译和执行都在无同源权限的浏览器 iframe 沙箱中，外网资源、fetch、子 iframe、表单及父窗口访问受限制。预览不会在服务器运行生成代码。可查看源码、错误、重跑、暂停更新、全屏及下载；关闭或切换会话即释放实例。
 
 预览默认在聊天页右侧占一半宽度，可拖动至 30%–65%；窄屏为页内上下分栏，保留输入框。只有主动点击全屏按钮才覆盖页面。预览模块和 Markdown 代码块有独立错误边界，模块加载或渲染失败不会卸载聊天。HTML 页面禁止缓存以减少旧前端残留。
 
@@ -160,3 +160,5 @@ python3 ~/.local/share/onecat-studio-app/current/scripts/rollback.py
 开始安装会固定当前版本选择，之后列表更新不自动切到其他版本。同版本存在多次任务时优先展示正在执行的任务，再按创建时间选择最近记录，避免旧失败记录遮住重试进度；切换版本清除原操作按钮的成功或失败反馈。
 
 针对性回归：`backend/onecat_tests/test_runtime_audit.py` 含实际离线 uv 虚拟环境恢复及模拟 HTTP/进程测试；`scripts/check-runtime-audit.py` 在临时数据库和模拟安装器上覆盖新版本出现、连续切换和旧任务延迟更新。浏览器使用软件渲染，不执行模型或 GPU 设置。
+
+Three.js 可用 `import * as THREE from "three"` 引入，OrbitControls 支持 `three/addons/controls/OrbitControls.js` 和 `three/examples/jsm/controls/OrbitControls.js`。HTML 经典内联脚本也可直接使用 `THREE` 和 `OrbitControls` 全局对象。依赖随 Studio 打包，预览不需要连接 CDN。
