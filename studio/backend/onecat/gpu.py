@@ -135,7 +135,7 @@ def validate_setting(uuids: list[str], setting: dict, *, devices=None):
             if low is None or high is None or not low <= watts <= high:
                 raise ValueError(f"{device['name']}: unsupported power limit {watts} W")
         clock = setting.get("graphics_clock_mhz")
-        if clock is not None and clock not in device["supported_graphics_clocks_mhz"]:
+        if clock is not None and clock not in (device.get("supported_graphics_clocks_mhz") or []):
             raise ValueError(f"{device['name']}: unsupported graphics clock {clock} MHz")
 
 

@@ -35,7 +35,7 @@ def hardware(monkeypatch):
             "processes": [{"pid": 123, "name": "external"}],
             "power_min_w": 150,
             "power_max_w": 300,
-            "supported_graphics_clocks_mhz": [975],
+            "supported_graphics_clocks_mhz": [975, 1350, 1530],
             "power_limit_w": 300,
         }
         for i, u in enumerate([U1, U2])
@@ -113,6 +113,42 @@ def test_invalid_scope_is_rejected_before_job(client, hardware, ids):
     assert (
         client.post("/api/gpu/power-mode", json={"id": "eco", "gpu_uuids": ids}).status_code == 400
     )
+    assert not db.all_records("jobs")
+
+
+def test_performance_uses_each_cards_maximum_and_confirms_readback(client, hardware):
+    devices, actual, _calls = hardware
+    devices[1].update(name="Tesla V100-PCIE-32GB", power_max_w=250,
+                      supported_graphics_clocks_mhz=[975, 1350, 1380])
+    before = client.get("/api/gpu/power-modes").json()
+    assert before["active"] is None  # The PCIe card has not yet received its 250 W limit.
+    mode = next(m for m in before["items"] if m["id"] == "performance")
+    assert mode["available"]
+    assert mode["boost_clocks_mhz"] == {U1: 1530, U2: 1380}
+    assert mode["settings"][U1] == {"power_limit_w": 300, "graphics_clock_mhz": None, "reset_clocks": True}
+    assert mode["settings"][U2] == {"power_limit_w": 250, "graphics_clock_mhz": None, "reset_clocks": True}
+    response = client.post("/api/gpu/power-mode", json={"id": "performance"})
+    assert response.status_code == 200
+    job = response.json()
+    assert db.get("jobs", job["id"])["payload"]["settings"] == mode["settings"]
+    control.apply_settings(mode["settings"], persist=True)
+    assert actual[U1]["graphics_clock_mhz"] is None
+    assert actual[U2]["graphics_clock_mhz"] is None
+    assert control.status()["active"] == "performance"
+    assert db.get("gpu_policies", U2)["setting"]["power_limit_w"] == 250
+    actual[U1]["graphics_clock_mhz"] = 1350
+    assert control.status()["active"] is None
+
+
+@pytest.mark.parametrize("missing", ["power_max_w", "supported_graphics_clocks_mhz"])
+def test_performance_unknown_maximum_is_rejected_before_job(client, hardware, missing):
+    devices, _actual, _calls = hardware
+    devices[0][missing] = None
+    mode = next(m for m in control.status()["items"] if m["id"] == "performance")
+    assert not mode["available"]
+    assert "Maximum GPU clock" in mode["reason"]
+    response = client.post("/api/gpu/power-mode", json={"id": "performance"})
+    assert response.status_code == 400
     assert not db.all_records("jobs")
 
 

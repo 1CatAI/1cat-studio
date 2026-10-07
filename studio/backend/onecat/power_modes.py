@@ -10,6 +10,20 @@ MODES = {
 }
 
 
+def resolved_setting(mode: str, devices: list[dict]) -> dict:
+    setting = dict(MODES[mode])
+    if mode == "performance":
+        clocks = (
+            set.intersection(*(set(d.get("supported_graphics_clocks_mhz") or []) for d in devices))
+            if devices else set()
+        )
+        limits = [d.get("power_max_w") for d in devices]
+        if not clocks or not limits or any(value is None for value in limits):
+            raise ValueError("无法确认 GPU 的最高频率或功率上限 / Maximum GPU clock or power limit is unavailable")
+        setting.update(power_limit_w=min(limits))
+    return setting
+
+
 def options(uuids: list[str]) -> dict:
     missing = None
     try:
@@ -20,10 +34,12 @@ def options(uuids: list[str]) -> dict:
     available = bool(devices) and all("V100" in d["name"] for d in devices)
     items = []
     active = None
-    for id, setting in MODES.items():
+    for id, template in MODES.items():
+        setting = dict(template)
         reason = None if available else missing or "These presets require an active V100 model"
         if not reason:
             try:
+                setting = resolved_setting(id, devices)
                 gpu.validate_setting(uuids, setting)
             except ValueError as error:
                 reason = str(error)

@@ -81,6 +81,8 @@ type ControlStatus = {
 		available: boolean;
 		reason?: string;
 		setting: Hardware;
+		settings?: Record<string, Hardware>;
+		boost_clocks_mhz?: Record<string, number>;
 	}[];
 	last_result?: {
 		id: string;
@@ -197,6 +199,13 @@ export function PowerModes({
 			submitting.current = false;
 		}
 	}
+	const performance = data?.items.find((item) => item.id === "performance");
+	const performanceSettings = Object.values(performance?.settings || {});
+	const performanceValues = (key: "power_limit_w" | "graphics_clock_mhz") =>
+		[...new Set((key === "graphics_clock_mhz"
+			? Object.values(performance?.boost_clocks_mhz || {})
+			: performanceSettings.map((setting) => setting[key])).filter((value) => value != null))]
+			.sort((a, b) => a! - b!).join(" / ");
 	const modes = [
 		{
 			id: "eco",
@@ -226,15 +235,15 @@ export function PowerModes({
 			id: "performance",
 			icon: Zap,
 			title: t("性能模式", "Performance"),
-			watts: "300",
+			watts: performanceValues("power_limit_w") || "—",
 			subtitle: t("W / 卡 · 功率上限", "W / GPU · power limit"),
 			description: t(
-				"高负载，优先响应速度。",
-				"Full power for heavy workloads.",
+				`动态最高 ${performanceValues("graphics_clock_mhz") || "—"} MHz · 闲置自动降频。`,
+				`Dynamic up to ${performanceValues("graphics_clock_mhz") || "—"} MHz · Lower clocks when idle.`,
 			),
 			detail: t(
-				"完整功率预算 · 动态频率",
-				"Full power budget · dynamic clocks",
+				`解除固定锁频 · 负载时允许升至 ${performanceValues("graphics_clock_mhz") || "—"} MHz`,
+				`Reset fixed clock locks · Allow boost up to ${performanceValues("graphics_clock_mhz") || "—"} MHz under load`,
 			),
 		},
 	];
