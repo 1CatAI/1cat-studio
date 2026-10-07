@@ -141,7 +141,7 @@ def test_updating_missing_thread_returns_not_found(client):
 
 def test_legacy_power_modes_require_authorization_and_recorded_clock_policy(client, monkeypatch):
     from onecat import engine, gpu, power_modes
-    device = {'uuid': 'gpu', 'name': 'V100', 'power_limit_w': 300}
+    device = {'uuid': 'gpu', 'name': 'V100', 'power_limit_w': 300, 'power_max_w': 300, 'supported_graphics_clocks_mhz': [975, 1350, 1530]}
     monkeypatch.setattr(gpu, 'selected_devices', lambda ids: [device] if ids else [])
     monkeypatch.setattr(gpu, 'validate_setting', lambda *args: None)
     state = {'state': 'stopped', 'profile': {'gpu_uuids': ['gpu']}}
@@ -152,3 +152,5 @@ def test_legacy_power_modes_require_authorization_and_recorded_clock_policy(clie
     assert power_modes.options(['gpu'])['active'] is None
     db.put('hardware', 'gpu', {'graphics_clock_mhz': None, 'reset_clocks': True})
     assert power_modes.options(['gpu'])['active'] == 'performance'
+    db.put('hardware', 'gpu', {'graphics_clock_mhz': 1530, 'reset_clocks': False})
+    assert power_modes.options(['gpu'])['active'] is None

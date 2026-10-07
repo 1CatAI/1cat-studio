@@ -116,7 +116,7 @@ source distribution. No shared vLLM kernel or migration worktree was modified.
 
 Model labels now separate base model and weight quantization from runtime suffixes.
 The power page adds V100 power-saver (975 MHz, 150 W driver limit, prior measured
-110–120 W target draw), balanced (185 W dynamic), and performance (300 W dynamic)
+110–120 W target draw), balanced (185 W dynamic), and performance (per-card maximum driver-supported power, with dynamic clocks and idle downclocking)
 controls with asynchronous job completion feedback. A shared backend sampler reads
 NVML every 0.5 seconds for live per-device power/VRAM and a two-minute trace; stale
 values are explicitly unavailable. Request history moves timing and request-window

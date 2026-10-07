@@ -188,7 +188,7 @@ def test_power_window_integrates_boundaries_and_rejects_gaps():
 
 
 def test_modes_obey_v100_minimum_and_use_actual_applied_setting(monkeypatch):
-    devices = [{"uuid": "mine", "name": "Tesla V100-SXM2-32GB", "power_limit_w": 150}]
+    devices = [{"uuid": "mine", "name": "Tesla V100-SXM2-32GB", "power_limit_w": 150, "power_max_w": 300, "supported_graphics_clocks_mhz": [975, 1350, 1530]}]
     monkeypatch.setattr(power_modes.gpu, "selected_devices", lambda uuids: devices)
     checked = []
     monkeypatch.setattr(
@@ -198,6 +198,7 @@ def test_modes_obey_v100_minimum_and_use_actual_applied_setting(monkeypatch):
     assert power_modes.options(["mine"])["active"] == "eco"
     assert power_modes.setting_for("eco", ["mine"])["power_limit_w"] == 150
     assert power_modes.setting_for("balanced", ["mine"])["power_limit_w"] == 185
+    assert power_modes.setting_for("performance", ["mine"])["graphics_clock_mhz"] is None
     assert power_modes.setting_for("performance", ["mine"])["reset_clocks"]
     assert all(setting["power_limit_w"] >= 150 for setting in checked)
     devices[0]["name"] = "Quadro P400"

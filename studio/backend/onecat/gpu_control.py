@@ -127,21 +127,32 @@ def status(requested=None):
     items = []
     for mode, setting in power_modes.MODES.items():
         reason = error
+        settings = {}
         if not reason:
             try:
                 if any("V100" not in d["name"] for d in devices if d["uuid"] in selected):
                     raise ValueError("这些档位适用于 V100 / These presets require V100 GPUs")
-                normalized({u: setting for u in uuids}, uuids, devices=devices)
+                settings = {
+                    d["uuid"]: power_modes.resolved_setting(mode, [d])
+                    for d in devices if d["uuid"] in selected
+                }
+                normalized(settings, uuids, devices=devices)
             except ValueError as problem:
                 reason = str(problem)
         items.append(
-            {"id": mode, "setting": setting, "available": reason is None, "reason": reason}
+            {"id": mode, "setting": next(iter(settings.values()), setting),
+             "settings": settings,
+             "boost_clocks_mhz": {
+                 d["uuid"]: max(d["supported_graphics_clocks_mhz"])
+                 for d in devices if d["uuid"] in selected
+             } if mode == "performance" and reason is None else {},
+             "available": reason is None, "reason": reason}
         )
     active = next(
         (
             i["id"]
             for i in items
-            if i["available"] and all(matches(actual.get(u), i["setting"]) for u in uuids)
+            if i["available"] and all(matches(actual.get(u), i["settings"][u]) for u in uuids)
         ),
         None,
     )
@@ -213,7 +224,10 @@ def queue(requested, *, mode=None, setting=None, settings=None, recover=False, r
             raise ValueError("Unknown power mode")
         if any("V100" not in d["name"] for d in devices if d["uuid"] in uuids):
             raise ValueError("These presets require V100 GPUs")
-        setting = power_modes.MODES[mode]
+        settings = {
+            d["uuid"]: power_modes.resolved_setting(mode, [d])
+            for d in devices if d["uuid"] in uuids
+        }
     values = (
         {}
         if recover_only

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / '.artifacts/motion-power-040/browser'
 OUT.mkdir(parents=True, exist_ok=True)
 seed = runpy.run_path(str(ROOT / 'studio/scripts/check-browser.py'))['SEED']
-seed = seed.replace('range(4)', 'range(8)').replace('tensor_parallel_size=4','tensor_parallel_size=8').replace('"supported_graphics_clocks_mhz":[]', '"supported_graphics_clocks_mhz":[975]')
+seed = seed.replace('range(4)', 'range(8)').replace('tensor_parallel_size=4','tensor_parallel_size=8').replace('"supported_graphics_clocks_mhz":[]', '"supported_graphics_clocks_mhz":[975,1350,1530]')
 seed = seed.replace('gpu.snapshot=lambda: {"gpus":devices', 'gpu.snapshot=lambda: {"available":True,"gpus":devices')
 seed = seed.replace('uvicorn.run(create_app(),', r'''
 from onecat import gpu_control as control
@@ -25,6 +25,7 @@ from onecat.jobs import Job
 from fastapi import Body
 for d in devices:
     d['default_power_limit_w']=300
+    d['power_max_w']=300
     d['graphics_clock_mhz']=300
     d['memory_clock_mhz']=877
     d['temperature_c']=35
@@ -86,6 +87,16 @@ def main():
                 assert context.request.post(BASE+'/api/auth/setup',data={'password':'motion-fixture-password'}).ok
                 context.request.put(BASE+'/api/settings',data={'theme':'dark'})
                 page.goto(BASE+'/performance')
+                expect(page.locator('.oc-power-mode').filter(has_text='性能模式')).to_contain_text('1530 MHz')
+                if os.environ.get('ONECAT_POWER_MAX_ONLY'):
+                    mode = page.locator('.oc-power-mode').filter(has_text='性能模式')
+                    expect(mode).to_be_enabled()
+                    expect(mode).to_contain_text('300')
+                    expect(mode).to_contain_text('闲置自动降频')
+                    page.screenshot(path=str(OUT/'performance-1530.png'))
+                    print(json.dumps({'passed':['1530 MHz maximum performance card', '300 W driver limit', 'mode enabled'], 'screenshot':str(OUT/'performance-1530.png')}))
+                    browser.close()
+                    return
                 expect(page.locator('html')).to_have_class('dark')
                 eco=page.locator('.oc-power-mode').filter(has=page.get_by_role('heading',name='省电模式',exact=True,include_hidden=True))
                 expect(eco).to_be_enabled()
