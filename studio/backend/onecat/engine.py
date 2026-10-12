@@ -535,15 +535,12 @@ def validate_profile(profile: dict) -> tuple[dict, dict]:
     from .catalog import validate_features
 
     validate_features(p)
+    # CUDA process presence does not establish insufficient free memory.
+    # Let the runtime validate its real memory budget without stopping other users.
     devices = gpu.selected_devices(p["gpu_uuids"])
-    from .creative.services import owned_pids as creative_pids
-
-    ours = owned_pids() | creative_pids()
     for device in devices:
         if device.get("compute_capability") == [7, 0] and p["dtype"] == "bfloat16":
             raise ValueError("V100 requires half precision, not bfloat16")
-        if any(proc["pid"] not in ours for proc in device["processes"]):
-            raise ValueError(f"GPU {device['index']} is occupied by another service")
     p["model_path"] = str(path)
     return p, runtime
 
