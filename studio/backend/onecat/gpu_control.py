@@ -316,9 +316,12 @@ def pending_uuids():
     return [u for u, a in actual.items() if a.get("recovery_pending")]
 
 
-def recover_pending():
+def recover_pending(requested=None):
     control, devices = inventory()
-    uuids = targets(None, control, devices)
+    shared = {d["uuid"] for d in devices if d.get("external_processes")}
+    uuids = [u for u in targets(requested, control, devices) if u not in shared]
+    if not uuids:
+        return {}
     actual = helper("snapshot", uuids=uuids)
     if any(a.get("recovery_pending") for a in actual.values()):
         return helper("apply", uuids=uuids, recover=True)
@@ -363,7 +366,14 @@ def ensure_saved(uuids):
     values = {u: p["setting"] for u, p in policies.items() if p}
     if not values and gpu_setup.helper_check().get("protocol", 0) < 2:
         return
-    recover_pending()
+    # Automatic startup must not change the power/clock policy of other tasks.
+    _control, devices = inventory()
+    shared = {d["uuid"] for d in devices if d.get("external_processes")}
+    eligible = [u for u in uuids if u not in shared]
+    if not eligible:
+        return
+    values = {u: v for u, v in values.items() if u not in shared}
+    recover_pending(eligible)
     if not values:
         return
     actual = helper("snapshot", uuids=sorted(values))
@@ -379,7 +389,10 @@ def reconcile_saved():
     policies = db.all_records("gpu_policies")
     values = {p["id"]: p["setting"] for p in policies}
     try:
-        pending = pending_uuids()
+        _control, devices = inventory()
+        shared = {d["uuid"] for d in devices if d.get("external_processes")}
+        values = {u: v for u, v in values.items() if u not in shared}
+        pending = [u for u in pending_uuids() if u not in shared]
         actual = helper("snapshot", uuids=sorted(values)) if values else {}
         changed = {u: v for u, v in values.items() if not matches(actual.get(u), v)}
         if changed:
