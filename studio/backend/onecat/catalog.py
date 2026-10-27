@@ -531,6 +531,9 @@ def capabilities(path, runtime_id):
 
 
 def validate_features(profile):
+    from .portable_gpu import rebind_profile
+
+    rebind_profile(profile)
     selected = gpu.selected_devices(profile["gpu_uuids"]) if profile["gpu_uuids"] else []
     if profile["dtype"] == "bfloat16" and any(
         (d.get("compute_capability") or [0])[0] < 8 for d in selected
