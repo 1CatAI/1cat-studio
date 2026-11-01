@@ -42,6 +42,19 @@ def test_native_template_levels_and_toggle_only_models(profile, tmp_path):
     assert model_controls.thinking_kwargs(profile, True) == {"enable_thinking": True}
 
 
+def test_preserve_thinking_is_off_only_for_thinking_with_a_template_that_knows_it(profile, tmp_path):
+    (tmp_path / "chat_template.jinja").write_text(
+        "{% if enable_thinking %}<think>{% endif %}"
+        "{% if preserve_thinking is undefined or preserve_thinking %}keep{% endif %}"
+    )
+    assert model_controls.thinking_kwargs(profile, True) == {
+        "enable_thinking": True,
+        "preserve_thinking": False,
+    }
+    # With thinking off, past answers render like the prompt that generated them.
+    assert model_controls.thinking_kwargs(profile, False) == {"enable_thinking": False}
+
+
 def test_picker_and_loading_identity_use_registered_repository(client, profile, monkeypatch):
     from onecat import engine
 
