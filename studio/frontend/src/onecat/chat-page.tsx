@@ -370,7 +370,9 @@ export function ChatPage() {
         message_id: pending.assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
         request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP,
           max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual",
-          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
+          // History is sent without reasoning; preserve_thinking=false makes templates that
+          // would render past reasoning (Qwen3.8) show those answers alone instead of an empty <think> block.
+          chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, preserve_thinking: false, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
       });
       pendingGeneration.current = result;
       const run = await result;

@@ -84,6 +84,30 @@ def test_late_developer_updates_remain_in_single_leading_instruction_message():
     assert messages[2]["tool_calls"][0]["id"] == messages[3]["tool_call_id"] == "c"
 
 
+def test_reasoning_items_return_to_their_assistant_turn():
+    data = body()
+    data["input"] += [
+        {"type": "reasoning", "id": "r1", "summary": [{"type": "summary_text", "text": "Plan: run ls."}]},
+        {"type": "function_call", "name": "exec", "call_id": "c", "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "c", "output": "a.py"},
+        {"type": "reasoning", "id": "r2", "summary": []},
+        {
+            "type": "reasoning",
+            "id": "r3",
+            "content": [{"type": "reasoning_text", "text": "Done."}],
+            "summary": [{"type": "summary_text", "text": "ignored summary"}],
+        },
+        {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Listed."}]},
+    ]
+    payload, _ = convert_input(data)
+    messages = payload["messages"]
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "tool", "assistant"]
+    assert messages[2]["reasoning"] == "Plan: run ls."
+    assert messages[2]["tool_calls"][0]["id"] == "c"
+    assert messages[4] == {"role": "assistant", "content": "Listed.", "reasoning": "Done."}
+    assert payload["chat_template_kwargs"] == {"preserve_thinking": False}
+
+
 def test_protocol_roundtrip_custom_function_namespace():
     data = body()
     data["tools"].append(
