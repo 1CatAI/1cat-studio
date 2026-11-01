@@ -19,6 +19,18 @@ PROFILE_FIELDS = (
     "enable_prefix_caching",
     "served_model_name",
 )
+# Recipe arguments the launch command derives from structured profile fields or
+# the runtime itself; every other recipe argument is forwarded unchanged.
+MANAGED_ARGS = {
+    *PROFILE_FIELDS,
+    "host",
+    "port",
+    "enable_auto_tool_choice",
+    "tool_call_parser",
+    "speculative_config",
+    "limit_mm_per_prompt",
+    "enable_prompt_tokens_details",
+}
 
 
 def release_profile(runtime: dict) -> dict:
@@ -45,7 +57,9 @@ def recommendation(runtime: dict) -> dict:
     values["tool_calling"] = args["enable_auto_tool_choice"]
     values["tool_parser"] = args["tool_call_parser"]
     extra = []
-    for key in (
+    # Known keys keep their historical order; newer recipe arguments (for
+    # example partial prefix caching) follow in recipe order.
+    known = (
         "trust_remote_code",
         "mamba_cache_mode",
         "block_size",
@@ -53,7 +67,9 @@ def recommendation(runtime: dict) -> dict:
         "reasoning_parser",
         "default_chat_template_kwargs",
         "seed",
-    ):
+    )
+    newer = [key for key in args if key not in MANAGED_ARGS and key not in known]
+    for key in (*known, *newer):
         value = args[key]
         flag = "--" + key.replace("_", "-")
         if isinstance(value, bool):

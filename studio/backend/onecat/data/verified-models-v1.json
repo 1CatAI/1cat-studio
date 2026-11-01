@@ -106,7 +106,9 @@
       "runtime_versions": [
         "1.5.0",
         "1.5.1.dev706+g4f8e5e674.cu128",
-        "1.5.1"
+        "1.5.1",
+        "1.5.2.dev20261029",
+        "1.5.2"
       ],
       "gpu": {
         "compute_capability": [
@@ -243,7 +245,9 @@
       "quantization": "NVFP4 / FP8",
       "runtime_versions": [
         "1.5.0",
-        "1.5.1"
+        "1.5.1",
+        "1.5.2.dev20261029",
+        "1.5.2"
       ],
       "gpu": {
         "compute_capability": [
@@ -341,7 +345,9 @@
       "quantization": "BF16",
       "runtime_versions": [
         "1.5.0",
-        "1.5.1.dev706+g4f8e5e674.cu128"
+        "1.5.1.dev706+g4f8e5e674.cu128",
+        "1.5.2.dev20261029",
+        "1.5.2"
       ],
       "gpu": {
         "compute_capability": [
