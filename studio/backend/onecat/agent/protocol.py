@@ -140,10 +140,6 @@ def convert_input(body: dict) -> tuple[dict, dict]:
         "messages": messages,
         "stream": True,
         "stream_options": {"include_usage": True},
-        # Keep reasoning only within the current tool-call loop (earlier
-        # turns render their answers alone), so long sessions do not carry
-        # every past plan in the context.
-        "chat_template_kwargs": {"preserve_thinking": False},
     }
     if tools:
         choice = body.get("tool_choice", "auto")

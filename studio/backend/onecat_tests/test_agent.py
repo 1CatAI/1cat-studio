@@ -105,7 +105,6 @@ def test_reasoning_items_return_to_their_assistant_turn():
     assert messages[2]["reasoning"] == "Plan: run ls."
     assert messages[2]["tool_calls"][0]["id"] == "c"
     assert messages[4] == {"role": "assistant", "content": "Listed.", "reasoning": "Done."}
-    assert payload["chat_template_kwargs"] == {"preserve_thinking": False}
 
 
 def test_protocol_roundtrip_custom_function_namespace():
