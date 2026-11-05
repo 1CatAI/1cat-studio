@@ -261,9 +261,9 @@
         "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.0"
       ],
       "tool_parser": "qwen3_coder",
-      "vision": false,
-      "vision_reason": "此版本尚未验证图片输入 / Image input has not been validated for this checkpoint",
-      "max_images": 0,
+      "vision": true,
+      "vision_reason": "",
+      "max_images": 4,
       "draft_repo_id": "incoai/Qwen3.8-27B-DFlash2",
       "accelerators": [
         "dflash"
@@ -369,6 +369,2174 @@
         "pr417-a09e332bcd"
       ],
       "upstream_revision": "dedf8df68adfb1afeaf7b7480c0a0243108177b4"
+    },
+    {
+      "id": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
+      "repo_id": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
+      "name": "Qwen3.8-Flash-Next · NVFP4",
+      "family": "Qwen3.8",
+      "role": "target",
+      "revision": "master",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 2297,
+          "sha256": "1ca83dfac23ccc75e52b7f4054aa87b520c54d1f9f679365c50280ba663605d9"
+        },
+        {
+          "path": "README.md",
+          "bytes": 5927,
+          "sha256": "2b62aaf5b5d876732a2f4efb5f023ca31185ba324110fc9be27c8b088ee827a2"
+        },
+        {
+          "path": "aime26_metrics.json",
+          "bytes": 1062,
+          "sha256": "eb4acd8c64618dc36db5c909b05ead73d172f5fdc90c42b44685c77468032ae9"
+        },
+        {
+          "path": "audit_unchanged_report.json",
+          "bytes": 110,
+          "sha256": "b0901c9029446c7e78f864b359096c73846c54fb8ecd7dd9c77357e4f0530f51"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 8952,
+          "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+        },
+        {
+          "path": "config.json",
+          "bytes": 4983,
+          "sha256": "e765305daba0951974308f4d32c075b52a6a45974730d273f2216718a994d624"
+        },
+        {
+          "path": "configuration.json",
+          "bytes": 76,
+          "sha256": "7f5e4dab8f262b1731914cb110764c86dbfc0459a136de7cc3ae4ae375edc828"
+        },
+        {
+          "path": "conversion_environment.json",
+          "bytes": 344,
+          "sha256": "10dadc9b3421b669e533ffcdb3ffb1bf56f42d35936fc24aa2020db0df7480ac"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 202,
+          "sha256": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e"
+        },
+        {
+          "path": "gsm8k_metrics.json",
+          "bytes": 869,
+          "sha256": "88766f7e1da1f8a7a8adb98ba3df94c4db6982af1176e35af12e223a81952a20"
+        },
+        {
+          "path": "hf_quant_config.json",
+          "bytes": 504,
+          "sha256": "7e69ef4b94302ae5b6f453b913621f698d5631a1d023d8b3e9e3b829721b98e8"
+        },
+        {
+          "path": "layer-00000-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "a2ab015cbd643090ad629b546031aa0e428ccef532f454b6e342d3a8dff3734b"
+        },
+        {
+          "path": "layer-00000-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "d367f9ed6570543e49a99db0a8f88fe12ed94117f9bb3db0d90624937cb56457"
+        },
+        {
+          "path": "layer-00000-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "652d7ed335d1adcfd74b1eac0872e41a2b8a7f2d3041477da6cdf0d47065848a"
+        },
+        {
+          "path": "layer-00000-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "e24ede1ac5e0341608da8ada2989bc92981ff6286e2f1601025ccb8c8d8b36ee"
+        },
+        {
+          "path": "layer-00000-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "6e3521cd315f6e009cfe2af0d779df34805d0343710a2b5d1cced1a041a8856e"
+        },
+        {
+          "path": "layer-00000-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "7ab7f14e3072a3073079701c721c05aca111c365336294d9eb78651355565bd3"
+        },
+        {
+          "path": "layer-00000-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "bf3b05a9893b4cdb2b085a92161c9939454334c6df84c7bb0b0dac2141a688ff"
+        },
+        {
+          "path": "layer-00000-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "1d91a60f90dbc44655c37d97d7eb37c93d5a8a872b92efed20f77d0705277045"
+        },
+        {
+          "path": "layer-00001-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "4c9bf3b10eddfb8cd9bcf68ae0e3a8b059caaf2f22abac3ecfc5caf68e265e31"
+        },
+        {
+          "path": "layer-00001-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "f987d5b4bf0a09f933e77230a7155917caeccd684a9c2af65ae055e7ba2f5841"
+        },
+        {
+          "path": "layer-00001-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "fc23ce40c8a898eb7b88da31035add674d8cf6bc9f01d4d30b4bf2dee5ecab84"
+        },
+        {
+          "path": "layer-00001-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "6bfd3aa965124674ef499f5e33e842ef6e012755dfa659da1e09a2f689a3257d"
+        },
+        {
+          "path": "layer-00001-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "cead92897540d0f050564bd223368ed46ef48dbfb1a73049c53abc65652cb256"
+        },
+        {
+          "path": "layer-00001-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "3e38e9e9a79a96cad1473f129897ff2fa79593b65cc9dd1d7416370b96675040"
+        },
+        {
+          "path": "layer-00001-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "645f752cbd2a5c2028cdb4742e5f06d3d4c30f57a40121bab13706f9201b89aa"
+        },
+        {
+          "path": "layer-00001-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "2f277f27504d22712822fb711071a212dd695841c9cbf4be7d3719d78f64d3db"
+        },
+        {
+          "path": "layer-00002-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "c4c9ba3402efbfe3d54e9b23a47d5d714f5989716cc6790667b271a99711d887"
+        },
+        {
+          "path": "layer-00002-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "e50f19bc1547c83a18d278b5b7c1cb544d76ee1a9487ee16be6e2af7a5135244"
+        },
+        {
+          "path": "layer-00002-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "a5312ad95ad6dae3dfe830524c6f1426ab938a1c757853e389f8af0eb7ebd7d7"
+        },
+        {
+          "path": "layer-00002-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "76671caa9d6bef00bdead734b3b325aa08091ba3ff10df802ab3a8299cb4380e"
+        },
+        {
+          "path": "layer-00002-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "75c9ea8ff92e04ff26a65a4bb987c999227029712efa71388b675fa3de8fc56a"
+        },
+        {
+          "path": "layer-00002-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "21170bf6d48641a8deb3b72c91a92386361ac15071cb96bc8c3ec60dd4c1428c"
+        },
+        {
+          "path": "layer-00002-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "66f2671a878462dba13a54b69aaf5834ea8f7212a02bb38fe087eaaa44807526"
+        },
+        {
+          "path": "layer-00002-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "fc02c5de9f8be6cc33c8b9426022ab3af2e8de71665d75b49863e3c4243fd3f6"
+        },
+        {
+          "path": "layer-00003-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "ab4080fa817b713572facf4e44f3cd5a2acc761b4871fba57fe06aa9ba036202"
+        },
+        {
+          "path": "layer-00003-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "81a41d71d0405ce057ea78c81fe967cda0e4df89b70eca587306798007aae674"
+        },
+        {
+          "path": "layer-00003-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "f7f2ff90c1bc01d0d917c986fb0f9d8da2d1d71cfd20f8ea8b0ae7d5998ec2e8"
+        },
+        {
+          "path": "layer-00003-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "13d153729652cba5f9f33eb5f7cbc4c2696453d5d7c125b451a5b04319cf8c02"
+        },
+        {
+          "path": "layer-00003-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "35cd5243756624ca1e43568ffba4066dc2a9504c1b3b8615fda244f120e7ee5e"
+        },
+        {
+          "path": "layer-00003-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "000bb3a3a9148a08cd12ecfb308fc9dc565026aff9fa3f6a39e300a91d21e463"
+        },
+        {
+          "path": "layer-00003-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "173497c6d22cff252e24f6d77644703b94b8867657bc1c111c028f281075e1ab"
+        },
+        {
+          "path": "layer-00003-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "e27cb3b27f029ec5c18d78cea549f7939336894c2ae01b0b4c174626f639201b"
+        },
+        {
+          "path": "layer-00004-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "21c0b2c91d659afc71a34248d9d3526080e17ec502319f06839d7a7b96a67a33"
+        },
+        {
+          "path": "layer-00004-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "e784a5b42e35615d3f2eb8ab264ab6d1498e3e8791076b3b0a1c34f3eac9c8c6"
+        },
+        {
+          "path": "layer-00004-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "86473816b8e5d7088ef7b9d5a3315f43d399be946c49fe01100df8c62f6688e0"
+        },
+        {
+          "path": "layer-00004-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "2479cc9a39ff2648f9c225ade0ce635ab7393662793f7097ff0f502a9b0e44b2"
+        },
+        {
+          "path": "layer-00004-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "a8cbb6114e9df1c879994fca948a61279c845c336108cb4847d26995cc5aeffa"
+        },
+        {
+          "path": "layer-00004-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "4926bf02da40ce2adfb2c2e06325b81340d91589aa7c383a8d047bc499c8f573"
+        },
+        {
+          "path": "layer-00004-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "b498d186d8890314d5fa03f8a44fdf53bee1d69ae17e58444f97c456c91f7ac1"
+        },
+        {
+          "path": "layer-00004-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "a05a14cd5e08b38074b35b39e4c961402827d3b9e4737df4b76fc338483859ab"
+        },
+        {
+          "path": "layer-00005-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "86013378d2a33614a9ac2f18bef408a975c4e095afb9003d94042f586ce5a724"
+        },
+        {
+          "path": "layer-00005-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "912811df1ffc0226b3a21f42fdd5e979d448a2bc329321087eaa87553aa9d1df"
+        },
+        {
+          "path": "layer-00005-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "14a850ea04d353de98553a47f9bbcddb0c6a96a2ff34745353ad4bcc9d4b705f"
+        },
+        {
+          "path": "layer-00005-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "e76dace09c68bba7d573f688958c1ab79c2790666dafa3641067168ec189b361"
+        },
+        {
+          "path": "layer-00005-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "4bf4e74da5d8167d391ce836ded5bbe19b7a15502310c7177f07669908fc2305"
+        },
+        {
+          "path": "layer-00005-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "ec950a8a7013a2904028f6aa450fe321f38d1a97483d3048f3824794287f74da"
+        },
+        {
+          "path": "layer-00005-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "2637fe48466db5a7b955767ef62889bfc05a7e6f6ad0e69adf0bc181aadeab1c"
+        },
+        {
+          "path": "layer-00005-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "7a7dcfd32d7b27221d4595343462d475093d45c95705e0eb51117bfe4c42906b"
+        },
+        {
+          "path": "layer-00006-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "741cedb0a9b0b30123d9ba0c4e6d7d932d5dbb0082afba98259b13c1ace1e2f8"
+        },
+        {
+          "path": "layer-00006-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "933a455efdb7de629b707fa58d2ea93af64c9d289aadc0907993d0eed364e70e"
+        },
+        {
+          "path": "layer-00006-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "55c0db55a234df5177c401eca8f3bae0674ce7a847afb0e8ef5e48dbb915cf66"
+        },
+        {
+          "path": "layer-00006-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "09d9c4301048b95ef3f4cb43756c76bcf1caf181fc1f46c80d113699f9cc1190"
+        },
+        {
+          "path": "layer-00006-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "cbe1bf1f01c7b9ad61474461f2eda5357d5826a4f782c06402c5ec8a4c5a35c8"
+        },
+        {
+          "path": "layer-00006-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "9a24d6de2c4044f161e296f9d8206fb732514a73a357bcc5b5aa492265050cc3"
+        },
+        {
+          "path": "layer-00006-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "db18a87668e21ecd281a3a4acd0d6e044e3ec463421860bc2bc4bbe84223ea2c"
+        },
+        {
+          "path": "layer-00006-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "1b0c1b76e2ea2ad41a8be46b699119af9ca1deb6f4101e3f2766ae73c2c3889a"
+        },
+        {
+          "path": "layer-00007-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "22a8308716dbf674641b37346f0e83f3469784157353566ed81ca7fa3e8db041"
+        },
+        {
+          "path": "layer-00007-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "ebbf7d1038139ede10a6d51024c8766f2d41f14550cb8fafd8c6870f11f73dfb"
+        },
+        {
+          "path": "layer-00007-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "df1d1a8cd4723bd9cd8566617518d3885136b7d2801452f0cbcc8efd91f409bd"
+        },
+        {
+          "path": "layer-00007-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "5d0d93dbe8accb9934ef2dd1b46ae16016378c87e0fce1b67cf76c05fb042f27"
+        },
+        {
+          "path": "layer-00007-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "23f250922b66941b85f935cf51e2e4e705680796f047c3188d59de0d4a54f8f6"
+        },
+        {
+          "path": "layer-00007-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "edcca3b3819218b11d747f5411d889e79ae8cc8cd4e87842a09ef630e874b2dc"
+        },
+        {
+          "path": "layer-00007-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "6d8f010cb09fa162bf56cebb44cb235e2d5b85f4c9c40d8bff74aeb72578626e"
+        },
+        {
+          "path": "layer-00007-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "521779414bc473815c661931323f75012165e5d59256eb31a7d88f93fdf931e7"
+        },
+        {
+          "path": "layer-00008-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "59b9dbb16b1189040dd27b623dce9c4c1c66ed027da29117ec7e6a6cf0e260aa"
+        },
+        {
+          "path": "layer-00008-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "5070037b26df8c3d87a13248226f2fe1bd1312e8ec7933ad95071f5591a49f0e"
+        },
+        {
+          "path": "layer-00008-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "e9cd704a8c226943bc042a2d29758af77c34c31d283a1ca7e4b19545abd57d46"
+        },
+        {
+          "path": "layer-00008-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "29063412c01ee9c8eec38bc5028eab090e85339219114ab193cc3577c032fcc8"
+        },
+        {
+          "path": "layer-00008-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "3f21c5ffe76ae0d082e5650f95061b9db39c15a7339608655ce0383071fe2675"
+        },
+        {
+          "path": "layer-00008-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "999422559453720ac35c64e46ac30b5c8427a5c8e2c694831369b4b29920bc21"
+        },
+        {
+          "path": "layer-00008-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "07df82eddaa0c963a23e2ca1de3330cedb0cf299f2af8ec6fa869bfb1302d9e2"
+        },
+        {
+          "path": "layer-00008-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "6fad6ce894124a7d74f2a34a82954a2cd1128206dcace823e63af7788f023980"
+        },
+        {
+          "path": "layer-00009-experts-0000-0127.complete.json",
+          "bytes": 5870,
+          "sha256": "baea343a8ff82ca1facfc8cb9d23b7fed935317d585183d6a36918bc04299574"
+        },
+        {
+          "path": "layer-00009-experts-0000-0127.safetensors",
+          "bytes": 354098208,
+          "sha256": "90ef8f76c7415a1ca69c4bf8b64135f5ee27d42b2b03a6af1556daf084a3ffcd"
+        },
+        {
+          "path": "layer-00009-experts-0128-0255.complete.json",
+          "bytes": 5872,
+          "sha256": "b513cf4dfdaad2f515d1095804934603085122601b9daaaeecfdf8bfabefb072"
+        },
+        {
+          "path": "layer-00009-experts-0128-0255.safetensors",
+          "bytes": 354099528,
+          "sha256": "75edef05364e8d6d89da56111cbc0ee6a7ff70b61f6d63c7ec7dcdf5b0db801c"
+        },
+        {
+          "path": "layer-00009-experts-0256-0383.complete.json",
+          "bytes": 5872,
+          "sha256": "dc0f3b95732ab4e127f607614f9739ec26f05e6a9c223a1755617d1d25e432b4"
+        },
+        {
+          "path": "layer-00009-experts-0256-0383.safetensors",
+          "bytes": 354099528,
+          "sha256": "56f9f90923efeb3e05a9ef7e086826cebc1eb3a4f62d628a3501596f20c623ce"
+        },
+        {
+          "path": "layer-00009-experts-0384-0511.complete.json",
+          "bytes": 5872,
+          "sha256": "8a8c92354a75630daeece9d360fb3a1ec1304bf1e2ac1ef97ed7c9ccc1748e2e"
+        },
+        {
+          "path": "layer-00009-experts-0384-0511.safetensors",
+          "bytes": 354099528,
+          "sha256": "4094286ed6b1518046b321d70bab660d33eaa285cbd275ca1b5d9c687c986121"
+        },
+        {
+          "path": "layer-00010-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "47adf0ca3da16691ad21138748c7b58e5107d24d14535b9b5388e37e260d050a"
+        },
+        {
+          "path": "layer-00010-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "68a4532a1432712d21c09dae384dfaefce7f68b4e6be3528571676a8bede2960"
+        },
+        {
+          "path": "layer-00010-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "76cd9600c63310eee881d42702b3ca46363dad063d00cad1fd3545a941e06520"
+        },
+        {
+          "path": "layer-00010-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "ad652e49701dc1ebb7fcb6189dd60c09966dacab32ac5c30184992bc9cc9f025"
+        },
+        {
+          "path": "layer-00010-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "1e99a2e186128dcdfa28467488a2a9d07e6f71b913ecfe8787b5657ffe29c849"
+        },
+        {
+          "path": "layer-00010-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "88b8cd2a04946087315f4f7354a9c229689c494c99a1a6e63e2a5ef155db6b7b"
+        },
+        {
+          "path": "layer-00010-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "5cbdcf6325cdd8ca28bb65e0116930a171f57c8549291eb195619b2efc278705"
+        },
+        {
+          "path": "layer-00010-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "19596339ee4ef575452cfa2d2aece12c525fda94308b7d6893eb317fe65ba759"
+        },
+        {
+          "path": "layer-00011-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "635a8d9be6b39beeef0c130099ae89a527024c4d53833f9f29cde3a3aa6893bd"
+        },
+        {
+          "path": "layer-00011-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "b6200a9b68496dc61b705d29b2b1ea1b7d13cc516edcdc14cdfe98d7cfef0730"
+        },
+        {
+          "path": "layer-00011-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "dfbeddfea91b61b7a3d0c5129c5d8485279cade6b55558e0dc1d4ead0f5bda47"
+        },
+        {
+          "path": "layer-00011-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "bc879b9347d0587157ad96c7cb056675996f3fabfcdb9465d4883ec5eb443f4a"
+        },
+        {
+          "path": "layer-00011-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "5a97aca4c024b1cfd960a34b0be539af24a5ca47c3d9b36781bef76421b7e7ad"
+        },
+        {
+          "path": "layer-00011-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "dbe5c9568538e9228baa101d1d945c3d832c87d61d63ca0baac23059859a49af"
+        },
+        {
+          "path": "layer-00011-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "b20e6f9e37c708f37e4c0cebda7b5d2f80b0e67705fd1acf5c5c42bfcce38ca0"
+        },
+        {
+          "path": "layer-00011-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "558b97015911a591cf5586ca5d37bc0b10eed01d2255b1669749d32b1be70e59"
+        },
+        {
+          "path": "layer-00012-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "4b654e1eabff1e7e171ba3ffb351d096547e698980ef1e6fa06fcc1e627ef2a7"
+        },
+        {
+          "path": "layer-00012-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "2d397a091516cc731e96816a9f04ed2f91e57ca9c05f3f1e0457bb0e45f503f7"
+        },
+        {
+          "path": "layer-00012-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "1eee1643daecad7648353941bfc7abad15b7ff9d1bd4706819e0d3da2e517107"
+        },
+        {
+          "path": "layer-00012-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "24f7f2abfb8b767cb15b16cdd54178c3683c6d71d2f829c285b376986ae2eea2"
+        },
+        {
+          "path": "layer-00012-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "10c6ca39cda5472118c9003b54a12af69f84861b75e48d7f9e9221e0f9cf7d7a"
+        },
+        {
+          "path": "layer-00012-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "4321bfe78906522316a4d0c2493872edf74c5e439cf1cf81892d51f273db0136"
+        },
+        {
+          "path": "layer-00012-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "47dc8ed8c64c7fbcec651547972160cc47017f61905e1377aea302ed5bc65f9c"
+        },
+        {
+          "path": "layer-00012-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "47346d69140682e1471ce33c82136014f7b21d6ba4213a7733a833479c0c7aee"
+        },
+        {
+          "path": "layer-00013-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "53ac11fde9cc2269051689f720e6379af7caea6c79d90ae4472de25b1f11bb32"
+        },
+        {
+          "path": "layer-00013-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "3f8fe8175f1a6b91e138909ac1c443c86d6a88042ca2ab50b9b11bd51cadf834"
+        },
+        {
+          "path": "layer-00013-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "7507ee668166f8e7e10cd29bcf069d57a5354eedff70132a2e4b5d1caa3a39e7"
+        },
+        {
+          "path": "layer-00013-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "62b0b839555207d96c894c4110a9aa757e34b756b6b9553edce24fa8d74faec4"
+        },
+        {
+          "path": "layer-00013-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "0183ee61a119d437f1ade2ebfe8a39e785825c5fd1e3b1a18e2f406e8140adc3"
+        },
+        {
+          "path": "layer-00013-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "7c7000b3619b91b2a30ee3d451180c431747ecf15e14fc1de8d4c4582356c0de"
+        },
+        {
+          "path": "layer-00013-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "18a135ce352e0fcbd28d01c3baad56b8a209ab623f48c115ed16eb0da5110b42"
+        },
+        {
+          "path": "layer-00013-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "0eafff8f1fa3d84cda08d8fba633ae4ba3428c710792be00704e014a5132d1bc"
+        },
+        {
+          "path": "layer-00014-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "2fe8e28e9f9efd37cf1908af94faee4ab39d90a58eaa25a49a2afa85514e4ec2"
+        },
+        {
+          "path": "layer-00014-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "3bc4d5fc2a77321dc1873246c3a472f8c1b5314feff2522254fa2f299f78e2e5"
+        },
+        {
+          "path": "layer-00014-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "c72fdb75af490e738f93c701a553e46942bd60f29c03be3b769a2ab03df447dc"
+        },
+        {
+          "path": "layer-00014-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "b823e0cee319b619968acaeba80c8b18d520ae9fc178cf4724034338c46c7d57"
+        },
+        {
+          "path": "layer-00014-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "35098bdd46e16277beb051de2eba34e295cb02e9cd9f7eb74e3ef688f79acc38"
+        },
+        {
+          "path": "layer-00014-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "58a262f85cce6607232a9ccc67bdeaeb2872139b9c22877241d54ad2cd98c834"
+        },
+        {
+          "path": "layer-00014-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "599965d20d82ee3e22139937ca974516fa1ea0e9fb4e36aea670bebc37c206ab"
+        },
+        {
+          "path": "layer-00014-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "c2f1a5e3401305b6270cb5a5dd9721143e4470da05f70004ae6b57c978a193b8"
+        },
+        {
+          "path": "layer-00015-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "d42ac77f59a16febcbecb11c5c6a19c4fab1f5643e2b9a73ab992f90333d5dd4"
+        },
+        {
+          "path": "layer-00015-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "567cc35e0ced101973b5d92aa384779b6cc1006199f52314e9d4cd9cdfe273b4"
+        },
+        {
+          "path": "layer-00015-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "6c433afaaa831c604ce901e97554705beced04ae57590e2285ced99776006e7c"
+        },
+        {
+          "path": "layer-00015-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "b5eabab058dc2195ed5594ea8968e2f2ed5fc8d92d39961d24a42ddc9fbe2506"
+        },
+        {
+          "path": "layer-00015-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "2e00e1d5800ac66945d2f93982a53299d927f1942b1c11fd79dac5b62af08c06"
+        },
+        {
+          "path": "layer-00015-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "0673c5fdce8dd6104a88b3baf9e27a29ddb147009af2f48556ddc03e91561b68"
+        },
+        {
+          "path": "layer-00015-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "4d1b59ce590f6963a02ae6a6cf6a769d7193643b99d6a6c9266df1985f404f26"
+        },
+        {
+          "path": "layer-00015-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "4b9e16bbb6f34671fce3cd3627ef0cf1a542095c46bbfa4967c7fa191772cc57"
+        },
+        {
+          "path": "layer-00016-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "08c88e60979d9c61bdaa5171e81d59a06d99e5f3a93ee9e171dda7c1d02bf5cd"
+        },
+        {
+          "path": "layer-00016-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "549cf0a240c5bfc08c5134e4477d453a19a90afee0baabbead88cbd3d32556ea"
+        },
+        {
+          "path": "layer-00016-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "e7a14b85f9516dd4d5765555a7e8ecc479e635301342b4f956fafae2dec37b62"
+        },
+        {
+          "path": "layer-00016-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "508331705c85d792a8f2fbd7344cd6f05f98fb0851fff79e4ac4b48a4c7150df"
+        },
+        {
+          "path": "layer-00016-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "447b6ee49c2283d6078a85f3b21b1a50b12a093aa88ab80086211d9c343275e1"
+        },
+        {
+          "path": "layer-00016-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "23e3d1654fff408816edb1192268736c2a58090e0dc6f8f931d407e98f611cc3"
+        },
+        {
+          "path": "layer-00016-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "725932c40d708268aacb531cbe89af526d648abeda8c17b5380976b5141e32e6"
+        },
+        {
+          "path": "layer-00016-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "e5b5709cc3799ca076cafcf64b6f7ad1eb5820cf64188d9dc92f13888006fdb5"
+        },
+        {
+          "path": "layer-00017-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "b4d1a836b670d0002370eba59299105cf1c63a1ac79c4390867df3c7c3d67f99"
+        },
+        {
+          "path": "layer-00017-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "c158fc5bbf96cc64e8fdaa1be1fa0d12df5da6048e5236c2268058fe3560c700"
+        },
+        {
+          "path": "layer-00017-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "9f162cff6e8a96415462d07d4c970fad214a28ba7c9aca716a9ca1a6f246dc01"
+        },
+        {
+          "path": "layer-00017-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "168581b524e2b6937405c11cf227a917ca7732a907a9e2c6f28e5a18cc8fe40f"
+        },
+        {
+          "path": "layer-00017-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "61c0b1ca290a3489a47aa041b6502678aef6e07a1cb905473a724885546ce725"
+        },
+        {
+          "path": "layer-00017-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "d3b503750fe0829af5171372c5a90d106694cc85f9518420fd82e7a5a445b3e4"
+        },
+        {
+          "path": "layer-00017-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "c56e343f3d001b7a71ed47dd9a95cefcf729e6b47dfce9194db7a74a8f0be1cc"
+        },
+        {
+          "path": "layer-00017-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "37beff318fcd350d83f3a841a4864c6e466f846b9691f7b6fa87f189328b70c7"
+        },
+        {
+          "path": "layer-00018-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "0ff2aa84151444222d7e9d74593d71a1d07d1ec5206143e979062a1bdf7f2e94"
+        },
+        {
+          "path": "layer-00018-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "b80b8151e21d27ed41f9e64a383469db85f982ce10a0be76b2b3053e7539a5a5"
+        },
+        {
+          "path": "layer-00018-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "be8dc6d2f6a6a2a1405e26bd9c6b4704b9b589248e765def6ed11a5dfb81aaa1"
+        },
+        {
+          "path": "layer-00018-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "c3284c528f0c2083ef72dfce27c890fa31286e6c3c0636183edeea3bce1f96e5"
+        },
+        {
+          "path": "layer-00018-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "3f48167ce63f8fe3174c3cd1908fda64ee88227961fc0f574731fa909ee7b393"
+        },
+        {
+          "path": "layer-00018-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "940ff868de9b0bae4184cccf7cd410aea022df8fe5f1aaaa3c7946e9a7d3473e"
+        },
+        {
+          "path": "layer-00018-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "fab0548436dac137874ada2a33c9c5b31063128620fb931cecf01b0b3bd4d2e5"
+        },
+        {
+          "path": "layer-00018-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "861632cf423d474282da4e967d9b1dadafc8bcdf5232553d5d568d8ac3b6e72c"
+        },
+        {
+          "path": "layer-00019-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "fe49baa3dd0bfb3919cfd32c0c32fbd054ac5deb5fceb947787c0e0249d4c380"
+        },
+        {
+          "path": "layer-00019-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "b169c46264cedb7ab0223f361dbb64f13abd8dd36a75935ea47fe17634d6db5d"
+        },
+        {
+          "path": "layer-00019-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "66d21a4f8ef707bf0889ee04a43996b069562853c67ff4d1a2c9c8dd6104b1f2"
+        },
+        {
+          "path": "layer-00019-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "60068e4f6634e07d1e9ce6d1f64066e91cb832655e42002e263cb194beede0b3"
+        },
+        {
+          "path": "layer-00019-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "773244518b4630f3596af57996389c55373d598708459fbeced7116064fc0630"
+        },
+        {
+          "path": "layer-00019-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "4526078c89f23834251b8b449a4c5b35b8de4c5116adf204dbb7476c089242f4"
+        },
+        {
+          "path": "layer-00019-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "e0c81c42dd7bf088bdcab9f4390783753ee816f39d2c54e54ab4c9022e8a2f26"
+        },
+        {
+          "path": "layer-00019-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "23bbff916cac0b589920a1cfa689a4feb30b09bae71d62298554c9caa614c14b"
+        },
+        {
+          "path": "layer-00020-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "88338f00e9d0ec146c8c13229b33e275e79d9f31cea38097e8f3671a8ac38251"
+        },
+        {
+          "path": "layer-00020-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "3f60eb3bf1c5ef04894b50cd99d064cadc9e836c340c576b230f753867dce9aa"
+        },
+        {
+          "path": "layer-00020-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "34f39d46d76da4ab9d228eeee6caaa248f3307fef57c6b040483a3b08e0385ce"
+        },
+        {
+          "path": "layer-00020-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "9f335aa65fa587e99342dd607277c0d6e2672f1feb3cab3dd93bc8f303804ff6"
+        },
+        {
+          "path": "layer-00020-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "ddc9aa1e68f1cc9c18f2c24a7785e4bcb54ef82351934d3287da0d752a2868e0"
+        },
+        {
+          "path": "layer-00020-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "3c5b9f9e8df064c205187b1ec733b6b0850f11a75020960357a55102fdbce8d5"
+        },
+        {
+          "path": "layer-00020-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "e9f0aae36d85f24be3899456e219a5167920ac6ae913ff64de62a574ca269e74"
+        },
+        {
+          "path": "layer-00020-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "2642d5d728ff4985abbbdaf086cc55e374c3459c9e7a4ae693ed6db5a013ebce"
+        },
+        {
+          "path": "layer-00021-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "bc3f74fa19b6e9d388b0f17a3e8d0bac0881b34505ca2dfedbfb0a11f498321a"
+        },
+        {
+          "path": "layer-00021-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "93227a3733f1a851eb36543f4b7df765869ba56110acf8966ed0e1118b2296c3"
+        },
+        {
+          "path": "layer-00021-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "9e81e1ccfb60bc635cd1d868c3964187980670225e4507bb8d2368b12f4ce874"
+        },
+        {
+          "path": "layer-00021-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "244185aaf74c55b9ce74c789b500691983d7606cf22579fe6d5144e205063110"
+        },
+        {
+          "path": "layer-00021-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "d4b057dab286523deca65f6c896d981f0602b0ad6b02bd51301240c569984039"
+        },
+        {
+          "path": "layer-00021-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "a542ae04a12af360987efff19022cdb3c23c66eb4336f12f9798f858c3e7fe9d"
+        },
+        {
+          "path": "layer-00021-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "5e40350ff5be78ae8d195bb3fd3f86d9ee16bb8aaf3a10b691438d03d8a37e91"
+        },
+        {
+          "path": "layer-00021-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "a7437f07bb1eb8901f7c304e396efa6bf5ac7ed63c7eb0e193ab58736bf7161a"
+        },
+        {
+          "path": "layer-00022-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "9a971b01afa6b0f69d601f573186ce8fabdb8edb205d54a243dd94720920f928"
+        },
+        {
+          "path": "layer-00022-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "8dddafa23e0c34888775e566b0c03591e7148049d9e96402b23b96e43e17120e"
+        },
+        {
+          "path": "layer-00022-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "370c67133741f6430205545dad8c78714727dcaeb006a380b16143345bfc2326"
+        },
+        {
+          "path": "layer-00022-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "1f12162297cc4967a14531b5ce4323107062e28b4e043ff326a6597361ec5e66"
+        },
+        {
+          "path": "layer-00022-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "b360f9d54b0f38f64c59aa66951c1c8ee8185d77dba88d18c18fe933a25c00ad"
+        },
+        {
+          "path": "layer-00022-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "b9df10513e1aa7a3c32934b0ee572b3d2f81b43bd8f73186e3779658b93fb96f"
+        },
+        {
+          "path": "layer-00022-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "343b1cbcfa7886f33068e7bd09dcebcd47baf00326a9a0d0e32b5027c39e826c"
+        },
+        {
+          "path": "layer-00022-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "93b54aa4fc9ef06cf2bf8ac295a605c125380ebd56adff36c1f68a7d8aeacf17"
+        },
+        {
+          "path": "layer-00023-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "f82374c4588f519496c2d32559871dade5a939cd56497395b8c9bf6ec5026c3c"
+        },
+        {
+          "path": "layer-00023-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "b7bc6a1a6e4355016e3916a23f8060702a80db9b5a200202185ab2506509e8fc"
+        },
+        {
+          "path": "layer-00023-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "d15ab5f9b93aa316f97774b746627ae813bf7b099ecbbb3f85f363d15ae1c9e6"
+        },
+        {
+          "path": "layer-00023-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "cdec95b4defdff52735c3c14f9e6a223bc9979ac3ac2a301880f34ea79f4c1f7"
+        },
+        {
+          "path": "layer-00023-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "af8d17f2b908c4dfc41676215530f203c08d597404cc5f0a61fc1a3f9c244756"
+        },
+        {
+          "path": "layer-00023-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "3b0079ad9b1b18433823488c3cf37052c79a01e782fe8c7e1184e84548560225"
+        },
+        {
+          "path": "layer-00023-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "cd882142fb1ccba7c661e6119c6abd6276b589f5dec6261570f60203fc6321a4"
+        },
+        {
+          "path": "layer-00023-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "20d44d6e85ffb0b9e939b07ac63e994cd4707ba5f4c6b3c2bf3ef66b357109f2"
+        },
+        {
+          "path": "layer-00024-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "537d85835f76ad4f888251c9d8e914e39b35e54c1ae4aa1d197e98382dfc22ce"
+        },
+        {
+          "path": "layer-00024-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "08750c65b4c40c65bb45b4fd4e5ad6255b89f29f3ce203d002643a65df5c343d"
+        },
+        {
+          "path": "layer-00024-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "a7d9fad166a447b3522834b8e7334e20dc375b9ceb16b7e3682dbd942671420a"
+        },
+        {
+          "path": "layer-00024-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "defd82e8300c9fceabb5cfd321327471050a5c42876f855c3f428c97cc0797e3"
+        },
+        {
+          "path": "layer-00024-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "1e81f8c16350a354f7fb99a936c9fa3d1d661c5180d9ca4cc15b6b878ad1963e"
+        },
+        {
+          "path": "layer-00024-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1df6e0ba920a67ea4a30efcef8f24abd8407687d40db7d0f0dfda7f7a223371a"
+        },
+        {
+          "path": "layer-00024-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "4ba8a1ca71dc6650b3ee1bfea3df9249ac786a98db364a02b2acd280da43d5ef"
+        },
+        {
+          "path": "layer-00024-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "99ff047c10b039d8b2c29959158f30dda36d88bb727dc8901a3a72bd616c8146"
+        },
+        {
+          "path": "layer-00025-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "af9904b6ec8785559ff7fb41e3c68d529fe80c68404708782d68ccae00f66395"
+        },
+        {
+          "path": "layer-00025-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "193bd0313811df798e6bed2773757f5bb51987acb5f675d830576db1f79c6c86"
+        },
+        {
+          "path": "layer-00025-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "dfaea0a2eeb32d58e00d316744466a7dc2cd43f24b86f782d56bee4aa0239c2a"
+        },
+        {
+          "path": "layer-00025-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "e476c290b5beeba1c39233f03b78a695789b5d108a1af2a71781d75f1c872708"
+        },
+        {
+          "path": "layer-00025-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "fc0a9234910c5b4033b5ebdab1da8dc191b461d43a45c78fd706b26c74d073fc"
+        },
+        {
+          "path": "layer-00025-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1ae4130404619dedea46db458a5d6ddab15e58064b48001ee3d0696c3742d265"
+        },
+        {
+          "path": "layer-00025-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "195358ca5811e3c6a996edba014ea4ca2d6caeca5d16b2c300b67d8009e1225a"
+        },
+        {
+          "path": "layer-00025-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "17a6ac277c4b1357da4afab1e394fb1e1e99be2553a33ff98a3a9251818a256d"
+        },
+        {
+          "path": "layer-00026-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "e4bf7f731c47b93e834f72ca6cc88f2db15900fca6f02d3b96b5c3103a8cad21"
+        },
+        {
+          "path": "layer-00026-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "1bf688d4658c7dbe186793a2b3944ec1a1a1effbf0b91d0dcb137f4e4dac249c"
+        },
+        {
+          "path": "layer-00026-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "48e2b031452ebded79a221d05773bb552c3d0c29501886ee54d0632804deae18"
+        },
+        {
+          "path": "layer-00026-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "234aec40e56b29ca1ea38f5483ce7a2aacdea5e3377d76417a6c6e5e710d2bee"
+        },
+        {
+          "path": "layer-00026-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "6bee0b0310d20d2b6881b8c3b692244033a05a92661208df14e755325c148576"
+        },
+        {
+          "path": "layer-00026-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "64093f5572a8ddefc149f7385b916a5c032c87ec3511dca7087f4484a349950d"
+        },
+        {
+          "path": "layer-00026-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "7fc0dd7fa51cbcaf4f70f9c424bb4feb1278bb34234c8be511420d00ea00be6d"
+        },
+        {
+          "path": "layer-00026-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "2421857831c4cd4ea4b091b0128f30012e90b9747514bf89d81d5f3b30ed4330"
+        },
+        {
+          "path": "layer-00027-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "6e03f6cd4ed2241a696fdbf9674683db727e5541fa910349cee6e49790583a30"
+        },
+        {
+          "path": "layer-00027-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "2782b3eb51fe5ae4e95865c330e9a36d0d8e8d1e46e1b07ef3f34e6cdb2aee05"
+        },
+        {
+          "path": "layer-00027-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "033cf37bb65168a69b1cbbad1540ee922eb22a338dd25c601dfb3ad418d76842"
+        },
+        {
+          "path": "layer-00027-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "2ca1523a585acba2383abb9e7ad1f46ec92df4c81dab7ff0f929ff0220e73510"
+        },
+        {
+          "path": "layer-00027-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "cc5bb77f9aec0b4164613928c5d5f8b679fa8f636782d3de9a6a29bee8e54e09"
+        },
+        {
+          "path": "layer-00027-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "2da2e96a25e3af4a8f66e6e31196c2e897f792a4d5aa31a3ba2013ec7a9b256e"
+        },
+        {
+          "path": "layer-00027-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "e3c38fafbbae30f0c21608eb9f290f253105de81f6bafe52e114e37ccb08f1ec"
+        },
+        {
+          "path": "layer-00027-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "31f7ab38d0035b96a0c8df3fa001edd87a9dcd4321c9fafc262fe52bc490029b"
+        },
+        {
+          "path": "layer-00028-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "6a232e30ce5701bcaebf5d3358e163d3ab6f0b89f19cf09c19355d673e4f5116"
+        },
+        {
+          "path": "layer-00028-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "34e51dd4f3f802e6093f76ccfb2bfae6d6c4edc0bbc4372a2aeec089bdffbf4f"
+        },
+        {
+          "path": "layer-00028-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "9c7d4f91edb6e6c2aaf4f74ec8e898ec09492ebcb96926e0333d8126ffe8a04e"
+        },
+        {
+          "path": "layer-00028-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "f04304ba3fd5e27093ffa3448f320004ea3777dfa04b883a29041e79dd5149d7"
+        },
+        {
+          "path": "layer-00028-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "80ed171827623550b89a0b47a80db81b473ed0a3766c1878bca7cc1fd0974f36"
+        },
+        {
+          "path": "layer-00028-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1b4279f0e6c4f33e614f3096dce0d46460f735771d22e7a17235162db3a524d6"
+        },
+        {
+          "path": "layer-00028-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "c215609764666f4116dbc605a8b835f4c1251e6b2cbf00dc40e21ab31a6f9b5a"
+        },
+        {
+          "path": "layer-00028-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "9ca3cc8d3116b7c21c46bc29d39ffc611be1173f6259024270553b379cbe87a7"
+        },
+        {
+          "path": "layer-00029-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "451c08a98fe771ddbf717f4c0a534e77cf0ecc2ab66a933aaf7819b838a544c6"
+        },
+        {
+          "path": "layer-00029-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "c234e5b5b535e3c4bf019b11aefa152d615e4ea2709b9bc69d1b8f6d749e8689"
+        },
+        {
+          "path": "layer-00029-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "e95f5a913121ce2600304b351501f58ed30594bd9fb25facd1ae0cbe0dfdc25a"
+        },
+        {
+          "path": "layer-00029-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "c753cdab380aafb7402fad4cc5df30a79a2fcf2f9c3455b910721804880fd1ad"
+        },
+        {
+          "path": "layer-00029-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "4cda24d776ecd08f49bf38a1a21dc41f4a584158ed14997faeece5062fe1ae97"
+        },
+        {
+          "path": "layer-00029-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "90a299234ec3a99318d21c678399afdc4f31c3b4186b3ba879cc1cab939a8a30"
+        },
+        {
+          "path": "layer-00029-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "224855aef7251bce7543be20b686593a7e353c92b345dd0b45c226896b7e00a9"
+        },
+        {
+          "path": "layer-00029-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "199194fa12c33b3ce6ebdf12283d544aa881ca04e976849c71bb4f95de4928e4"
+        },
+        {
+          "path": "layer-00030-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "7195021e03879faf1d03b5ddf8b58c193362477bbdbf9a5aa7eb7877c711bb36"
+        },
+        {
+          "path": "layer-00030-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "09ac224ea1329677f5e6b45c042c01f3a024788e0caca1333c80d5b0d1d465a9"
+        },
+        {
+          "path": "layer-00030-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "b4d15dd7e0b0f656b285cab28622c1584ca3729de53ecf8e23c4506d02d34bbf"
+        },
+        {
+          "path": "layer-00030-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "f825803df1f7cb6eacc59891244cfd471f99aace90d50beabc67a2e04e6f759c"
+        },
+        {
+          "path": "layer-00030-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "969fec8d1fd11c33a032ed46c311e69fa93bc572797331da90f9f4039216b9f8"
+        },
+        {
+          "path": "layer-00030-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "8f6753ddbb0f37b6e0574cb50ff9482d23582f7ca3075cfadaaef9860db023d8"
+        },
+        {
+          "path": "layer-00030-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "72d845febeea0d7ea4fba0f4771cff06b4d9f31c1afb9758005bbcad4d78679c"
+        },
+        {
+          "path": "layer-00030-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "1ca4e72c3dddc366a4cf8dd994dee03dc46c0b8e1ffe53d6478e00a46107730e"
+        },
+        {
+          "path": "layer-00031-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "fca733873150507ee1fda76050ab641736508a8de7005a4dd5f06cc28409f052"
+        },
+        {
+          "path": "layer-00031-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "e0b10583cee6577735ee1d3cad89d5503fce19b1c0cd58ecaf33192bd69f03ad"
+        },
+        {
+          "path": "layer-00031-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "4d58fb78b537f940b44ff133d4d5e61a898777a098454db221c03d3ac64f44ed"
+        },
+        {
+          "path": "layer-00031-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "9a85f4d1860671e6cd7f5ab559facea9c0efdfc78c2a4fc3e0345662e987296d"
+        },
+        {
+          "path": "layer-00031-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "10672c5a7c9344dedfa4dcfe7d34e590960a3b5d75e676c4186eb9646b79ec7f"
+        },
+        {
+          "path": "layer-00031-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "382268f75b5a3c0a7e3de912985838b42cc6b4c72718bc254d18cafb14adf425"
+        },
+        {
+          "path": "layer-00031-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "fcc80abab9323e1aa67a13e87dbe192ebba5dc4af578861f6e075b005a3d884d"
+        },
+        {
+          "path": "layer-00031-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "7da4d40aa6fbeaaeddcd19d8a0dde214f3ce96f896e04cb80f3672f89338df15"
+        },
+        {
+          "path": "layer-00032-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "2e8a223bea79ae959fd68d07ab2841030205b46fbf7ddbd98e90acccb17fad3d"
+        },
+        {
+          "path": "layer-00032-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "ce63cd41815193124b34e8f0a4206a2d1d5483eac1ace84106ee009a51f4ec14"
+        },
+        {
+          "path": "layer-00032-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "4e922fe6bf4aac909f2c58378b6ef1e0a368a25ec56b321d1bdc62b5a4775f58"
+        },
+        {
+          "path": "layer-00032-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "576b8243444fb8f307cda8207cd03647d60ebde51503952915f67734b913d62c"
+        },
+        {
+          "path": "layer-00032-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "380cb7aafe6908ce548e1c337f83833f295da6fdb2f3143cc68d771f6d011423"
+        },
+        {
+          "path": "layer-00032-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1e9e15cddbf992a8defa7d20055795ad8ec2ee85e6dbac1a55afc393ddd72ca0"
+        },
+        {
+          "path": "layer-00032-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "ae25b651e0787d8ecc04434372d74e57257f2dc0932feba838c977cf779163d7"
+        },
+        {
+          "path": "layer-00032-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "f7c42fcd6d54dfe180e70664c2169b91b76c6347f51febc2bc28ae105d7a427b"
+        },
+        {
+          "path": "layer-00033-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "e378047d72267003e5884a1f815697aa429e3f2269a3d3d14bdf79f7c4ce835d"
+        },
+        {
+          "path": "layer-00033-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "ba0a7f73f57af2aa3cf4c2fd50b6533cdeeb2c02de9d1e902f305bb3946f76c3"
+        },
+        {
+          "path": "layer-00033-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "5eec71fd3774eaf318fee51c4c1fecff9a24f81e1d40f28a5991be5939e66a34"
+        },
+        {
+          "path": "layer-00033-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "806419069af5028e7cebf5d023adf52bc2b56fa5f1c972bfd26b9ad0df4fab18"
+        },
+        {
+          "path": "layer-00033-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "b82dee49d9b9dec184a14e1938c46ef752ea87899288b1c730de1b77255e9cdf"
+        },
+        {
+          "path": "layer-00033-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "9ecd76884ac0db2df1ced1ca7f7b756e74c7aca67ef9a34f5d23e041e284ad89"
+        },
+        {
+          "path": "layer-00033-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "d4fe27bd21f555431d3c4cc5962a42af17d542356f5ca902f293894ee095614f"
+        },
+        {
+          "path": "layer-00033-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "6d4558b6cf22f515a3ea9cd409165b5874feb7e18b9b6e0945ffaa88f45ce453"
+        },
+        {
+          "path": "layer-00034-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "816051b0366ce37836a8af69a458d1ba71b392d745db7d1ec22437dc40a77ade"
+        },
+        {
+          "path": "layer-00034-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "518e346dfa56a49667f04cf604404af602c481216ce319cb1bb6baa9b49b333b"
+        },
+        {
+          "path": "layer-00034-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "aabe1c07745fa2bb18387c5366c79ca0816568b6f0ab04f66de378d74291c2cb"
+        },
+        {
+          "path": "layer-00034-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "23fd381f089ca5ba0c73bb78eced8d52a518ec473f969dbd795e506739567318"
+        },
+        {
+          "path": "layer-00034-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "736d26165e3d3cc99c25020f93e936ace260f8fa7b414c5985f86057e5f8dc85"
+        },
+        {
+          "path": "layer-00034-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "849667349cf940a7e86c6905a84b7fd7fb55d511f825c4e6a653d2150c9f92e4"
+        },
+        {
+          "path": "layer-00034-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "a9e96c3b00d5186228a90461c9ae3b0ee70c5267d86733c424abfc2b155f7423"
+        },
+        {
+          "path": "layer-00034-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "e0c883b155b1c6fca9ce36984c08f87ecd758bde32104d3ef9ebcc1d02b3823d"
+        },
+        {
+          "path": "layer-00035-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "c64d81ff8546a391e64f4084fd7f19769e3617fadf65277bb98ccb1271632380"
+        },
+        {
+          "path": "layer-00035-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "ecadcb5e6d2f6143b0d15d778b668da783556a85b42befd7637c9978fd3bd77e"
+        },
+        {
+          "path": "layer-00035-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "4972fccdaa9466aaf8c2e588d0d393dc33a868f080971e62a7a89ffe3d4728f3"
+        },
+        {
+          "path": "layer-00035-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "c91a550feeec731332d0e97e855311a28c92df4fc3bf974cc6ddc00b5c0e12d1"
+        },
+        {
+          "path": "layer-00035-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "4de8b61f9550d6b9468158ea25351e15e6996c292814076124db63528ce49996"
+        },
+        {
+          "path": "layer-00035-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "917fcc655a0effc987d27587df3e62130ad530aa6bea96aefe6cede4bd7debff"
+        },
+        {
+          "path": "layer-00035-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "9a21d3c13adc029f42121d6634b8c830525f8dfd735dda7ccea16a1a6c8eeb6e"
+        },
+        {
+          "path": "layer-00035-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "ece021a3df0741cddaf89182b41e06febeb460052689668fabc6dbb61ad168b4"
+        },
+        {
+          "path": "layer-00036-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "d9cb89ced380fabc64c46da625d0785662b31c342fc5cb334eabaf8b5d6d5549"
+        },
+        {
+          "path": "layer-00036-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "388bd0564300638b5c9bb6e125c6d5c68a33902e233b9c7821539990345e344a"
+        },
+        {
+          "path": "layer-00036-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "a37fd13f41e54238d931e4a519c03777c5d824975b56b0dc5766641e6c1c8217"
+        },
+        {
+          "path": "layer-00036-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "57bf69a35e9465cd41ef8515e0bc3fe1bdc219609346469b0e3c4b0dcd3a4cb6"
+        },
+        {
+          "path": "layer-00036-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "200927f8f7a542ea19a1344c2995a88789107f9e783f1171e4fca5df1071b58f"
+        },
+        {
+          "path": "layer-00036-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "d4da83c4ab407187c8deb681b4253f52bc073c3b80b6ec46ea46b8c1ac960c82"
+        },
+        {
+          "path": "layer-00036-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "35d4dc0092959a5b493c6ac1ce21972c8247ce6ac008e96f923ea82ad14f25a8"
+        },
+        {
+          "path": "layer-00036-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "c977ab88b65759b93d7895902a9b58c703d8a8f86679490684b3fcbff81118bc"
+        },
+        {
+          "path": "layer-00037-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "a6ac2f34229cea969d9d2ebae184ae10f63e21405a29e1cc3b755f7d0c488095"
+        },
+        {
+          "path": "layer-00037-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "b65f84bbf3745538804b78b6e6f57fc1e2cfbcf792f1c6e2645cd0d98f879ef9"
+        },
+        {
+          "path": "layer-00037-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "8218bd233d93c8ee3714f4c778ea51316c5d4006c16585334b590c5f3ddd563f"
+        },
+        {
+          "path": "layer-00037-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "90fb9aeee9d52864d68476f42aa93005f83b5ed44284b0b4ef93a2ee4b9d1d59"
+        },
+        {
+          "path": "layer-00037-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "337a2ae2095c02070bdb3abd1fcd04bd83733ee6c5e5548eccd5ebb1ba5f0a85"
+        },
+        {
+          "path": "layer-00037-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1cf68b76e59192b1949e9ee6da8bc2b57fc5cbfcd59e56b84d072bc340e5bebe"
+        },
+        {
+          "path": "layer-00037-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "1ca6301a79a7357a55673eede75f79c8d9d3edb7d26c4152b609b5399efa3047"
+        },
+        {
+          "path": "layer-00037-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "6c3e5d929e50ef57dea6b0e6ddbb596f478bbd8005d0a1829cdde4ec3d1378c5"
+        },
+        {
+          "path": "layer-00038-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "b025cb8214a7861efb1016bdeae1d8fc190588ef717ae2bad2e5efae7ff02039"
+        },
+        {
+          "path": "layer-00038-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "66fbdc1602ec1d7017f61092d2a79ef4b3d6669d3e79934c7bbea9dc6f1b5857"
+        },
+        {
+          "path": "layer-00038-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "6392ec6f0f5b816b3874e8e6f2b798ed7f14a593971a424303e6dd46c380648b"
+        },
+        {
+          "path": "layer-00038-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "9e90062c4e8d2a847c4e1c4a732658382e491d50d3311b1844eb6677a608de29"
+        },
+        {
+          "path": "layer-00038-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "8b7bf7a2e1f4901e2b5e4c30ffdc17fbabbbcd883daf71ef9bdf0c153077ed04"
+        },
+        {
+          "path": "layer-00038-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "d94b3b12e49031c484947c3638b33cd460fcf85e94d232b5860cf9e840800504"
+        },
+        {
+          "path": "layer-00038-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "e4ce58632a5fbed30529dbb9b676a2491cbe055006e81dcc05315ad3b51a3fdc"
+        },
+        {
+          "path": "layer-00038-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "e48b1f406d505f5743559a744a20ddc57eadd6369ee61f7b759c472e5c15185d"
+        },
+        {
+          "path": "layer-00039-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "84499e06bbee311e6f6907be8b6ebe64792141c48881d810ee0a0654da79bdf0"
+        },
+        {
+          "path": "layer-00039-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "2ddc77522f5bdcb2cf910732ac5400c7eb81c4cc434e904b092a2c1f0b289d18"
+        },
+        {
+          "path": "layer-00039-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "b1281c59f6ef0e9168ecd8ce3cc83a376286f6a57823c1515825217fa7c955d7"
+        },
+        {
+          "path": "layer-00039-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "68a5c858ded2433bc9b3f1e6f1f253761a229184f068888e672364ab94efd4b2"
+        },
+        {
+          "path": "layer-00039-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "a3865e986212422a7ef7f5b53ab6738fd6cb0154132fce996547890cffd4611b"
+        },
+        {
+          "path": "layer-00039-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "a105df175935fe92be45b56a03783fe1eef829bc432781ca735b35a2b14045f3"
+        },
+        {
+          "path": "layer-00039-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "8bfce14d469cca892c2a4b58dccd7ab6c940731e9b761c37c0e923dc4d6cff81"
+        },
+        {
+          "path": "layer-00039-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "6f503890fcd49194a35c6a80167ab5508f53cf41986f874ec492f38f0b1e56b9"
+        },
+        {
+          "path": "layer-00040-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "335eed35e96e6e45435fb6ee774a4dfce74288f8b762797b6c032c87de2a7925"
+        },
+        {
+          "path": "layer-00040-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "762c34b27295007c74d0e0da0100d9d623a7229a8f5536c21d3575cc4d626e20"
+        },
+        {
+          "path": "layer-00040-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "6881180db5d483ba4016652139e4bdbe9c78568a524687fd35eb3276c44d24ee"
+        },
+        {
+          "path": "layer-00040-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "fd611b47e966171d27e39b776eb27b9c7033c374166c91b79a2175e8a8c76ddc"
+        },
+        {
+          "path": "layer-00040-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "a86d429bb2cb87a4f03a863d72544b28d3c5c7f01e7541d608a4e2c6a4353378"
+        },
+        {
+          "path": "layer-00040-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "2fb1a10066b50789bd93e7ce48ef2d65d4a10186850d8a0260e3270cd6d993f8"
+        },
+        {
+          "path": "layer-00040-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "435bd9088f216c678cf41d24d4bbe069bbdfaaeb30ca099cf90f9e5f936f600f"
+        },
+        {
+          "path": "layer-00040-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "5480dc8a605c06fcbb7b555ba109a6a04f3fe5c63176f8eeef0ce0fea5306dd3"
+        },
+        {
+          "path": "layer-00041-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "7f68d271325e8004fc0a652124898f5b5179cb9e7bf791d07424c8f91f3504cc"
+        },
+        {
+          "path": "layer-00041-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "45d2db6be7f04188b66e5112ed11cea8c76c51a189e532bd637acc048e7d9ec9"
+        },
+        {
+          "path": "layer-00041-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "cc1146ffcb99de5c376a92bab78104c82dc2da504b0fa4d96536d731dc829401"
+        },
+        {
+          "path": "layer-00041-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "c81d815cffba9e7892369547efd1022564b60985992903e80e8ac389829ff09a"
+        },
+        {
+          "path": "layer-00041-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "2133b5d4829ff9ee75b6c4200352af8edae3c12ca68dfbdcc276ee0b37c54596"
+        },
+        {
+          "path": "layer-00041-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "861a80e534f394c1780cb956cbf80e1a94a11296f6b958e33ce7b71d731e0a98"
+        },
+        {
+          "path": "layer-00041-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "8455eb0ffe899e90f8ba5b705970c6811280118e708d145f29ae61dbbaf9f0ff"
+        },
+        {
+          "path": "layer-00041-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "103092afac9547792b476d46d1443602e2719143801cc20441dbb5f2f07483a4"
+        },
+        {
+          "path": "layer-00042-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "266633e5d4f3340edb819b8747bcf64012b4ff264b76e8c50a6cb67d205916e4"
+        },
+        {
+          "path": "layer-00042-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "f255b100c78bb3b8d045baee5ad85e409c626d139f6e70e935f6cee80f640e26"
+        },
+        {
+          "path": "layer-00042-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "6564ed370b5d80b943c29aafdd72d58e4a1f04ab71ea2a482cc4e7657f43f571"
+        },
+        {
+          "path": "layer-00042-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "be0caa2be8ee8b0a41b3095cb4556767e228c4425014112a606475dc478a8f3c"
+        },
+        {
+          "path": "layer-00042-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "141bd3b33b8cba15ff615288342e1da5fddcae533a127b8ed379566a4d58d7af"
+        },
+        {
+          "path": "layer-00042-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "1781ddba444b925ebbde4788232e5ec1facafe5b290f82386a0752739f8d9c7b"
+        },
+        {
+          "path": "layer-00042-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "d8cf097aade9aa5cacaa00dfbc26f61713850cfb78a1e071ffd66e89bac74efe"
+        },
+        {
+          "path": "layer-00042-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "747efaca036ab0e82eae83eebc41704b1435976771cb0ad2988fe9f0d0949566"
+        },
+        {
+          "path": "layer-00043-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "c92f49c494ee3e70367977e685ff7e76ffb1a2684cc13fd6a8c147e6988026e4"
+        },
+        {
+          "path": "layer-00043-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "4f4a15d21467099a816bcc928602d969b84f01a3411d37c70be01c415281e662"
+        },
+        {
+          "path": "layer-00043-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "da745968dc188c215839df361bc58e3f25bfc80d75bde31d1393b5e21db2857f"
+        },
+        {
+          "path": "layer-00043-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "9255aa9eb41a4cb8a7453aecdf6b76a998ad673f452eac4fa4f8841c4c49708f"
+        },
+        {
+          "path": "layer-00043-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "a554cea4fb8172d7322de58d6b6ab0bc082c81e7d6bb37024dda6af0c6794cbe"
+        },
+        {
+          "path": "layer-00043-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "c879dd2a43ef33c4243ffcd308e504faf8bf51543ed729e6fd67015648c7fdbc"
+        },
+        {
+          "path": "layer-00043-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "62dc4748ebc2786bc084df9a6bfd5d188baa72f73e2cf13c976691f862f128b7"
+        },
+        {
+          "path": "layer-00043-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "1f08bd35554dad5e49198d20fd3cbe855b646b676813ceb41427f12bbcca64cb"
+        },
+        {
+          "path": "layer-00044-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "107667f6724e980465c8cb97d4f7b79d29a0fd524790d2be5cd7508563a8376e"
+        },
+        {
+          "path": "layer-00044-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "43ba77225aedadb59ed3fd3f8fc3851732754ce3668a596b7ba915ca117b079f"
+        },
+        {
+          "path": "layer-00044-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "bc0b2e532a76831488af4e9596ef44f7c83affd8b2406258ada1e63724f7c11e"
+        },
+        {
+          "path": "layer-00044-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "9ac895c194e7a03ac64e191a4a05d64e71360fe256076a6b7bf13d79a8246498"
+        },
+        {
+          "path": "layer-00044-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "cd5033e109f04b4057e9a983281328d34adb218b49a2d94276dc4ef1d3733a86"
+        },
+        {
+          "path": "layer-00044-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "7b88df75d991390e29bd22277101df43fae3c8814e2ab475e6c8f4c37b920fb2"
+        },
+        {
+          "path": "layer-00044-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "94c5757e85bb30da739a626da39eefe0c16cda37c63595aadf0937bfc0b3fc05"
+        },
+        {
+          "path": "layer-00044-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "e91039a72f3441d56ab33ba282ced4a19e6bdd304330668bbdc7a9d33a4836a3"
+        },
+        {
+          "path": "layer-00045-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "051b767a2b094c8eb778faf4905b79bba5a04d080c72d253e2a7b9642ca2206b"
+        },
+        {
+          "path": "layer-00045-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "6b4663f20730626d814f11a50d90cc17b6e5be1dd87009e39ca4837538db54d0"
+        },
+        {
+          "path": "layer-00045-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "2655f362b014ba25ef18ee93fb429a0ecfc42ba57cceba00c2560d46c3737e85"
+        },
+        {
+          "path": "layer-00045-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "af1babf5b99606b70c8678ada7f75fca9c7db39147ea1dd54eada8ca0ec71892"
+        },
+        {
+          "path": "layer-00045-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "84595663d047e9607604379165be169e61b076b625d3d83a8d5b334d9886e224"
+        },
+        {
+          "path": "layer-00045-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "800bbc3b5b223fdef3d9279ec5264896cc1f0c06e2a6a12e923ebd2d939c9e87"
+        },
+        {
+          "path": "layer-00045-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "0877e7bed4154f8966fae2f647b91e538a06474f7169b99dd9e3ec511e181b8d"
+        },
+        {
+          "path": "layer-00045-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "6a674a58b9aad03755c21d42a1178ddcad06d65328e290910320946839c4ae9b"
+        },
+        {
+          "path": "layer-00046-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "262d152d1d43720958fe6bb5cd6d682277dbedb4b1a86c65b99555b3109640a6"
+        },
+        {
+          "path": "layer-00046-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "8e4e00860f4a7bd95b83ea2e31465a021fb3028ab74a39c98a15604d78ac1dc4"
+        },
+        {
+          "path": "layer-00046-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "d2e1ff421b7df07b73404558df1b134d0866dff414426d63935d868f3228d23f"
+        },
+        {
+          "path": "layer-00046-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "bae896040e1e3ac32f30f141f4fae5e61d0deac63814eab285b16f413dfb3c5c"
+        },
+        {
+          "path": "layer-00046-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "2f606af30369f17529441b2e044f28f00d0e618ca3adc13509f8f0f8736e7cc3"
+        },
+        {
+          "path": "layer-00046-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "10d5537a449a1a2ed75187040a668111dfa42f13aa5dcd3686b099237dd465b4"
+        },
+        {
+          "path": "layer-00046-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "dac2b2a5127d8cb166c07c58fd535121dda892f5d7ed0cdf0b3a729fee49554f"
+        },
+        {
+          "path": "layer-00046-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "02f108a39b01e72f8c745f52aeaa93b2048d3051bbe8858d45f19dbc06056ece"
+        },
+        {
+          "path": "layer-00047-experts-0000-0127.complete.json",
+          "bytes": 5871,
+          "sha256": "bc937b414836c65bfb1c0d1f53edea0e3d3e6b49b952f0b454d4ca2eecd2973e"
+        },
+        {
+          "path": "layer-00047-experts-0000-0127.safetensors",
+          "bytes": 354099744,
+          "sha256": "ffb11d556f354b7cfbe516a48b3223c9a0b344498c36d60de384eaea9b056c33"
+        },
+        {
+          "path": "layer-00047-experts-0128-0255.complete.json",
+          "bytes": 5873,
+          "sha256": "f5390d3c458efc13dcf81ad784116bf8311a60a58f7d1f617d16f7bb8a98de0c"
+        },
+        {
+          "path": "layer-00047-experts-0128-0255.safetensors",
+          "bytes": 354101064,
+          "sha256": "86625a4d2f2e5a02f149e0a02255e85593c454812708d8f64dbe974f594ff123"
+        },
+        {
+          "path": "layer-00047-experts-0256-0383.complete.json",
+          "bytes": 5873,
+          "sha256": "999e57b68f328cdd4abdcd80cb12dd84cb6a4700dc9641b15d5f4b78d40adcda"
+        },
+        {
+          "path": "layer-00047-experts-0256-0383.safetensors",
+          "bytes": 354101064,
+          "sha256": "49fc6dbad8e129fa444bfe0b263bd43e8b7b8625fa544c0aa95216e71e97327e"
+        },
+        {
+          "path": "layer-00047-experts-0384-0511.complete.json",
+          "bytes": 5873,
+          "sha256": "13fa2cc5891a20b5343f0bd42f08b650681c6746395d00047a80175946aeb04c"
+        },
+        {
+          "path": "layer-00047-experts-0384-0511.safetensors",
+          "bytes": 354101064,
+          "sha256": "38d3c582a5b60166c9e6747dae816bc0b4fc7da19a130545a055eb1261f7b90a"
+        },
+        {
+          "path": "merges.txt",
+          "bytes": 3353259,
+          "sha256": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d"
+        },
+        {
+          "path": "model-bf16-00001.safetensors",
+          "bytes": 1273114461,
+          "sha256": "5990db4bb32ad7183a1ece76387e0c832c2c96b7cf2576a928e3439f606cef14"
+        },
+        {
+          "path": "model-bf16-00010.safetensors",
+          "bytes": 323564201,
+          "sha256": "0c2c3ef0030f5134edca0f3bbffc111cfa5da4b39b839cb8248ec762009be0aa"
+        },
+        {
+          "path": "model-bf16-00011.safetensors",
+          "bytes": 10727387912,
+          "sha256": "d18b0db2e27fa066b3f8f86913686f572ee29406d971c8f5b0ec2902e3419ad9"
+        },
+        {
+          "path": "model-bf16-00012.safetensors",
+          "bytes": 3683689888,
+          "sha256": "6c7c599218f8be53472c7b9ab0a9683b753cc187c5b7a49223e22348470b80e2"
+        },
+        {
+          "path": "model-plefp8-00000.safetensors",
+          "bytes": 5200027199,
+          "sha256": "dc2e845b7edd35bda92834fba3626bf7d199e28d6aceac99fee654aade390cfd"
+        },
+        {
+          "path": "model-plefp8-00001.safetensors",
+          "bytes": 5200027202,
+          "sha256": "899eaa0716e28594468a1389ee58cb065c23907f1270de3831f5ecb0a4f82d56"
+        },
+        {
+          "path": "model-plefp8-00002.safetensors",
+          "bytes": 5200027198,
+          "sha256": "06fd8a11abf0419a669f89397b8d70dd6ff42d401e6b2a037c65e49704faaf71"
+        },
+        {
+          "path": "model-plefp8-00003.safetensors",
+          "bytes": 5200027189,
+          "sha256": "c6aaa1fc08e84eced3c8151ac8679ed943888eba0fcef2556963693430f95bd9"
+        },
+        {
+          "path": "model-plefp8-00004.safetensors",
+          "bytes": 5200027190,
+          "sha256": "d94e97c96d3ea09208614da016960f3f4b429f47a044c898a51b493f42f74ba2"
+        },
+        {
+          "path": "model-plefp8-00005.safetensors",
+          "bytes": 5200027190,
+          "sha256": "03d5d4792e14a4ab55bae50bb459624b01786f818bbcfcaed1a5d0235af484c6"
+        },
+        {
+          "path": "model-plefp8-00006.safetensors",
+          "bytes": 5200027190,
+          "sha256": "586cccbc12383021bc9bc02f206d9b19fbd1672373ed9a5d91e3b0ce34c2418f"
+        },
+        {
+          "path": "model-plefp8-00007.safetensors",
+          "bytes": 5200027190,
+          "sha256": "c4a23bcc10f3cde6b633e82c282a9a518e3a64d433628283e1bc592c94cf3d6c"
+        },
+        {
+          "path": "model-plefp8-00008.safetensors",
+          "bytes": 5200027190,
+          "sha256": "2dc8098c0d020bff277c9cf499a6b908e17836b70a5f949dfa24793371c9a87e"
+        },
+        {
+          "path": "model-plefp8-00009.safetensors",
+          "bytes": 4400023163,
+          "sha256": "61de98b89bb79f386795787d7a76827a26f1e292c26edbb0a1b613da455f5a9c"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 34258807,
+          "sha256": "da5ca9c3b65e48e151329e64e141c2fa700bf2f99aec53cc014e4b52a6ff7a84"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+        },
+        {
+          "path": "qualification-notes.md",
+          "bytes": 3253,
+          "sha256": "8466e1895096cf524f51bd5e971ca89e08034ac5a5a78f5259d79172c2c1b7ab"
+        },
+        {
+          "path": "smoke_report.json",
+          "bytes": 389,
+          "sha256": "8282913c8502a1241ab1ac6f227e62f24616c83f0725a401353b87af390e204d"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 12809320,
+          "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 17928,
+          "sha256": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27"
+        },
+        {
+          "path": "validate_checkpoint_report.json",
+          "bytes": 336,
+          "sha256": "264fbdd66715cc5902da7b314b9483c9d5e5850307df889845e3ee117824c679"
+        },
+        {
+          "path": "validate_scales_report.json",
+          "bytes": 149,
+          "sha256": "4da2ed4a9e737ec6d6b4a12109b27804856e3d47d3a15cc7317e798c2f6f3e44"
+        },
+        {
+          "path": "video_preprocessor_config.json",
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 6722759,
+          "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+        }
+      ],
+      "architecture": "Qwen4ExpForConditionalGeneration",
+      "quantization": "NVFP4",
+      "runtime_versions": [
+        "1.5.2.dev20261105"
+      ],
+      "gpu": {
+        "compute_capability": [
+          7,
+          0
+        ],
+        "count": 4,
+        "memory_mib": 32000,
+        "tp": 4,
+        "pp": 1
+      },
+      "evidence": [
+        "https://github.com/1CatAI/1Cat-vLLM/pull/415",
+        "https://github.com/1CatAI/1Cat-vLLM/pull/389"
+      ],
+      "tool_parser": "qwen3_coder",
+      "vision": false,
+      "vision_reason": "此配方只加载文本模型，尚未验证图片输入 / This recipe loads the text model only; image input is not validated",
+      "max_images": 0,
+      "draft_repo_id": null,
+      "accelerators": [
+        "mtp"
+      ],
+      "default_speculative_config": {
+        "method": "mtp",
+        "num_speculative_tokens": 4,
+        "draft_sample_method": "greedy"
+      },
+      "recommended": {
+        "dtype": "half",
+        "tensor_parallel_size": 4,
+        "kv_cache_dtype": "float16",
+        "attention_backend": "FLASH_ATTN_V100",
+        "max_model_len": 65536,
+        "max_num_batched_tokens": 4096,
+        "max_num_seqs": 4,
+        "gpu_memory_utilization": 0.92,
+        "extra_args": [
+          "--trust-remote-code",
+          "--language-model-only",
+          "--mamba-ssm-cache-dtype",
+          "float32",
+          "--reasoning-parser",
+          "qwen3",
+          "--default-chat-template-kwargs",
+          "{\"enable_thinking\":false}",
+          "--seed",
+          "0"
+        ],
+        "enable_prefix_caching": true,
+        "served_model_name": "qwen3.8-flash-next-nvfp4",
+        "tool_calling": true,
+        "tool_parser": "qwen3_coder"
+      }
     },
     {
       "id": "LibertAIDAI/GLM-5.3-Flash-NVFP4",
@@ -2902,13 +5070,6 @@
       "downloadable": false
     },
     {
-      "family": "Qwen3.8",
-      "checkpoint": "Qwen3.8-Flash-Next · NVFP4",
-      "evidence": "https://github.com/1CatAI/1Cat-vLLM/pull/338",
-      "reason": "需要 PLE offload；待核对发布版配方及检查点文件清单",
-      "downloadable": false
-    },
-    {
       "family": "GLM",
       "checkpoint": "LibertAIDAI/GLM-5.3-Flash-NVFP4",
       "evidence": "https://github.com/1CatAI/1Cat-vLLM/pull/341",
@@ -3166,19 +5327,19 @@
       "family": "Qwen3.8",
       "quantization": "NVFP4",
       "level": "validated",
-      "catalog_id": null,
+      "catalog_id": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
       "evidence": [
         "https://github.com/1CatAI/1Cat-vLLM/pull/415",
         "https://github.com/1CatAI/1Cat-vLLM/pull/389",
         "https://github.com/1CatAI/1Cat-vLLM/releases/tag/v1.5.0"
       ],
-      "runtime": "1.5.0",
+      "runtime": "1.5.2.dev20261105",
       "hardware": "4 × V100 32 GB · TP4；PLE CPU offload",
       "features": [
         "基础推理 / Base inference",
         "MTP4"
       ],
-      "note": "RadixArk/Qwen3.8-Flash-Next-NVFP4；需要额外主机内存、PLE 和 V2 配方，尚未纳入一键启动 / Requires host RAM, PLE and V2 recipe; one-click launch pending."
+      "note": "一键启动；只加载文本模型，每卡需 32 GB / One-click launch; text model only, needs 32 GB per GPU."
     },
     {
       "id": "qwen38-flash-next-awq",

@@ -339,3 +339,15 @@ def test_unmanageable_boards_are_never_bound(helper, monkeypatch, capsys):
     value = check(module, monkeypatch, capsys)
     assert not value["available"] and value["allowed_uuids"] == []
     assert "controllable power limit" in value["reason"]
+
+
+def test_overclocked_memory_uses_the_highest_stock_clock_table(monkeypatch):
+    file = Path(__file__).resolve().parents[2] / "scripts/onecat-gpu-helper.py"
+    spec = importlib.util.spec_from_file_location("gpu_helper_clocks", file)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "smi", lambda *a: "877, 1530\n877, 975\n405, 405\n")
+    assert module.clocks("GPU-x", 877) == {1530, 975}
+    assert module.clocks("GPU-x", 1107) == {1530, 975}
+    monkeypatch.setattr(module, "smi", lambda *a: "")
+    assert module.clocks("GPU-x", 1107) == set()

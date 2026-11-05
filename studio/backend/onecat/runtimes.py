@@ -134,6 +134,34 @@ def run_command(job: Job, argv: list[str], env=None, cwd=None, timeout=3600):
         raise
 
 
+def with_serve_flags(record: dict) -> dict:
+    """The runtime with its `serve` flags, read once from its own parser."""
+    capabilities = record.get("capabilities") or {}
+    if capabilities.get("serve_flags"):
+        return record
+    env = {**runtime_environment(record), "PYTHONNOUSERSITE": "1"}
+    if "PYTHONPATH" not in record.get("environment", {}):
+        env.pop("PYTHONPATH", None)
+    try:
+        result = subprocess.run(
+            [record["python_path"], "-m", "vllm.entrypoints.cli.main", "serve", "--help=all"],
+            cwd=record.get("working_directory") or None,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return record
+    flags = sorted(set(re.findall(r"(?<![\w-])--[a-zA-Z0-9][\w.-]*", result.stdout)))
+    if result.returncode or not flags:
+        return record
+    updated = {**record, "capabilities": {**capabilities, "serve_flags": flags}}
+    db.put("runtimes", record["id"], updated)
+    return updated
+
+
 def inspect_runtime(record: dict) -> dict:
     python = Path(record["python_path"]).expanduser().absolute()
     if not python.is_file() or not os.access(python, os.X_OK):

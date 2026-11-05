@@ -2,9 +2,30 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import fcntl
+import logging
 import os
 from pathlib import Path
+
+
+class QuietPolling(logging.Filter):
+    """Hide successful GETs, which are the UI's polling; keep writes and errors."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        return not (
+            isinstance(args, tuple) and len(args) == 5 and args[1] == "GET" and args[4] < 400
+        )
+
+
+def log_config() -> dict:
+    from uvicorn.config import LOGGING_CONFIG
+
+    config = copy.deepcopy(LOGGING_CONFIG)
+    config["filters"] = {"quiet_polling": {"()": QuietPolling}}
+    config["loggers"]["uvicorn.access"]["filters"] = ["quiet_polling"]
+    return config
 
 
 def main():
@@ -40,6 +61,7 @@ def main():
             app,
             host=host,
             port=port,
+            log_config=log_config(),
             log_level="info",
             proxy_headers=False,
             timeout_graceful_shutdown=10,

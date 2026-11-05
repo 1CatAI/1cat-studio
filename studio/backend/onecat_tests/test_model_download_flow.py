@@ -95,8 +95,8 @@ def test_unsloth_recipe_preserves_checkpoint_identity_and_capabilities(monkeypat
     capabilities = catalog.capabilities("/unsloth", "runtime")
     assert capabilities["tool_parser"] == "qwen3_coder"
     assert capabilities["accelerators"] == ["dflash"]
-    # QAT's image-input acceptance does not carry over to another publisher.
-    assert not capabilities["vision"]
+    # Same vision weights as QAT; image input was verified on this checkpoint too.
+    assert capabilities["vision"]
 
 
 def test_qwen_catalog_defaults_expose_256k_tools_vision_and_mtp_choices(monkeypatch):
@@ -176,20 +176,19 @@ def test_download_without_runtime_then_create_default_profile(checkpoint):
     catalog.validate_features(profile)
 
 
-def test_known_source_overlay_inherits_its_validated_base_version():
+def test_any_validated_runtime_serves_an_entry_regardless_of_version():
     item = {"runtime_versions": ["1.3.0"], "runtime_snapshots": []}
-    runtime = {
-        "validated": True,
-        "capabilities": {
-            "vllm_version": "dev",
-            "distribution_version": "1.3.0",
-            "source_snapshot": "pr417-a09e332bcd",
-        },
-    }
+    runtime = {"validated": True, "capabilities": {"vllm_version": "9.9.9.dev1"}}
     assert catalog.runtime_matches(item, runtime)
 
-    runtime["capabilities"]["source_snapshot"] = "unrecognized-local-tree"
+    runtime["validated"] = False
     assert not catalog.runtime_matches(item, runtime)
+
+
+def test_entry_defaults_to_the_newest_validated_runtime():
+    old = {"id": "old", "validated": True, "capabilities": {"distribution_version": "1.5.1"}}
+    new = {"id": "new", "validated": True, "capabilities": {"distribution_version": "1.5.2.dev20261104"}}
+    assert [r["id"] for r in catalog.newest_first([old, new])] == ["new", "old"]
 
 
 def test_download_creates_default_without_overwriting_user_edits(checkpoint):
@@ -208,15 +207,15 @@ def test_download_creates_default_without_overwriting_user_edits(checkpoint):
     assert visible["compatible"]
 
 
-def test_launch_gate_remains_strict_after_download(checkpoint, monkeypatch):
-    installed("dev", "unrelated")
+def test_launch_gate_requires_a_validated_runtime_after_download(checkpoint, monkeypatch):
+    db.put("runtimes", "unvalidated", {**installed("dev", "unvalidated"), "validated": False})
     result = download(checkpoint)
     assert catalog.launch_defaults(checkpoint["id"])["profile"]["runtime_id"] == ""
     with pytest.raises(ValueError, match="Requires runtime"):
         catalog.create_default_profile(result["model_id"])
     installed()
     profile = catalog.create_default_profile(result["model_id"])
-    profile["runtime_id"] = "unrelated"
+    profile["runtime_id"] = "unvalidated"
     with pytest.raises(ValueError, match="Requires runtime"):
         catalog.validate_features(profile)
     # A verified topology is only a recommendation, but a machine with no GPU
@@ -345,3 +344,15 @@ def test_download_admission_is_deduplicated_across_runtime_selections(checkpoint
             ).status_code == 400
 
     asyncio.run(run())
+
+
+def test_flash_next_is_listed_with_mtp_on_32gb_cards_only():
+    item = catalog.entry("RadixArk/Qwen3.8-Flash-Next-NVFP4")
+    assert item["gpu"]["memory_mib"] == 32000
+    assert item["accelerators"] == ["mtp"]
+    assert not item["vision"]
+    assert "--language-model-only" in item["recommended"]["extra_args"]
+    db.put("runtimes", "r", {"id": "r", "name": "r", "validated": True})
+    profile = catalog.launch_defaults(item["id"], devices=[])["profile"]
+    assert profile["speculative_config"]["method"] == "mtp"
+    assert profile["kv_cache_dtype"] == "float16"

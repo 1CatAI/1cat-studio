@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 """Exact checkpoint evidence and immutable ModelScope download manifests."""
 
+import copy
 import hashlib
 import json
 import re
@@ -9,17 +10,8 @@ from pathlib import Path
 
 from . import db, gpu
 
-SOURCE_SNAPSHOT_BASE_VERSIONS = {"pr417-a09e332bcd": "1.3.0"}
-
-
 def runtime_family(value) -> str:
-    """The compatibility family of a runtime: builds sharing a major.minor.
-
-    A runtime is a replaceable component: it gets upgraded in place and reinstalled
-    under a new id. Acceptance is therefore attached to the checkpoint and this
-    family, so an upgrade inside the family keeps working while a new major or
-    minor still has to prove itself.
-    """
+    """A runtime's major.minor, used only to prefer a close replacement runtime."""
     if isinstance(value, dict):
         capabilities = value.get("capabilities") or {}
         text = str(
@@ -45,19 +37,21 @@ def entry(id):
 
 
 def runtime_matches(item, runtime):
-    capabilities = runtime.get("capabilities", {})
-    snapshot = capabilities.get("source_snapshot")
-    if snapshot:
-        versions = {SOURCE_SNAPSHOT_BASE_VERSIONS.get(snapshot)}
-    else:
-        versions = {
-            runtime.get("release", {}).get("version"),
-            capabilities.get("distribution_version"),
-            capabilities.get("vllm_version"),
-        }
-    return runtime.get("validated") and (
-        bool(versions.intersection(item["runtime_versions"]))
-        or snapshot in item.get("runtime_snapshots", [])
+    """Any validated runtime may serve any entry.
+
+    Studio and the engine release independently, so no entry is tied to engine
+    versions: ``runtime_versions`` only records where the recipe was verified.
+    """
+    return bool(runtime.get("validated"))
+
+
+def newest_first(runtimes):
+    from .activation import _runtime_version
+
+    return sorted(
+        runtimes,
+        key=lambda r: (_runtime_version(r), r.get("validated_at") or 0),
+        reverse=True,
     )
 
 
@@ -88,7 +82,7 @@ def compatibility(item, runtime_id=None, devices=None):
     reasons = []
     runtimes = [db.get("runtimes", runtime_id, {})] if runtime_id else db.all_records("runtimes")
     if not any(runtime_matches(item, r) for r in runtimes):
-        reasons.append("需要运行环境 / Requires runtime: " + ", ".join(item["runtime_versions"]))
+        reasons.append("需要运行环境 / Requires runtime: 1Cat-vLLM")
     if item["gpu"]["pp"] != 1:
         reasons.append(
             f"需要 TP{item['gpu']['tp']} / PP{item['gpu']['pp']}；Studio 尚不支持流水线并行 / "
@@ -275,7 +269,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
         ),
         None,
     )
-    installed = [r for r in db.all_records("runtimes") if runtime_matches(item, r)]
+    installed = newest_first(r for r in db.all_records("runtimes") if runtime_matches(item, r))
     active_id = db.get("engine", "active", {}).get("profile", {}).get("runtime_id")
     runtime = next(
         (r for r in installed if r["id"] == active_id), installed[0] if installed else {}
@@ -297,7 +291,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
         values.update(item.get("recommended", {}))
         from .sm70_profiles import MODEL_IDS, default_speculation, qualified_draft, recommendation
 
-        speculative = None
+        speculative = copy.deepcopy(item.get("default_speculative_config"))
         if repo in MODEL_IDS:
             recommended = recommendation(runtime)
             values.update(recommended)
@@ -463,23 +457,18 @@ def capabilities(path, runtime_id):
         record = db.get("model_validation", digest + ":" + runtime_id, {})
         inherited_from = None
         if not record or record.get("model_path") != str(folder):
-            # The exact runtime id is not the identity of the inference stack: a
-            # runtime may be upgraded in place or replaced by an equivalent build.
-            family = runtime_family(runtime) or runtime_family(runtime_id)
-            if family:
-                with db.connect() as conn:
-                    rows = conn.execute(
-                        "SELECT id, data FROM records WHERE bucket=? AND id LIKE ?",
-                        ("model_validation", digest + ":%"),
-                    ).fetchall()
-                for candidate_id, raw in rows:
-                    candidate = json.loads(raw)
-                    if candidate.get("model_path") != str(folder):
-                        continue
-                    source = candidate.get("runtime_family") or candidate_id.split(":", 1)[1]
-                    if runtime_family(source) == family:
-                        record, inherited_from = candidate, candidate_id.split(":", 1)[1]
-                        break
+            # Validation belongs to these exact files, not to one engine version:
+            # the runtime may be upgraded or replaced by any other build.
+            with db.connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, data FROM records WHERE bucket=? AND id LIKE ?",
+                    ("model_validation", digest + ":%"),
+                ).fetchall()
+            for candidate_id, raw in rows:
+                candidate = json.loads(raw)
+                if candidate.get("model_path") == str(folder):
+                    record, inherited_from = candidate, candidate_id.split(":", 1)[1]
+                    break
         if record and record.get("model_path") == str(folder):
             files = {
                 f.name: [f.stat().st_size, f.stat().st_mtime_ns]
@@ -531,6 +520,9 @@ def capabilities(path, runtime_id):
 
 
 def validate_features(profile):
+    from .portable_gpu import rebind_profile
+
+    rebind_profile(profile)
     selected = gpu.selected_devices(profile["gpu_uuids"]) if profile["gpu_uuids"] else []
     if profile["dtype"] == "bfloat16" and any(
         (d.get("compute_capability") or [0])[0] < 8 for d in selected
@@ -569,8 +561,6 @@ def validate_features(profile):
         raise ValueError("Tool parser is not validated for this checkpoint and runtime")
     if profile.get("vision_enabled") and not caps.get("vision"):
         raise ValueError("Vision is not validated for this checkpoint and runtime")
-    if profile.get("vision_enabled") and profile["max_images"] > caps["max_images"]:
-        raise ValueError("Image count exceeds the validated model limit")
     spec = profile.get("speculative_config")
     if spec:
         if spec.get("method") not in caps.get("accelerators", []):
