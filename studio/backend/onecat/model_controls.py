@@ -15,9 +15,10 @@ from . import db
 
 
 @lru_cache(maxsize=64)
-def _template_support(files: tuple) -> tuple[bool, tuple[str, ...]]:
+def _template_support(files: tuple) -> tuple[bool, tuple[str, ...], bool]:
     supported = False
     efforts = ()
+    preserve = False
     for filename, _, _ in files:
         path = Path(filename)
         try:
@@ -29,6 +30,8 @@ def _template_support(files: tuple) -> tuple[bool, tuple[str, ...]]:
                 text = template if isinstance(template, str) else json.dumps(template)
             if "enable_thinking" in text:
                 supported = True
+            if "preserve_thinking" in text:
+                preserve = True
             # Only advertise levels explicitly accepted by the deployed template.
             accepted = re.search(r"\b(?:resolved_)?reasoning_effort\s+not\s+in\s+(\([^)]*\))", text)
             if accepted:
@@ -37,7 +40,7 @@ def _template_support(files: tuple) -> tuple[bool, tuple[str, ...]]:
                     efforts = tuple(v for v in ("low", "medium", "high", "xhigh") if v in values)
         except (OSError, ValueError, SyntaxError):
             continue
-    return supported, efforts
+    return supported, efforts, preserve
 
 
 def thinking_support(profile: dict) -> dict:
@@ -51,11 +54,12 @@ def thinking_support(profile: dict) -> dict:
                 files.append((str(file), stat.st_mtime_ns, stat.st_size))
             except OSError:
                 pass
-    supported, efforts = _template_support(tuple(files))
+    supported, efforts, preserve = _template_support(tuple(files))
     return {
         "supported": supported,
         "efforts": list(efforts) if supported else [],
         "default_effort": "xhigh" if "xhigh" in efforts else (efforts[-1] if efforts else None),
+        "preserve_thinking": supported and preserve,
         "reason": None
         if supported
         else "当前模型模板未声明思考开关 / This model template does not expose a thinking switch",
@@ -74,6 +78,14 @@ def thinking_kwargs(profile: dict, thinking: bool | None, effort: str | None = N
             )
         return {}
     result = {"enable_thinking": thinking}
+    if thinking and support["preserve_thinking"]:
+        # Past turns arrive without their reasoning (chat drops it; agents keep
+        # it only for the current tool-call loop). Templates that would render
+        # past reasoning (Qwen3.8) then show those answers alone instead of an
+        # empty <think> block. Not sent with thinking off: the template renders
+        # past answers exactly like the generation prompt that produced them,
+        # which keeps them reusable from the prefix cache.
+        result["preserve_thinking"] = False
     if thinking and effort is not None:
         if effort not in support["efforts"]:
             raise HTTPException(

@@ -118,8 +118,19 @@ def convert_input(body: dict) -> tuple[dict, dict]:
                 output = "\n".join(p.get("text", "") for p in output)
             messages.append({"role": "tool", "tool_call_id": item["call_id"], "content": output})
         elif kind == "reasoning":
-            # Internal reasoning is not re-injected into the chat template.
-            continue
+            # ResponseStream returns the model's reasoning as the summary text.
+            # Give it back to the template: Qwen3.8-style templates render the
+            # reasoning of the current tool-call loop, and the model continues
+            # from its own plan instead of an empty <think></think> block.
+            parts = item.get("content") or item.get("summary") or []
+            text = "".join(
+                p.get("text", "")
+                for p in parts
+                if p.get("type") in {"reasoning_text", "summary_text"}
+            )
+            if text:
+                target = assistant()
+                target["reasoning"] = target.get("reasoning", "") + text
         else:
             raise ValueError(f"Unsupported Responses input item: {kind}")
     if instructions:
