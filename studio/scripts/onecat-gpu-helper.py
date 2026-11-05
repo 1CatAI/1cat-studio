@@ -211,7 +211,12 @@ def clocks(uuid, memory):
             "-i", uuid, "--query-supported-clocks=memory,graphics", "--format=csv,noheader,nounits"
         ).splitlines()
     )
-    return {int(row[1]) for row in rows if int(row[0]) == memory}
+    table = {}
+    for row in rows:
+        table.setdefault(int(row[0]), set()).add(int(row[1]))
+    # An overclocked memory clock has no entry in the driver's table; graphics
+    # clocks are still those of its highest stock memory clock.
+    return table.get(memory) or (table[max(table)] if table else set())
 
 
 def number(value, name):

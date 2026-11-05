@@ -30,8 +30,9 @@ def test_direct_restart_reconciliation_respects_hold(monkeypatch):
     assert db.get('gpu_policies', 'gpu')['setting']['power_limit_w'] == 150
 
 
-@pytest.mark.parametrize('state', ['stopped', 'ready'])
-def test_background_startup_and_idle_do_not_touch_gpus(monkeypatch, state):
+# Not named "state": that would replace the fixture isolating the database.
+@pytest.mark.parametrize('engine_state', ['stopped', 'ready'])
+def test_background_startup_and_idle_do_not_touch_gpus(monkeypatch, engine_state):
     monkeypatch.setenv('ONECAT_AUTO_GPU_ACTIONS', '0')
     db.put('settings', 'main', {'autostart_profile': 'p', 'idle_unload_minutes': 1})
     monkeypatch.setattr(gpu, 'recover_interrupted', forbidden)
@@ -41,7 +42,7 @@ def test_background_startup_and_idle_do_not_touch_gpus(monkeypatch, state):
     monkeypatch.setattr(app, 'scheduled_job', forbidden)
     monkeypatch.setattr(runtimes, 'refresh_incomplete_metadata', lambda: None)
     monkeypatch.setattr(catalog, 'backfill_default_profiles', lambda: None)
-    monkeypatch.setattr(app.engine, 'status', lambda: {'state': state, 'last_request_at': 0, 'adopted_service': True})
+    monkeypatch.setattr(app.engine, 'status', lambda: {'state': engine_state, 'last_request_at': 0, 'adopted_service': True})
     calls = 0
     async def sleep(_seconds):
         nonlocal calls

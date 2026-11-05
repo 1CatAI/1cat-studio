@@ -5,6 +5,7 @@ import contextlib
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -23,6 +24,8 @@ from .config import state_root
 from .jobs import Cancelled, Job, same_process
 from .runtime_environment import runtime_environment
 from .schemas import Profile
+
+logger = logging.getLogger(__name__)
 
 _ENGINE_FAILURE_MARKERS = re.compile(
     r"(?i)(cuda out of memory|outofmemoryerror|cuda error|nccl|illegal memory access|"
@@ -388,6 +391,29 @@ def read_acceleration(data: dict, client) -> dict | None:
         return None
 
 
+def supported_extra_args(args: list[str], flags) -> list[str]:
+    """Drop flags (and their values) the runtime's own parser does not accept.
+
+    Runtimes are interchangeable, so a profile may carry recipe flags newer than
+    the runtime selected for it; those must not abort the launch.
+    """
+    if not flags:
+        return list(args)
+    known = {flag.replace("_", "-") for flag in flags}
+    kept, keep = [], True
+    for token in args:
+        if token.startswith("--"):
+            flag = token.split("=", 1)[0]
+            keep = flag.replace("_", "-") in known
+            if not keep:
+                logger.warning("Runtime does not support %s; dropped from launch", flag)
+        elif re.match(r"-[a-zA-Z]", token):
+            keep = True
+        if keep:
+            kept.append(token)
+    return kept
+
+
 def build_argv(profile: dict, runtime: dict, port: int, api_key: str | None) -> list[str]:
     p = Profile.model_validate(profile)
     command = [
@@ -442,11 +468,13 @@ def build_argv(profile: dict, runtime: dict, port: int, api_key: str | None) -> 
         command += ["--enable-auto-tool-choice", "--tool-call-parser", p.tool_parser]
     command += [
         "--limit-mm-per-prompt",
-        json.dumps({"image": p.max_images if p.vision_enabled else 0, "video": 0, "audio": 0}),
+        # With vision on, the engine leaves the image count unlimited.
+        json.dumps({**({} if p.vision_enabled else {"image": 0}), "video": 0, "audio": 0}),
     ]
     if p.vision_enabled and p.vision_processor_kwargs:
         command += ["--mm-processor-kwargs", json.dumps(p.vision_processor_kwargs)]
-    return command + p.extra_args
+    flags = (runtime.get("capabilities") or {}).get("serve_flags")
+    return command + supported_extra_args(p.extra_args, flags)
 
 
 def command_preview(profile: dict) -> str:
@@ -669,8 +697,11 @@ def start(job: Job, profile_id: str):
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     key = secrets.token_urlsafe(32)
-    command = build_argv(profile, runtime, port, key)
     from .gpu_control import ensure_saved
+    from .runtimes import with_serve_flags
+
+    runtime = with_serve_flags(runtime)
+    command = build_argv(profile, runtime, port, key)
 
     ensure_saved(profile["gpu_uuids"])
     try:

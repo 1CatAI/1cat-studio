@@ -1,13 +1,16 @@
 import argparse
 import json
+import logging
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 
 import psutil
 import pytest
-from onecat import db, engine, gpu
+from onecat import db, engine, gpu, runtimes
+from onecat.__main__ import QuietPolling, log_config
 from onecat.jobs import Cancelled, Job, same_process
 from onecat.runtimes import run_command
 
@@ -281,3 +284,64 @@ def test_stop_of_collected_transient_service_is_idempotent(monkeypatch):
     db.put("jobs", "j", {"id": "j", "kind": "stop_model", "payload": {}})
     engine.stop(Job("j"), force=True)
     assert engine.status()["state"] == "stopped"
+
+
+def _limit_mm(argv):
+    return json.loads(argv[argv.index("--limit-mm-per-prompt") + 1])
+
+
+def test_vision_profile_does_not_cap_image_count():
+    base = {"name": "test", "model_path": "/model", "runtime_id": "r"}
+    runtime = {"python_path": sys.executable}
+    assert "image" not in _limit_mm(
+        engine.build_argv({**base, "vision_enabled": True}, runtime, 8000, None)
+    )
+    assert _limit_mm(engine.build_argv(base, runtime, 8000, None))["image"] == 0
+
+
+def test_extra_args_the_runtime_does_not_know_are_dropped():
+    args = ["--partial-prefix-cache", "--max-num-batched-tokens", "4096", "--foo=1", "--old", "2"]
+    assert engine.supported_extra_args(args, ["--max-num-batched-tokens", "--old"]) == [
+        "--max-num-batched-tokens", "4096", "--old", "2",
+    ]
+    assert engine.supported_extra_args(args, None) == args
+    argv = engine.build_argv(
+        {"name": "test", "model_path": "/model", "runtime_id": "r", "extra_args": ["--new-flag"]},
+        {"python_path": sys.executable, "capabilities": {"serve_flags": ["--model"]}},
+        8000,
+        None,
+    )
+    assert "--new-flag" not in argv
+
+
+def test_serve_flags_are_read_once_from_the_runtime(state, monkeypatch):
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="  --model MODEL\n  --max-model-len, -m\n")
+
+    monkeypatch.setattr(runtimes.subprocess, "run", run)
+    record = {"id": "r", "python_path": sys.executable}
+    db.put("runtimes", "r", record)
+    updated = runtimes.with_serve_flags(record)
+    assert updated["capabilities"]["serve_flags"] == ["--max-model-len", "--model"]
+    assert runtimes.with_serve_flags(db.get("runtimes", "r"))["id"] == "r"
+    assert len(calls) == 1
+    monkeypatch.setattr(runtimes.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    assert runtimes.with_serve_flags({"id": "x", "python_path": "/none"}) == {
+        "id": "x", "python_path": "/none",
+    }
+
+
+@pytest.mark.parametrize(
+    ("method", "status", "kept"),
+    [("GET", 200, False), ("GET", 304, False), ("GET", 500, True), ("POST", 200, True)],
+)
+def test_access_log_hides_only_successful_polling(method, status, kept):
+    record = logging.LogRecord(
+        "uvicorn.access", logging.INFO, "", 0, "%s - %s %s HTTP/%s %d",
+        ("127.0.0.1:1", method, "/api/inference/status", "1.1", status), None,
+    )
+    assert QuietPolling().filter(record) is kept
+    assert log_config()["loggers"]["uvicorn.access"]["filters"] == ["quiet_polling"]

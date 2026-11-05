@@ -519,7 +519,6 @@ export function ProfileEditor({
                 setP((prev) => ({
                   ...prev,
                   vision_enabled: v,
-                  max_images: Math.min(4, caps?.max_images || 4),
                 }))
               }
             />

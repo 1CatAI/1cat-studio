@@ -103,7 +103,8 @@ class Profile(StrictModel):
     tool_calling: bool = False
     tool_parser: str | None = None
     vision_enabled: bool = False
-    max_images: int = Field(default=4, ge=1, le=4)
+    # Number of images the recipe was verified with; requests are not limited to it.
+    max_images: int = Field(default=4, ge=1)
     vision_processor_kwargs: dict = Field(default_factory=dict)
 
     @field_validator("gpu_uuids")

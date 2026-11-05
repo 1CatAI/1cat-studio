@@ -101,8 +101,6 @@ def prepare_messages(messages, profile):
             count = sum(p.get("type") == "image" for p in content)
             if count and not profile.get("vision_enabled"):
                 raise ValueError("This model profile does not have image understanding enabled")
-            if count > min(4, profile.get("max_images", 4)):
-                raise ValueError("This message exceeds the model's image limit")
             content = [
                 {"type": "image_url", "image_url": {"url": data_url(p["attachment_id"])}}
                 if p["type"] == "image"

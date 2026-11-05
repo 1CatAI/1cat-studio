@@ -45,6 +45,15 @@ def snapshot() -> dict:
                 if mem_clock
                 else []
             )
+            if not clocks:
+                # An overclocked memory clock has no entry in the driver's table;
+                # graphics clocks are still those of its highest stock memory clock.
+                stock = read(nv.nvmlDeviceGetSupportedMemoryClocks, handle) or []
+                clocks = (
+                    read(nv.nvmlDeviceGetSupportedGraphicsClocks, handle, max(stock))
+                    if stock
+                    else []
+                )
             processes = []
             for proc in read(nv.nvmlDeviceGetComputeRunningProcesses, handle) or []:
                 try:

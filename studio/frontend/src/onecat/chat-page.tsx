@@ -144,16 +144,6 @@ export function ChatPage() {
       );
       return;
     }
-    const maximum = Math.min(4, engine?.profile?.max_images || 4);
-    if (files.length + attachments.length > maximum) {
-      setError(
-        t(
-          `每条消息最多 ${maximum} 张图片`,
-          `At most ${maximum} images per message`,
-        ),
-      );
-      return;
-    }
     const abort = new AbortController();
     uploadController.current = abort;
     setUploading(true);

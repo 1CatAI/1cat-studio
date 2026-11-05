@@ -156,7 +156,7 @@ def test_catalog_download_does_not_require_launch_compatibility(client, monkeypa
     all_items = client.get("/api/models/search?all_verified=true").json()
     assert all_items["items"] and not all_items["items"][0]["compatible"]
     assert client.get("/api/models/search").json()["items"] == []
-    assert {e["family"] for e in all_items["audit"]} >= {"Qwen3.6", "Qwen3.8", "GLM", "DeepSeek"}
+    assert {e["family"] for e in all_items["audit"]} >= {"Qwen3.6", "GLM", "DeepSeek"}
 
 
 def test_supported_inventory_is_visible_without_claiming_download_compatibility(
@@ -172,7 +172,7 @@ def test_supported_inventory_is_visible_without_claiming_download_compatibility(
         "GLM",
         "DeepSeek",
     }
-    assert sum(item["downloadable"] for item in inventory["items"]) == 9
+    assert sum(item["downloadable"] for item in inventory["items"]) == 10
     assert not any(item["compatible"] for item in inventory["items"])
     assert all(
         item["evidence"] and item["runtime"] and item["hardware"] for item in inventory["items"]

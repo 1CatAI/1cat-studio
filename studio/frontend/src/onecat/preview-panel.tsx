@@ -31,9 +31,58 @@ function runtimeSource() {
     });
   return runtime;
 }
+// The frame stays an opaque origin (sandbox="allow-scripts"), so HTTPS loads
+// cannot reach Studio's cookies or storage; they let generated pages use CDN
+// modules, fonts and assets beyond the bundled preview dependencies.
 export const PREVIEW_CSP =
-  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https:; style-src 'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; connect-src https:; media-src data: blob: https:; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const script = (value: string) => value.replace(/<\/script/gi, "<\\/script");
+// HTML runs as the browser would run the file itself (importmaps, CDN modules,
+// fonts, external scripts), like a saved .html. This prelude only reports
+// errors/readiness, keeps navigation inside the frame and replaces Web Storage,
+// which opaque frames cannot use.
+const HTML_PRELUDE = `(()=>{const r=(type,message="")=>parent.postMessage({onecat_preview:true,type,message},"*");
+const store=()=>{const v=new Map();return{get length(){return v.size},key:i=>[...v.keys()][i]??null,getItem:k=>v.get(String(k))??null,setItem:(k,x)=>{v.set(String(k),String(x))},removeItem:k=>{v.delete(String(k))},clear:()=>v.clear()}};
+for(const n of["localStorage","sessionStorage"])Object.defineProperty(window,n,{value:store()});
+addEventListener("error",e=>{if(e.target&&e.target!==window&&(e.target.src||e.target.href))r("error","Failed to load "+(e.target.src||e.target.href));else r("error",e.message)},true);
+addEventListener("unhandledrejection",e=>r("error",String(e.reason)));
+document.addEventListener("click",e=>{const a=e.target?.closest?.("a");if(a&&!a.getAttribute("href")?.startsWith("#"))e.preventDefault()},true);
+document.addEventListener("submit",e=>e.preventDefault(),true);
+addEventListener("load",()=>requestAnimationFrame(()=>requestAnimationFrame(()=>r("ready"))));})();`;
+const DEFAULT_IMPORT_MAP = JSON.stringify({
+  imports: {
+    three: "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+  },
+});
+function incompleteMarkup(source: string) {
+  return (
+    /<[^>]*$/.test(source) ||
+    (source.match(/<script\b/gi) || []).length !==
+      (source.match(/<\/script\s*>/gi) || []).length ||
+    (source.match(/<style\b/gi) || []).length !==
+      (source.match(/<\/style\s*>/gi) || []).length
+  );
+}
+function nativeHtml(source: string) {
+  const head =
+    `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">` +
+    `<script>${script(HTML_PRELUDE)}</script>` +
+    // Generated pages often give a hidden overlay display:flex, which would
+    // otherwise cover the whole preview; honour the attribute as authored.
+    "<style>[hidden]{display:none!important}</style>" +
+    (/<script\b[^>]*type\s*=\s*["']?importmap/i.test(source)
+      ? ""
+      : `<script type="importmap">${DEFAULT_IMPORT_MAP}</script>`);
+  // Insert first in <head> so the policy and prelude precede every page script.
+  const open = source.match(/<head\b[^>]*>/i) || source.match(/<html\b[^>]*>/i);
+  if (open?.index !== undefined) {
+    const at = open.index + open[0].length;
+    const tag = /^<head/i.test(open[0]) ? head : `<head>${head}</head>`;
+    return source.slice(0, at) + tag + source.slice(at);
+  }
+  return `<!doctype html><html><head>${head}</head><body>${source}</body></html>`;
+}
 export function PreviewPanel({
   artifact,
   onClose,
@@ -154,7 +203,14 @@ export function PreviewPanel({
       }
     }
     window.addEventListener("message", receive);
-    void runtimeSource()
+    const html = candidate.language === "html";
+    if (html && incompleteMarkup(candidate.source)) {
+      setCodeError(true);
+      setError("Waiting for complete markup / 等待完整代码");
+      setStatus("error");
+      return dispose;
+    }
+    void (html ? Promise.resolve("") : runtimeSource())
       .then((bundle) => {
         if (!active || !container.current) return;
         frame = document.createElement("iframe");
@@ -180,7 +236,7 @@ export function PreviewPanel({
           }
         });
         const invocation = `window.OneCatPreview.run(${JSON.stringify(candidate.source)},${JSON.stringify(candidate.language)});`;
-        frame.srcdoc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;min-height:100%;font-family:system-ui;background:#fff;color:#18181b}#root{min-height:100vh}button,input,select{font:inherit}</style></head><body><div id="root"></div><script>${script(bundle)}</script><script>${script(invocation)}</script></body></html>`;
+        frame.srcdoc = html ? nativeHtml(candidate.source) : `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;min-height:100%;font-family:system-ui;background:#fff;color:#18181b}#root{min-height:100vh}button,input,select{font:inherit}</style></head><body><div id="root"></div><script>${script(bundle)}</script><script>${script(invocation)}</script></body></html>`;
         container.current.appendChild(frame);
         timeout = setTimeout(() => {
           if (active) {
@@ -194,7 +250,7 @@ export function PreviewPanel({
             );
             dispose();
           }
-        }, 10000);
+        }, 20000);
       })
       .catch((e) => {
         if (active) {
