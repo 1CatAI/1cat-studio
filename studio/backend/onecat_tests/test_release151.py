@@ -94,6 +94,28 @@ def test_studio_argv_matches_release_profile():
     assert "--enable-prompt-tokens-details" in args
 
 
+def test_newer_wheel_recipe_arguments_reach_argv():
+    recipe = sm70_profiles.release_profile({})
+    recipe["args"].update(
+        mixed_prefill_step_latency_ms=0,
+        partial_prefix_cache=True,
+        enable_prompt_tokens_details=True,
+    )
+    runtime = {
+        "python_path": "/venv/bin/python",
+        "capabilities": {
+            "prompt_token_details": True,
+            "sm70_profiles": {sm70_profiles.PROFILE_NAME: recipe},
+        },
+    }
+    argv = engine.build_argv(_profile(runtime), runtime, 8000, None)
+    args = _options(argv)
+    assert args["--mixed-prefill-step-latency-ms"] == "0"
+    assert args["--partial-prefix-cache"] is True
+    # Derived from the runtime capability, not repeated from the recipe.
+    assert argv.count("--enable-prompt-tokens-details") == 1
+
+
 def test_prompt_details_capability_beats_version():
     runtime = {
         "python_path": "/python",
