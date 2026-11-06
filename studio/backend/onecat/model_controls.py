@@ -66,6 +66,24 @@ def thinking_support(profile: dict) -> dict:
     }
 
 
+# Qwen3.x model cards: thinking and instruct modes have separate recommendations.
+QWEN3_SAMPLING = {
+    True: {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0, "repetition_penalty": 1.0},
+    False: {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5, "repetition_penalty": 1.0},
+}
+
+
+def recommended_sampling(profile: dict) -> dict | None:
+    """The model card's sampling per thinking mode, or None when it is unknown."""
+    args = [str(a) for a in profile.get("extra_args") or []]
+    parser = next((v.split("=", 1)[1] for v in args if v.startswith("--reasoning-parser=")), None)
+    if parser is None and "--reasoning-parser" in args[:-1]:
+        parser = args[args.index("--reasoning-parser") + 1]
+    if not parser or not parser.startswith("qwen3"):
+        return None
+    return {"thinking": dict(QWEN3_SAMPLING[True]), "instruct": dict(QWEN3_SAMPLING[False])}
+
+
 def thinking_kwargs(profile: dict, thinking: bool | None, effort: str | None = None) -> dict:
     if thinking is None:
         return {}

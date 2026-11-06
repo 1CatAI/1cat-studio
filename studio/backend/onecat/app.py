@@ -721,8 +721,9 @@ def create_app() -> FastAPI:
 
     @admin.get("/inference/options")
     def inference_options():
-        from .model_controls import thinking_support
-        return {"thinking": thinking_support(engine.private_state().get("profile") or {})}
+        from .model_controls import recommended_sampling, thinking_support
+        profile = engine.private_state().get("profile") or {}
+        return {"thinking": thinking_support(profile), "sampling": recommended_sampling(profile)}
 
     @admin.get("/inference/models")
     def inference_models(agent: bool = False):

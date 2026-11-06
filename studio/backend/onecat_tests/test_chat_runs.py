@@ -291,3 +291,55 @@ async def test_delayed_stop_is_bound_to_its_generation(monkeypatch):
         assert not chat_runs._tasks[id].cancelling()
     finally:
         await chat_runs.cancel(id, second["id"])
+
+
+@pytest.mark.parametrize(
+    "settings,expected",
+    [
+        ({"thinking": True}, {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "presence_penalty": 0.0}),
+        ({"thinking": False}, {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}),
+        ({"thinking": True, "sampling_mode": "custom"}, {"temperature": 0.3, "top_p": 0.5}),
+    ],
+)
+def test_chat_follows_model_card_sampling_unless_custom(monkeypatch, settings, expected):
+    from onecat import engine, model_controls
+
+    calls = fixture(monkeypatch)
+    profile = {"extra_args": ["--reasoning-parser", "qwen3"]}
+    monkeypatch.setattr(engine, "private_state", lambda: {"profile": profile})
+    monkeypatch.setattr(model_controls, "thinking_kwargs", lambda *a: {})
+    id = thread("sampling")
+    history = studio_db.list_chat_messages(id)
+
+    async def scenario():
+        chat_runs.recover()
+        chat_runs.start(
+            id,
+            {
+                "message_id": "answer",
+                "messages": history,
+                "expected_message_ids": [m["id"] for m in history],
+                "settings": settings,
+                "request": {"messages": [], "temperature": 0.3, "top_p": 0.5},
+            },
+        )
+        for _ in range(100):
+            if calls:
+                break
+            await asyncio.sleep(0.01)
+        await chat_runs.cancel(id)
+
+    asyncio.run(scenario())
+    sent = calls[0]
+    for key, value in expected.items():
+        assert sent[key] == value
+    if settings.get("sampling_mode") == "custom":
+        assert "top_k" not in sent and "presence_penalty" not in sent
+
+
+def test_recommended_sampling_only_for_qwen3_reasoning_models():
+    from onecat.model_controls import recommended_sampling
+
+    assert recommended_sampling({"extra_args": ["--reasoning-parser=qwen3"]})["thinking"]["temperature"] == 1.0
+    assert recommended_sampling({"extra_args": ["--reasoning-parser", "deepseek_v4"]}) is None
+    assert recommended_sampling({}) is None

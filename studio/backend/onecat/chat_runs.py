@@ -320,6 +320,16 @@ def start(thread: str, payload: dict) -> dict:
                 settings.get("thinking_effort"),
             ),
         }
+    if submission and submission["settings"].get("sampling_mode", "auto") == "auto":
+        from .model_controls import recommended_sampling
+        from .engine import private_state
+
+        recommended = recommended_sampling(private_state().get("profile") or {})
+        if recommended:
+            # Follow the model card for the selected mode unless the user set
+            # their own temperature or top-p for this conversation.
+            mode = "thinking" if submission["settings"].get("thinking") else "instruct"
+            body.update(recommended[mode])
     record = {
         "id": db.uid(),
         "thread_id": thread,

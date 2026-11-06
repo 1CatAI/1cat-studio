@@ -6,6 +6,8 @@ def normalize(settings):
     result = dict(settings or {})
     if result.get("thinking_effort") not in {None, "low", "medium", "high", "xhigh"}:
         raise ValueError("Unknown thinking strength")
+    if result.get("sampling_mode") not in {None, "auto", "custom"}:
+        raise ValueError("Unknown sampling mode")
     limit = result.get("max_tokens")
     mode = result.get("max_tokens_mode")
     if mode not in {None, "auto", "manual"}:
