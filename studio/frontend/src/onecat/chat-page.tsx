@@ -94,7 +94,8 @@ export function ChatPage() {
   const [activeRun, setActiveRun] = useState<ChatRun>();
   const [reconnecting, setReconnecting] = useState(false);
   const { data: engine, error: engineError } = useQuery<Engine>("/api/inference/status", 3000);
-  const { data: options } = useQuery<{ thinking: ThinkingSupport }>("/api/inference/options?profile=" + (engine?.profile_id || ""));
+  type Sampling = { temperature: number; top_p: number; top_k: number; min_p: number; presence_penalty: number; repetition_penalty: number };
+  const { data: options } = useQuery<{ thinking: ThinkingSupport; sampling?: { thinking: Sampling; instruct: Sampling } | null }>("/api/inference/options?profile=" + (engine?.profile_id || ""));
   const [hydratedThread, setHydratedThread] = useState<string>();
   const [input, setInput] = useBrowserState("onecat:chat-draft:" + (threadId || "new"), "");
   const [messages, setMessages] = useState<Message[]>([]),
@@ -102,14 +103,22 @@ export function ChatPage() {
     [stopping, setStopping] = useState(false),
     [error, setError] = useState(""),
     [config, setConfig] = useState(false);
-  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort };
+  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort; sampling_mode?: "auto" | "custom" };
   const [settingsDraft, setSettingsDraft] = useBrowserState<Settings | null>("onecat:chat-settings:" + (threadId || "new"), null);
   const settings = settingsDraft || { system_prompt: "", temperature: 0.7, top_p: 0.9, max_tokens: null, thinking: false,
     ...(threadId && loaded?.thread.id === threadId ? loaded.thread.settings : engine?.profile?.default_sampling) } as Settings;
-  const { system_prompt: systemPrompt, temperature, top_p: topP, max_tokens: maxTokens, thinking } = settings;
+  const { system_prompt: systemPrompt, max_tokens: maxTokens, thinking } = settings;
+  // Unless the user set their own values, use the model card's sampling for the selected mode.
+  const recommended = options?.sampling ? options.sampling[options?.thinking.supported && thinking ? "thinking" : "instruct"] : null;
+  const customSampling = settings.sampling_mode === "custom" || !recommended;
+  const temperature = customSampling ? settings.temperature : recommended.temperature;
+  const topP = customSampling ? settings.top_p : recommended.top_p;
+  const extraSampling = customSampling || !recommended ? {} : { top_k: recommended.top_k, min_p: recommended.min_p,
+    presence_penalty: recommended.presence_penalty, repetition_penalty: recommended.repetition_penalty };
   const setSystemPrompt = (value: string) => setSettingsDraft({ ...settings, system_prompt: value });
-  const setTemperature = (value: number) => setSettingsDraft({ ...settings, temperature: value });
-  const setTopP = (value: number) => setSettingsDraft({ ...settings, top_p: value });
+  const setTemperature = (value: number) => setSettingsDraft({ ...settings, temperature: value, top_p: topP, sampling_mode: "custom" });
+  const setTopP = (value: number) => setSettingsDraft({ ...settings, temperature, top_p: value, sampling_mode: "custom" });
+  const resetSampling = () => setSettingsDraft({ ...settings, sampling_mode: "auto" });
   const setMaxTokens = (value: number | null) => setSettingsDraft({ ...settings, max_tokens: value });
   const effort = thinkingEffort(options?.thinking, settings.thinking_effort);
   const setThinking = (value: boolean, level?: ThinkingEffort) => setSettingsDraft({ ...settings, thinking: value, thinking_effort: level });
@@ -337,7 +346,7 @@ export function ChatPage() {
     const originalScope = threadId;
     let accepted = false;
     try {
-      const requestSettings = { system_prompt: systemPrompt, temperature, top_p: topP,
+      const requestSettings = { system_prompt: systemPrompt, temperature, top_p: topP, sampling_mode: customSampling ? "custom" : "auto",
         max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking: !!options?.thinking.supported && thinking, thinking_effort: effort };
       const identity = JSON.stringify({ base, userText, images, settings: requestSettings, model: engine?.profile_id });
       let pending = submission?.identity === identity ? submission : null;
@@ -358,7 +367,7 @@ export function ChatPage() {
       if (systemPrompt) requestMessages.unshift({ role: "system", content: [{ type: "text", text: systemPrompt }] });
       const result = mutation<ChatRun>(`/api/chat/threads/${id}/generate`, {
         message_id: pending.assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
-        request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP,
+        request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP, ...extraSampling,
           max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual",
           chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
       });
@@ -865,6 +874,16 @@ export function ChatPage() {
               max={1}
               step={0.05}
             />
+            {recommended && (
+              <div className="oc-muted" style={{ gridColumn: "1 / -1", fontSize: 12 }}>
+                {customSampling
+                  ? <>{t("已使用自定义采样参数。", "Using custom sampling.")} <Button type="button" variant="outline" size="sm" onClick={resetSampling}>{t("恢复模型推荐", "Use model recommendation")}</Button></>
+                  : t(
+                      `按模型推荐（${thinking ? "思考" : "非思考"}模式）：top_k ${recommended.top_k}，presence_penalty ${recommended.presence_penalty}`,
+                      `Model recommendation (${thinking ? "thinking" : "non-thinking"}): top_k ${recommended.top_k}, presence_penalty ${recommended.presence_penalty}`,
+                    )}
+              </div>
+            )}
             <Field
               label={t("最大生成长度", "Maximum generated tokens")}
               hint={t(
