@@ -297,7 +297,7 @@ async def test_delayed_stop_is_bound_to_its_generation(monkeypatch):
     "settings,expected",
     [
         ({"thinking": True}, {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "presence_penalty": 0.0}),
-        ({"thinking": False}, {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}),
+        ({"thinking": False}, {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 0.0}),
         ({"thinking": True, "sampling_mode": "custom"}, {"temperature": 0.3, "top_p": 0.5}),
     ],
 )
