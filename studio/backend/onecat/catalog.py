@@ -55,6 +55,12 @@ def newest_first(runtimes):
     )
 
 
+def _same_version(left, right):
+    from .activation import _runtime_version
+
+    return _runtime_version(left) == _runtime_version(right)
+
+
 def recommended_devices(devices, topology):
     """The verified layout when it exists, otherwise the closest hardware present."""
     same = [
@@ -271,9 +277,11 @@ def launch_defaults(repo, model_id=None, *, devices=None):
     )
     installed = newest_first(r for r in db.all_records("runtimes") if runtime_matches(item, r))
     active_id = db.get("engine", "active", {}).get("profile", {}).get("runtime_id")
-    runtime = next(
-        (r for r in installed if r["id"] == active_id), installed[0] if installed else {}
-    )
+    # A new default profile takes the newest validated runtime, so installing a
+    # release is enough to use it. The running engine's runtime only breaks a
+    # tie between installs of the same version.
+    newest = [r for r in installed if _same_version(r, installed[0])]
+    runtime = next((r for r in newest if r["id"] == active_id), newest[0] if newest else {})
     devices = gpu.snapshot()["gpus"] if devices is None else devices
     reasons = compatibility(item, runtime.get("id"), devices)
     notes = recommendations(item, devices)
