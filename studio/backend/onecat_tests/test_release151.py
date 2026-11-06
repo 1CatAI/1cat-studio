@@ -445,3 +445,23 @@ def test_incomplete_acceleration_report_cannot_claim_all_enabled():
         transport=httpx.MockTransport(lambda _: httpx.Response(200, json=report))
     ) as client:
         assert engine.read_acceleration({"port": 8000, "api_key": "key"}, client) is None
+
+
+def test_default_profile_takes_the_newest_runtime_over_the_running_one(
+    qualified_release_models,
+):
+    from onecat import catalog, db
+
+    old, _, _ = qualified_release_models
+    newer = {**old, "id": "newer", "release": {"version": "1.5.2"}}
+    db.put("runtimes", newer["id"], newer)
+    db.put("engine", "active", {"profile": {"runtime_id": old["id"]}})
+    defaults = catalog.launch_defaults("QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4", "target")
+    assert defaults["profile"]["runtime_id"] == "newer"
+
+    # Two installs of the newest version: keep the one already running.
+    same = {**newer, "id": "same", "validated_at": 1}
+    db.put("runtimes", same["id"], same)
+    db.put("engine", "active", {"profile": {"runtime_id": "newer"}})
+    defaults = catalog.launch_defaults("QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4", "target")
+    assert defaults["profile"]["runtime_id"] == "newer"
