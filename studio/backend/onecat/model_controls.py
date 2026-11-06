@@ -67,9 +67,12 @@ def thinking_support(profile: dict) -> dict:
 
 
 # Qwen3.x model cards: thinking and instruct modes have separate recommendations.
+# Instruct presence_penalty is 0 instead of the card's 1.5: on SM70 DFlash2 the
+# penalty path adds ~3.5 ms per verify round (12.7 -> 16.2 ms) with no change in
+# acceptance. The card lists 0-2 as the valid range.
 QWEN3_SAMPLING = {
     True: {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0, "repetition_penalty": 1.0},
-    False: {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5, "repetition_penalty": 1.0},
+    False: {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0, "repetition_penalty": 1.0},
 }
 
 
