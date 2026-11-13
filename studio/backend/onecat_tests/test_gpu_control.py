@@ -327,3 +327,41 @@ def test_persistence_failure_rolls_back_hardware(hardware, monkeypatch):
     assert hardware[1][U1]["graphics_clock_mhz"] is None
     assert error.value.result["devices"][U1] == {"state": "restored", "restored_exact": True}
     assert not db.get("gpu_policies", U1)
+
+
+def test_shared_gpu_launch_skips_automatic_hardware_restore(hardware):
+    devices, actual, calls = hardware
+    devices[0]["external_processes"] = [{"pid": 123, "name": "external"}]
+    saved = {"power_limit_w": 185, "graphics_clock_mhz": None, "reset_clocks": True}
+    for uuid in [U1, U2]:
+        db.put("gpu_policies", uuid, {"id": uuid, "setting": saved})
+    control.ensure_saved([U1])
+    assert not calls
+    control.ensure_saved([U1, U2])
+    assert actual[U1]["power_limit_w"] == 300
+    assert actual[U2]["power_limit_w"] == 185
+    assert all(U1 not in payload["uuids"] for action, payload in calls)
+    assert db.get("gpu_policies", U1)["setting"] == saved
+
+
+def test_restart_does_not_restore_hardware_on_shared_gpus(hardware):
+    devices, actual, _calls = hardware
+    devices[0]["external_processes"] = [{"pid": 123, "name": "external"}]
+    saved = {"power_limit_w": 185, "graphics_clock_mhz": None, "reset_clocks": True}
+    for uuid in [U1, U2]:
+        db.put("gpu_policies", uuid, {"id": uuid, "setting": saved})
+    control.reconcile_saved()
+    job = db.all_records("jobs")[0]
+    assert job["payload"]["uuids"] == [U2]
+    assert actual[U1]["power_limit_w"] == 300
+
+
+def test_pending_hardware_recovery_leaves_shared_gpu_untouched(hardware):
+    devices, actual, calls = hardware
+    devices[0]["external_processes"] = [{"pid": 123, "name": "external"}]
+    actual[U1]["recovery_pending"] = True
+    assert control.recover_pending([U1]) == {}
+    assert not calls
+    assert control.recover_pending([U1, U2]) == {}
+    assert all(payload["uuids"] == [U2] for action, payload in calls)
+    assert actual[U1]["recovery_pending"]
