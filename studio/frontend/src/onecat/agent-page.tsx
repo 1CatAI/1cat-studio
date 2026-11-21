@@ -224,7 +224,7 @@ export function AgentPage() {
   const engineReady = !!selectedRuntime?.installed && (agentEngine === "pi" ? !!selectedRuntime.ready : !!status?.sandbox_ready);
   const reason = statusError ? t("暂时无法确认 Agent 状态，请稍后重试。", "Agent status is unavailable. Please try again shortly.")
     : !status ? t("正在检查 Agent…", "Checking Agent…")
-    : !engineReady ? selectedRuntime?.error || selectedRuntime?.sandbox_error || t(agentEngine === "pi" ? "PI（Oh My Pi）运行时不可用，请安装固定版本 omp。" : "Codex 运行环境不可用，请检查组件与沙箱。", agentEngine === "pi" ? "PI (Oh My Pi) is unavailable; install the pinned omp runtime." : "Codex is unavailable; check its component and sandbox.")
+    : !engineReady ? selectedRuntime?.error || selectedRuntime?.sandbox_error || t(agentEngine === "pi" ? "PI（Oh My Pi）运行时不可用，请安装固定版本 omp。" : "Codex 运行环境不可用，请检查组件与沙箱。", agentEngine === "pi" ? "PI (Oh My Pi) requires the pinned omp runtime. Install it to continue." : "Codex is unavailable. Check the runtime and sandbox setup.")
     : !status.model.ready ? t("请在输入框下方选择并启动模型。", "Choose and start a model below the input.")
     : !status.model.tool_calling ? t("请在模型启动预设中启用工具调用。", "Enable tool calling in the model's launch profile.")
     : source && !taskId && !sourceChat ? sourceError || t("正在读取背景对话…", "Loading conversation context…") : "";
@@ -237,13 +237,13 @@ export function AgentPage() {
     try {
       if (prompt.startsWith("/")) {
         const nativePiSkill = agentEngine === "pi" && /^\/skill:\S+(?:\s|$)/.test(prompt);
-        if (!nativePiSkill && (!command || !agentCommands.some(([name]) => name === command.name))) throw new Error(t("这个命令尚未接入。输入 /help 查看可用命令；命令不会作为普通消息发送。", "This command is not connected. Use /help for available commands; it was not sent to the model."));
+        if (!nativePiSkill && (!command || !agentCommands.some(([name]) => name === command.name))) throw new Error(t("此命令不可用。输入 /help 查看命令列表。", "This command is unavailable. Enter /help to see available commands."));
         switch (command?.name) {
           case "help": setInfoPanel("help"); setDraft(""); return;
           case "status": setInfoPanel("status"); setDraft(""); return;
           case "model": setInfoPanel("model"); setDraft(""); return;
           case "permissions":
-            if (running) throw new Error(t("本轮权限已固定，结束后可更改。", "Permissions are bound to the running turn; change them after it finishes."));
+            if (running) throw new Error(t("请在本轮任务结束后更改权限。", "You can change permissions when this turn finishes."));
             if (command.argument) {
               if (!["read-only", "workspace-write"].includes(command.argument)) throw new Error(t("使用 /permissions read-only 或 workspace-write", "Use /permissions read-only or workspace-write"));
               setPermission(command.argument as typeof permission);
@@ -313,7 +313,7 @@ export function AgentPage() {
         if (abort.signal.aborted) return;
       }
       if (currentScope.current !== scope) return;
-      setUploadNotice(t(`已上传 ${chosen.length} 个文件${list.length > chosen.length ? `，跳过 ${list.length - chosen.length} 个环境或缓存文件` : ""}`, `Uploaded ${chosen.length} files${list.length > chosen.length ? `; skipped ${list.length - chosen.length} environment or cache files` : ""}`));
+      setUploadNotice(t(`已上传 ${chosen.length} 个文件${list.length > chosen.length ? `，跳过 ${list.length - chosen.length} 个环境或缓存文件` : ""}`, `Uploaded ${chosen.length} files${list.length > chosen.length ? `. Skipped ${list.length - chosen.length} environment or cache files` : ""}`));
       setPanel("files"); refreshData();
     } catch (e) { if (!abort.signal.aborted && currentScope.current === scope) setError((e as Error).message); }
     finally { if (uploadController.current === abort) uploadController.current = null; setBusy(false); if (fileInput.current) fileInput.current.value = ""; if (folderInput.current) folderInput.current.value = ""; }
@@ -329,7 +329,7 @@ export function AgentPage() {
       <div className="oc-agent-toolbar">
         <div className="oc-agent-project-select"><FolderOpen size={17} />
           <select aria-label={t("Agent 项目", "Agent project")} value={projectId} disabled={!!taskId || busy}
-            onChange={e => select(e.target.value)}><option value="">{t("选择项目", "Choose a project")}</option>
+            onChange={e => select(e.target.value)}><option value="">{t("选择项目", "Select project")}</option>
             {projects?.items.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select>
           {!taskId && <Button size="icon-sm" variant="ghost" aria-label={t("新建项目", "New project")} onClick={() => setCreateOpen(true)}><Plus /></Button>}
         </div>
@@ -353,16 +353,15 @@ export function AgentPage() {
         const el = scroll.current!; bottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 70;
         setFollowing(bottom.current);
       }}><div className="oc-agent-content">
-        {!taskId && <div className="oc-agent-welcome"><div className="oc-agent-mark">02 / IDEAS INTO ACTION</div>
-          <h1>LET’S BUILD.<span>{t("让想法，成为作品。", "Turn ideas into work.")}</span></h1>
-          <p>{t("读取项目、修改文件、运行测试，直到交付成果。", "Read the project, edit files, run tests and deliver the result.")}</p>
+        {!taskId && <div className="oc-agent-welcome">
+          <h1>{t("Agent 工作台", "Agent workspace")}</h1>
+          <p>{t("在项目中编辑文件、运行命令和测试。", "Edit files, run commands and test your project.")}</p>
           {!project && <Button onClick={() => setCreateOpen(true)}><Plus />{t("创建第一个项目", "Create a project")}</Button>}
           <div className="oc-agent-examples">{[
             ["做一个可预览的贪吃蛇游戏", "Build a snake game I can preview"],
             ["检查项目，修复问题并运行测试", "Inspect this project, fix issues and run tests"],
             ["整理项目结构并完善说明文档", "Organize the project and improve its documentation"],
           ].map(([zh, en]) => <button key={en} onClick={() => setDraft(t(zh, en))}>{t(zh, en)}<ArrowUp size={14} /></button>)}</div>
-          <small><ShieldCheck size={14} />{t("项目隔离 · 本地模型 · 文件与执行记录保留", "Isolated project · Local model · Saved files and execution history")}</small>
         </div>}
         {taskId && !task && !connectionError && <div className="oc-empty"><LoaderCircle className="animate-spin" /></div>}
         {!!task?.plan?.length && <details className="oc-agent-activity oc-agent-plan" open>
@@ -386,7 +385,7 @@ export function AgentPage() {
           {task.changes.map(change => <button key={change.path} onClick={() => { setPanel(change.kind === "deleted" ? "diff" : "files"); setPreview(undefined); setFilePath(change.path); }}>
             <FileCode size={15} /><span>{change.path}</span><small>{change.kind === "added" ? t("新增", "Added") : change.kind === "deleted" ? t("删除", "Deleted") : t("修改", "Modified")}</small>
           </button>)}</div>}
-        {task?.files_truncated && !running && <p className="oc-agent-note">{t("项目超过 2,000 个文件，仅展示已核对的修改。", "This project exceeds 2,000 files; only verified changes are shown.")}</p>}
+        {task?.files_truncated && !running && <p className="oc-agent-note">{t("项目超过 2,000 个文件。这里列出已核对的修改。", "This project has more than 2,000 files. The list shows verified changes.")}</p>}
       </div></div>
       {!following && running && <Button className="oc-agent-follow" size="sm" variant="secondary" onClick={() => { bottom.current = true; setFollowing(true); scroll.current?.scrollTo({ top: scroll.current.scrollHeight }); }}><ArrowDown />{t("查看最新进展", "Latest activity")}</Button>}
       <div className="oc-agent-bottom">
@@ -406,7 +405,7 @@ export function AgentPage() {
             aria-describedby={startHint ? "agent-start-hint" : undefined}
             aria-autocomplete="list" aria-controls={commands.length ? "agent-command-list" : undefined} aria-activedescendant={commands[selectedCommand] ? `agent-command-${commands[selectedCommand][0]}` : undefined}
             onChange={e => { setDraft(e.target.value); setCommandIndex(0); setCommandDismissed(false); }}
-            placeholder={taskId ? t("补充要求，或输入 / 查看命令…", "Add instructions, or type / for commands…") : t("你想完成什么？输入 / 查看命令", "What would you like to build? Type / for commands")}
+            placeholder={taskId ? t("补充要求，或输入 / 查看命令…", "Add instructions, or type / for commands…") : t("描述任务，或输入 / 查看命令…", "Describe a task, or type / for commands…")}
             onKeyDown={e => {
               if (e.nativeEvent.isComposing) return;
               if (commands.length) {
@@ -474,11 +473,11 @@ export function AgentPage() {
       {infoPanel === "permissions" ? <div className="oc-agent-details">
         <Field label={t("工作模式", "Mode")}><select value={mode} disabled={running || busy} onChange={e => setMode(e.target.value as typeof mode)}><option value="default">{t("执行：读取、修改并测试", "Execute: read, edit and test")}</option><option value="plan">{t("计划：分析与规划，不写入项目", "Plan: analyze and plan without editing")}</option></select></Field>
         <Field label={t("项目权限", "Project permissions")}><select ref={permissionInput} value={mode === "plan" ? "read-only" : permission} disabled={running || busy || mode === "plan"} onChange={e => setPermission(e.target.value as typeof permission)}><option value="workspace-write">{t("项目写入", "Workspace write")}</option><option value="read-only">{t("只读", "Read only")}</option></select></Field>
-        <p className="oc-agent-note">{t("仅能访问当前项目，外网关闭。设置在下一轮任务生效。", "Access is limited to this project; networking is off. Changes apply to the next turn.")}</p>
+        <p className="oc-agent-note">{t("文件访问范围为当前项目。联网已关闭。权限更改在下一轮任务生效。", "File access is scoped to this project. Networking is off. Permission changes apply on the next turn.")}</p>
         <Button onClick={() => setInfoPanel(null)}>{t("完成", "Done")}</Button>
       </div> : infoPanel === "history" ? <AgentHistory /> : infoPanel === "help" ? <div className="oc-agent-command-help">
         {agentCommands.map(([name, zh, en]) => <button type="button" key={name} onClick={() => { setInfoPanel(null); chooseCommand(name); }}><code>/{name}</code><span>{t(zh, en)}</span></button>)}
-          <p className="oc-agent-note">{t("Codex 与 PI 是并列引擎。PI 通过固定版本的原生 RPC 接入；蜂群数量、批量和并发策略由 PI 配置决定，Studio 只展示事件和速度。", "Codex and PI are sibling engines. PI is connected through native RPC at a pinned version; PI owns swarm size, batching and concurrency while Studio exposes events and speed.")}</p>
+          <p className="oc-agent-note">{t("PI 的配置决定蜂群规模、批次和并发数。可在 Studio 查看子任务进度和速度。", "PI settings determine swarm size, batching and concurrency. View subtask progress and speed in Studio.")}</p>
       </div> : <div className="oc-agent-details">
         <dl><dt>{t("当前模型", "Current model")}</dt><dd>{status?.model.label || status?.model.name || "—"}</dd>
           {task && <><dt>{t("本任务上次使用", "Last used for this task")}</dt><dd>{task.model_label || task.model}</dd></>}
@@ -490,7 +489,7 @@ export function AgentPage() {
           <dt>{t("速度来源", "Speed source")}</dt><dd>{t("本机 token 流观测", "Local token stream observation")}</dd>
         </dl>
         {task && <AgentStats task={task} onDetails={() => {}} details />}
-        <p className="oc-agent-note">{t("LLM 为模型请求的实际耗时，包含等待和生成；工具耗时来自官方执行事件。TTFT 为成功请求的首 token 平均等待时间。速率只计算有完整 token ID 与计时的输出，排除首批 token 和工具执行；缺少数据或中断时显示 —。输入、输出、缓存为本任务累计用量。Agent 会预留上下文空间，因此预算可能小于模型总上下文。", "LLM time includes request waiting and generation; tool time comes from official execution events. TTFT averages successful requests. Speed uses complete token IDs and arrival times, excluding the first batch and tool time; missing or interrupted data shows —. Token totals are cumulative. Codex reserves context space, so its budget can be smaller than the model context window.")}</p>
+        <p className="oc-agent-note">{t("LLM 耗时包括等待和生成。工具耗时来自执行记录。TTFT 是成功请求的平均首 token 等待时间。生成速率按首批后的 token 到达时间计算，缺测显示 —。用量按任务累计，上下文预算已扣除预留空间。", "LLM time covers waiting and generation. Tool time comes from execution events. TTFT is the average time to the first token for successful requests. Generation speed uses token arrival times after the first batch. A dash marks missing measurements. Totals cover this task, and the context budget accounts for reserved space.")}</p>
         <Button asChild variant="outline"><Link to="/models">{t("选择或加载模型", "Choose or load a model")}</Link></Button>
       </div>}
     </Modal>
@@ -501,7 +500,7 @@ export function AgentPage() {
         catch (e) { setError((e as Error).message); } finally { setCreating(false); }
       }}>
         <Field label={t("项目名称", "Project name")}><Input autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required /></Field>
-        <Field label={t("GitHub 仓库（可选）", "GitHub repository (optional)")} hint={t("支持公开仓库；留空创建空白项目。", "Public repositories only. Leave empty for a blank project.")}><Input value={repository} onChange={e => setRepository(e.target.value)} placeholder="https://github.com/owner/repository" /></Field>
+        <Field label={t("GitHub 仓库（可选）", "GitHub repository (optional)")} hint={t("输入公开仓库地址，或留空创建空白项目。", "Enter a public repository URL, or leave it blank to start an empty project.")}><Input value={repository} onChange={e => setRepository(e.target.value)} placeholder="https://github.com/owner/repository" /></Field>
         <p className="oc-agent-note">{t("文件保存在这台服务器的独立项目目录，可上传文件或下载整个项目。", "Files live in an isolated project on this server. Upload files or download the entire project.")}</p>
         <ErrorNotice error={error} /><Button type="submit" disabled={creating || !name.trim()}>{creating ? <LoaderCircle className="animate-spin" /> : <FolderOpen />}{creating ? t("正在创建…", "Creating…") : t("创建项目", "Create project")}</Button>
       </form>
@@ -514,7 +513,7 @@ const Activity = memo(function Activity({ item, running, onPreview }: { item: Ag
   const t = useText();
   const [expanded, setExpanded] = useState(false);
   if (item.type === "commandMessage") return <div className="oc-agent-command-message"><Terminal size={13} />{item.text}</div>;
-  if (item.type === "contextCompaction") return <p className="oc-agent-note">{item.finished ? t("上下文已压缩，文件与任务记录保留。", "Context compacted; project files and task history retained.") : t("正在压缩上下文…", "Compacting context…")}</p>;
+  if (item.type === "contextCompaction") return <p className="oc-agent-note">{item.finished ? t("上下文已压缩，可以继续任务。", "Context compacted. You can continue the task.") : t("正在压缩上下文…", "Compacting context…")}</p>;
   if (item.type === "enteredReviewMode") return <p className="oc-agent-note">{t("审查项目 · 只读", "Reviewing project · Read only")}</p>;
   if (item.type === "exitedReviewMode") return <div className="oc-agent-answer"><Markdown text={item.review || t("审查完成", "Review completed")} streaming={false} /></div>;
   if (item.type === "plan") return <div className="oc-agent-answer"><strong>{t("建议计划", "Proposed plan")}</strong><Markdown text={item.text || ""} streaming={running} /></div>;

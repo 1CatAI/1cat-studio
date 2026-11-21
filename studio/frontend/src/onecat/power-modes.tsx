@@ -463,8 +463,8 @@ export function PowerModes({
 				<div className="oc-power-notes-body">
 					<p>
 						{t(
-							"显示的是每卡功率上限，实际功率随负载变化。模型启动与切换会保留你的选择。",
-							"Values are per-GPU power limits; actual draw varies with workload. Model launches and changes preserve your choice.",
+							"每张卡显示已设功率上限。实际功率随负载变化。",
+							"Each GPU shows its configured power limit. Actual draw varies with workload.",
 						)}
 					</p>
 					{modes.map((mode) => {
@@ -498,8 +498,8 @@ export function PowerModes({
 					})}
 					<p>
 						{t(
-							"外部程序占用的已授权 GPU 也会调节，程序不会被停止。涉及 Studio 请求时等待请求结束；启动、停止或校准期间排队。首次调节会建立动态频率基线。",
-							"Authorized GPUs running external workloads are included without stopping their processes. Overlapping Studio requests drain first; launch, stop and calibration operations finish before queued changes. First use establishes a dynamic clock baseline.",
+							"功耗设置会作用于所选 GPU，包括运行其他程序的卡。Studio 会等相关请求、模型启停或校准结束后再应用。首次调节以动态频率为基线。",
+							"Power settings apply to the selected GPUs, including those running other applications. Studio waits for affected requests, model changes or calibration to finish. The first adjustment sets a dynamic clock baseline.",
 						)}
 					</p>
 				</div>
@@ -510,8 +510,8 @@ export function PowerModes({
 				onOpenChange={setScopeOpen}
 				title={t("GPU 控制范围", "GPU control scope")}
 				description={t(
-					"选择调节哪些显卡；关闭窗口后点击档位才会应用设置。",
-					"Choose which GPUs to control. Settings apply only when you select a power mode or apply manual controls.",
+					"选择显卡，再选择档位或手动应用设置。",
+					"Select the GPUs, then choose a power mode or apply manual settings.",
 				)}
 				footer={
 					<>
@@ -615,8 +615,8 @@ export function PowerModes({
 						</summary>
 						<p className="oc-muted">
 							{t(
-								"所选卡上的外部程序也受功耗设置影响，程序不会被停止。",
-								"Power settings also affect external workloads on selected GPUs without stopping them.",
+								"功耗设置也会影响所选 GPU 上的其他任务。",
+								"Power settings also affect other tasks running on these GPUs.",
 							)}
 						</p>
 						{externalDevices.map((device) => (
@@ -636,8 +636,8 @@ export function PowerModes({
 				onOpenChange={setTaskOpen}
 				title={t("任务详情", "Task details")}
 				description={t(
-					"显示固定的任务范围与逐卡结果。更改选卡不会改变已提交的任务。",
-					"Shows the submitted scope and per-GPU results. Changing your selection does not change a submitted task.",
+					"查看本次任务涉及的显卡和逐卡结果。",
+					"See which GPUs this task covers and the result for each card.",
 				)}
 				footer={
 					<Button onClick={() => setTaskOpen(false)}>
@@ -673,8 +673,8 @@ export function PowerModes({
 									{result.state === "restored"
 										? result.restored_exact === false
 											? t(
-													"已恢复原功率上限与动态频率；原锁频未知",
-													"Original power restored with dynamic clocks; previous lock was unknown",
+													"已恢复原功率上限，频率设为动态。原锁频未知。",
+													"The original power limit is restored. Dynamic clocks are active because the previous lock was unknown.",
 												)
 											: t("已恢复原设置", "Original settings restored")
 										: result.state === "unchanged"

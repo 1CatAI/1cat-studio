@@ -108,7 +108,7 @@ export function SettingsPage() {
       applyTheme(values.theme);
       await setLocale(values.locale);
       toast.success(restart_required
-        ? t("设置已保存；监听地址或端口将在重启 Studio 后生效。", "Saved. Listener changes take effect after restarting Studio.")
+        ? t("设置已保存。重启 Studio 后应用新的地址或端口。", "Settings saved. Restart Studio to apply address or port changes.")
         : t("设置已保存", "Settings saved"));
     } finally { setSaving(false); }
   }
@@ -162,11 +162,13 @@ export function SettingsPage() {
               onCheckedChange={value => { localStorage.setItem("onecat_stream_animation", value ? "on" : "off"); window.dispatchEvent(new Event("onecat:animation")); }} />
               {t("柔和流式动画", "Soft streaming animation")}
             </label>
-            <p className="oc-muted">{t("外观即时预览；保存后应用到下次打开。动画会遵循系统减少动态效果偏好。", "Preview appearance immediately; save for future visits. Animation respects reduced-motion preferences.")}</p>
+            <p className="oc-muted">{t("界面动效遵循系统的减少动态效果设置。", "Interface motion follows the system’s reduced-motion setting.")}</p>
           </div>
           <div className="oc-panel" id="settings-models">
-            <div className="oc-row oc-spaced"><p className="oc-muted">{t("安装、导入和切换运行环境统一在环境管理中完成。", "Install, import and select runtimes in runtime management.")}</p><Button variant="outline" asChild><Link to="/setup">{t("管理运行环境", "Manage runtimes")}</Link></Button></div>
-            <h2>{t("模型与下载", "Models and downloads")}</h2>
+            <div className="oc-row oc-spaced">
+              <h2>{t("模型与下载", "Models and downloads")}</h2>
+              <Button variant="outline" asChild><Link to="/setup">{t("管理运行环境", "Manage runtimes")}</Link></Button>
+            </div>
             <div className="oc-form-grid">
               <Field label={t("模型存储目录", "Model directory")}>
                 <Input
@@ -188,8 +190,8 @@ export function SettingsPage() {
               hint={
                 data?.modelscope_token_set
                   ? t(
-                      "已配置。留空不会更改现有 token。",
-                      "Configured. An empty field does not change the existing token.",
+                      "已保存 token。填写新 token 可替换。",
+                      "A token is saved. Enter a new one to replace it.",
                     )
                   : t("访问受限模型时需要。", "Required for gated models.")
               }
@@ -255,8 +257,8 @@ export function SettingsPage() {
         ))}
         <p className="oc-muted oc-spaced">
           {t(
-            "升级时导入新环境，再修改启动预设的运行环境。旧环境保留，可随时切回。",
-            "Import a new runtime and select it in your launch profile. Previous runtimes remain available for rollback.",
+            "导入新环境后，在模型启动预设中选择要使用的版本。",
+            "Import a new runtime, then select the version to use in your launch profile.",
           )}
         </p>
       </div>
@@ -287,12 +289,12 @@ export function SettingsPage() {
                 <div className="oc-muted">
                   <p>{cap.startup.service_enabled
                     ? t("Studio 用户服务已设为开机启动。", "Studio user service is enabled at boot.")
-                    : t("Studio 用户服务未启用；请以服务模式安装，或执行 systemctl --user enable --now onecat-studio.service。", "Studio user service is not enabled; install in service mode or run systemctl --user enable --now onecat-studio.service.")}</p>
+                    : t("启用 Studio 用户服务后可随系统启动。请以服务模式安装，或运行 systemctl --user enable --now onecat-studio.service。", "Enable the Studio user service to start at boot. Install in service mode or run systemctl --user enable --now onecat-studio.service.")}</p>
                   <p>{cap.startup.linger_enabled
                     ? t("无需登录也会启动。", "Starts without a user login.")
                     : t(`目前需用户登录才会启动；管理员可执行 sudo loginctl enable-linger ${cap.startup.user}。`, `A user login is currently required; an administrator can run sudo loginctl enable-linger ${cap.startup.user}.`)}</p>
                   {!cap.automatic_gpu_actions && (
-                    <p className="oc-status-warn">{t("自动 GPU 操作已被管理员暂停，所选模型不会自动加载。", "Automatic GPU actions are paused by an administrator; the selected model will not load automatically.")}</p>
+                    <p className="oc-status-warn">{t("管理员已暂停自动 GPU 操作。请手动启动模型。", "An administrator paused automatic GPU actions. Start the model manually.")}</p>
                   )}
                 </div>
               )}
@@ -316,8 +318,8 @@ export function SettingsPage() {
               <Field
                 label={t("允许局域网访问 Studio 与 API", "Allow LAN access to Studio and API")}
                 hint={t(
-                  "保存并重启 Studio 后生效；访问仍需登录或 API Key。接入地址见“服务 → API”。",
-                  "Save and restart Studio to apply. Login or an API key is still required. Find the address under Service → API.",
+                  "保存设置并重启 Studio。访问网页需登录，调用 API 使用 API Key。地址见「服务 → API」。",
+                  "Save the settings and restart Studio. Sign in for web access and use an API key for requests. Find the address under Service → API.",
                 )}
               >
                 <Switch
@@ -340,8 +342,8 @@ export function SettingsPage() {
         <h2>{t("备份与诊断", "Backup and diagnostics")}</h2>
         <p className="oc-muted">
           {t(
-            "备份包含会话、配置与访问凭据数据库，不包含模型权重。",
-            "Backups contain conversations, configuration, and credential databases, but not model weights.",
+            "备份会保存会话、配置和访问凭据。模型权重需单独备份。",
+            "Backups include conversations, settings and credentials. Back up model weights separately.",
           )}
         </p>
         <div className="oc-actions oc-spaced">
@@ -389,8 +391,8 @@ export function SettingsPage() {
           </Field>
           <p className="oc-muted">
             {t(
-              "恢复会替换当前配置与会话，并要求重新登录。请先停止模型和后台任务。",
-              "Restore replaces current settings and conversations and requires a new login. Stop the model and background tasks first.",
+              "请先停止模型和后台任务。恢复会替换当前配置和会话，完成后请重新登录。",
+              "Stop the model and background tasks first. Restoring replaces current settings and conversations. Sign in again when it finishes.",
             )}
           </p>
           <Action
@@ -409,8 +411,8 @@ export function SettingsPage() {
         <h2>1Cat Studio {cap?.version || "0.1.0"}</h2>
         <p className="oc-muted">
           {t(
-            "采用 1Cat 社区源码许可证；硬件预装销售与换皮销售须另行授权。",
-            "Licensed under the 1Cat Community Source License; hardware-bundled and rebranded sales require permission.",
+            "本项目采用 1Cat 社区源码许可证。硬件预装销售与换皮销售须另行授权。",
+            "This project uses the 1Cat Community Source License. Hardware-bundled and rebranded sales require permission.",
           )}
         </p>
         <div className="oc-actions oc-spaced">

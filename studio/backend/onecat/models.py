@@ -120,7 +120,7 @@ def download(job: Job):
     ]
     pinned = sorted(approved["files"], key=lambda f: f["path"])
     if manifest != pinned:
-        raise ValueError("ModelScope files changed since verification; catalog update required")
+        raise ValueError("The ModelScope snapshot differs from the verified manifest. Update the model catalog before downloading.")
     if not any(f["path"].endswith((".safetensors", ".bin")) for f in pinned):
         raise ValueError("Verified checkpoint has no runnable weights")
     identity = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()

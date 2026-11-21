@@ -550,7 +550,7 @@ def validate_features(profile):
     )
     if registered.get("role") == "draft":
         raise ValueError(
-            "This is a companion draft checkpoint; select it in DFlash2 settings instead of launching it as a chat model"
+            "Select this companion draft checkpoint in DFlash2 settings for your chat model"
         )
     if registered.get("catalog_id") and not profile.get("catalog_id"):
         profile["catalog_id"] = registered["catalog_id"]

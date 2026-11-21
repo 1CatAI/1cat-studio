@@ -69,8 +69,8 @@ export function TokenUsage({ days = 1, onDaysChange, model = "", onModelChange, 
       value: data?.cached_tokens,
       measured: data?.cache_measured,
       description: t(
-        "属于输入的一部分，不重复相加",
-        "A subset of input; not counted twice",
+        "计入输入 token",
+        "Included in input tokens",
       ),
     },
   ];
@@ -138,7 +138,7 @@ export function TokenUsage({ days = 1, onDaysChange, model = "", onModelChange, 
         ))}
       </div>
       {data && cards.some(card => card.measured != null && card.measured < data.requests) && <details className="oc-usage-coverage">
-        <summary>{t("部分请求缺少统计，当前显示已采集数据", "Some requests have incomplete metrics; measured values are shown")}</summary>
+        <summary>{t("部分请求缺少用量记录", "Usage data is missing for some requests")}</summary>
         {cards.map(card => <p key={card.id}>{card.label} · {t(`已采集 ${card.measured} / ${data.requests} 次`, `${card.measured} / ${data.requests} measured`)}</p>)}
       </details>}
       {!!data?.requests && !!data?.timeline?.length && <div className="oc-usage-trend">
@@ -159,8 +159,8 @@ export function TokenUsage({ days = 1, onDaysChange, model = "", onModelChange, 
       {data?.requests === 0 && <p className="oc-muted oc-spaced">{t("当前筛选范围内还没有请求。完成聊天或 API 调用后，这里会显示产出趋势。", "No requests in this range yet. Chat or make an API call to see usage trends.")}</p>}
       <p className="oc-muted oc-chart-caption">
         {t(
-          "统计经 Studio 的聊天和 API 请求，按请求开始时间滚动累计，每 5 秒更新。使用模型服务返回的实际 token 数；缺失数据不估算。",
-          "Rolling totals for chat and API requests through Studio, grouped by request start time and refreshed every 5 s. Counts are reported by the model service; missing values are not estimated.",
+          "按请求开始时间统计 Studio 的聊天和 API 用量。token 数由模型服务提供，每 5 秒更新。",
+          "Chat and API usage through Studio is grouped by request start time. Token counts come from the model service and refresh every 5 s.",
         )}
       </p>
     </section>

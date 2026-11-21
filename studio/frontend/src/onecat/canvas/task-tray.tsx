@@ -74,8 +74,8 @@ export function TaskTray({
 							{run.telemetry?.source === "selected_gpu_boards" && (
 								<small>
 									{t(
-										"所选 GPU 板卡实测，可能包含其他负载",
-										"Measured selected GPU boards; may include other workloads",
+										"所选 GPU 的实测总量，含同期负载",
+										"Measured total for the selected GPUs, including concurrent workloads",
 									)}
 								</small>
 							)}
@@ -87,8 +87,8 @@ export function TaskTray({
 							{run.cancel_note && (
 								<p className="oc-muted">
 									{t(
-										"后端暂不支持中途停止，完成后将保留结果。",
-										"Backend cannot interrupt this generation; its result will be retained.",
+										"此任务无法中途停止。完成后会保存结果。",
+										"This task cannot be stopped. The result will be saved when it finishes.",
 									)}
 								</p>
 							)}

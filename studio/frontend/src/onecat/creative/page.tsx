@@ -422,12 +422,11 @@ export default function CreativePage() {
   return (
     <section className="oc-generation-page">
       <div className="oc-generation-intro">
-        <span>1CAT CREATIVE</span>
-        <h1>{t("让想法，成为画面。", "Bring your ideas to life.")}</h1>
+        <h1>{t("图片与视频创作", "Create images and video")}</h1>
         <p>
           {t(
-            "写下描述，剩下的交给工作台。",
-            "Describe your idea. Your workspace handles the rest.",
+            "描述想生成的画面，再选择模型和规格。",
+            "Describe the scene, then choose a model and output size.",
           )}
         </p>
       </div>
@@ -531,8 +530,8 @@ export default function CreativePage() {
         {draft.references.some((r) => r.role !== "reference") && (
           <p className="oc-generation-reference-note">
             {t(
-              "首尾帧会按所选画面比例居中裁切，保留原图比例。",
-              "Keyframes are center-cropped to the selected aspect ratio, without stretching.",
+              "首尾帧按所选画面比例居中裁切。",
+              "Keyframes are center-cropped to the selected aspect ratio.",
             )}
           </p>
         )}
@@ -601,18 +600,18 @@ export default function CreativePage() {
         {kind === "video" && <p id="creative-fast-note" className="oc-generation-fast-note">
           {!catalog ? t("正在读取模型能力…", "Loading model capabilities…") : model?.fast_variant
             ? draft.fast
-              ? t("VSA 稀疏注意力 · 原版浮点权重 + 专用 FastH3 适配器。画质验收尚未通过，输出可能有差异；首次使用需要下载并重新加载模型。", "VSA sparse attention · original floating weights + the dedicated FastH3 adapter. Quality acceptance is incomplete; output may differ. First use downloads and reloads the model.")
+              ? t("VSA 稀疏注意力使用原始浮点权重和 FastH3 适配器。画质仍在验证。首次使用会下载组件并重新加载模型。", "VSA sparse attention uses the original floating-point weights and the FastH3 adapter. Output quality is still being evaluated. First use downloads the required components and reloads the model.")
               : !model.fast_available
                 ? t("当前运行环境尚未包含 VSA 内核，更新后可开启 Fast。", "Update the native runtime to enable Fast VSA.")
-                : t("FlashAttention · 原始权重 + FastH3 Dense。开启 Fast 切换 VSA 专用适配器，仅支持文生视频。", "FlashAttention · original weights + FastH3 Dense. Fast switches to the dedicated VSA adapter. Text to video only.")
-            : t("Fast VSA 需选择 Minimax-H3 原始权重；现有 INT8 / LightX2V 工作流保持不变。", "Select the original Minimax-H3 weights for Fast VSA. INT8 / LightX2V workflows keep their existing execution.")}
+                : t("当前为 FlashAttention、原始权重和 FastH3 Dense。开启 Fast 后切换到 VSA，支持文生视频。", "This configuration uses FlashAttention, the original weights and FastH3 Dense. Fast switches to the VSA adapter for text-to-video.")
+            : t("选择 Minimax-H3 原始权重即可使用 Fast VSA。", "Select the original Minimax-H3 weights to use Fast VSA.")}
         </p>}
-        {model?.text_only && draft.references.length > 0 && <p role="alert" className="oc-generation-reference-note">{t("该工作流仅支持文字，请移除参考素材或选择原来的 H3 模型。", "This workflow accepts text only. Remove references or select another H3 model.")}</p>}
+        {model?.text_only && draft.references.length > 0 && <p role="alert" className="oc-generation-reference-note">{t("此工作流用于文生视频。移除参考素材，或选择支持参考素材的 H3 模型。", "This workflow is for text-to-video. Remove the references or choose an H3 model that accepts them.")}</p>}
         <div className="oc-generation-composer-note">
           <span>
             {t(
-              "作品保存在服务器，离开页面也会继续生成。",
-              "Your results are saved on the server. Generation continues when you leave.",
+              "生成在后台继续，作品保存在服务器。",
+              "Generation runs in the background, and results are saved on the server.",
             )}
           </span>
           {!!downloadBytes && (
@@ -622,7 +621,7 @@ export default function CreativePage() {
             </span>
           )}
         </div>
-        {model && !supportedSize && <p role="alert" className="oc-generation-reference-note">{t("当前工作流不支持已选分辨率，请重新选择。", "This workflow does not support the selected resolution. Choose another size.")}</p>}
+        {model && !supportedSize && <p role="alert" className="oc-generation-reference-note">{t("请选择当前工作流支持的分辨率。", "Choose a resolution supported by this workflow.")}</p>}
         {variant && (
           <details className="oc-generation-model-files">
             <summary>{t("模型文件与工作流", "Model files and workflow")}</summary>
@@ -731,7 +730,7 @@ export default function CreativePage() {
                       : ""}
                   </button>
                 </div>
-                <button className="oc-generation-duration" onClick={() => setDetail(run)} title={t("包含等待、准备模型、生成和保存；点击查看明细", "Includes waiting, preparation, generation and saving. Click for details.")}>
+                <button className="oc-generation-duration" onClick={() => setDetail(run)} title={t("包含等待、加载模型、生成和保存", "Includes waiting, model loading, generation and saving")}>
                   <Clock3 size={13} />
                   {terminal(run.state) ? t("总耗时", "Total time") : t("已用时间", "Elapsed")}
                   <span>{elapsed(totalSeconds(run, now))}</span>
@@ -812,8 +811,8 @@ export default function CreativePage() {
       >
         <p>
           {t(
-            "生成需要释放以下 Studio 服务。当前请求完成后会切换，生成将自动继续。",
-            "Generation needs to release these Studio services. The switch waits for active requests, then generation continues automatically.",
+            "当前请求结束后会卸载以下服务，然后开始生成。",
+            "After active requests finish, Studio unloads these services and starts generation.",
           )}
         </p>
         <ul>

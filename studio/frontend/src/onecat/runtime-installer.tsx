@@ -177,8 +177,8 @@ export function RuntimeInstaller() {
 						error={
 							missing
 								? t(
-										"当前列表中找不到所选发行包，请重新选择或检查更新。",
-										"The selected release is absent from this list. Choose a release or check for updates.",
+										"请选择列表中的版本，或刷新发布列表。",
+										"Choose a listed version or refresh the release list.",
 									)
 								: unavailable
 						}
@@ -325,8 +325,8 @@ export function RuntimeInstaller() {
 							</div>
 							<p className="oc-muted oc-runtime-hint">
 								{t(
-									"安装或升级会创建独立环境，保留已有环境。完成后在模型启动预设中选择新环境才会生效。",
-									"Installs and upgrades create an isolated environment and preserve existing ones. Select the new runtime in a model launch profile to use it.",
+									"新版本会安装到独立环境。安装后，在模型启动预设中选择它。",
+									"New versions install into separate runtimes. Select the installed runtime in a model launch profile.",
 								)}
 							</p>
 							<details className="oc-runtime-assets">
@@ -336,8 +336,8 @@ export function RuntimeInstaller() {
 								</summary>
 								<p className="oc-muted">
 									{t(
-										"至少预留 20 GiB 磁盘。配套 wheel 一同安装，PyTorch 版本以 wheel 内的精确依赖为准。",
-										"Reserve at least 20 GiB. Companion wheels install together; the wheel metadata determines the exact PyTorch version.",
+										"需要至少 20 GiB 可用空间。安装器会按发行包要求安装配套 wheel 和 PyTorch。",
+										"Allow at least 20 GiB of free space. Studio installs the companion wheels and the PyTorch version required by the release.",
 									)}
 								</p>
 								{release.assets.map((a) => (

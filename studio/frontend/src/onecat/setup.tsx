@@ -144,8 +144,8 @@ export function SetupPage() {
             </h2>
             <p className="oc-muted">
               {t(
-                "读取当前服务的模型、环境和启动参数，避免重复加载。",
-                "Read the service's model, environment, and launch arguments without loading a second instance.",
+                "接管正在运行的服务时，沿用它的模型、环境和启动参数。",
+                "Adopt the running service with its current model, runtime and launch arguments.",
               )}
             </p>
             <Field
@@ -161,8 +161,8 @@ export function SetupPage() {
               disabled={!unit}
               run={() => mutation("/api/inference/adopt", { unit })}
               success={t(
-                "正在读取现有服务，请查看后台任务进度",
-                "Inspecting service; follow progress in Tasks",
+                "正在读取服务。进度见任务列表。",
+                "Inspecting the service. View progress in Tasks.",
               )}
             >
               <FolderInput />
@@ -213,8 +213,8 @@ export function SetupPage() {
           ) : (
             <p>
               {t(
-                "未检测到 NVIDIA GPU。仍可配置环境和模型库。",
-                "No NVIDIA GPU detected. You can still configure runtimes and models.",
+                "未检测到 NVIDIA GPU。可先准备运行环境和模型。",
+                "No NVIDIA GPU detected. You can set up runtimes and models first.",
               )}
             </p>
           )}
@@ -230,7 +230,7 @@ export function SetupPage() {
         <div><h2>{t("Agent 引擎", "Agent engine")} · Codex {agent?.version || ""}</h2>
           <p className="oc-muted">{agent?.installed && agent.sandbox_ready
             ? t("已随 Studio 安装，项目沙箱已就绪。", "Included with Studio. The project sandbox is ready.")
-            : t("Agent 组件或执行沙箱尚未就绪，请完成 Studio 安装配置。", "The Agent component or sandbox needs Studio installation setup.")}</p></div>
+            : t("完成 Agent 组件和沙箱配置后即可使用。", "Finish setting up the Agent component and sandbox to use Agent.")}</p></div>
         <Button variant="outline" asChild><Link to="/agent">{t("打开 Agent", "Open Agent")}<ArrowRight /></Link></Button>
       </div>
       </details>
