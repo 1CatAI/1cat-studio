@@ -28,7 +28,7 @@ item['files']=[{'path':n,'bytes':len(v),'sha256':hashlib.sha256(v).hexdigest()} 
 catalog.directory=lambda:inventory
 devices.append({**devices[0],'index':4,'uuid':'GPU-'+'a'*36,'name':'Quadro P400','compute_capability':[6,1],'memory_total_mib':2048})
 gpu.snapshot=lambda:{'gpus':devices,'available':True,'timestamp':time.time()}
-db.patch('runtimes','r',{'release':{'version':'dev'},'capabilities':{'vllm_version':'dev'}})
+db.patch('runtimes','r',{'validated':False,'release':{'version':'dev'},'capabilities':{'vllm_version':'dev'}})
 class Hub:
  def list_repo_files(self,*args,**kwargs):
   return [SimpleNamespace(path=f['path'],size=f['bytes'],sha256=f['sha256'],is_dir=False) for f in item['files']]
@@ -165,7 +165,7 @@ def run():
                         advanced.click()
                     expect(dialog.locator('.oc-gpu-choices [role=checkbox][data-state=checked]')).to_have_count(4)
                     expect(dialog.get_by_label('最大生成长度', exact=True)).to_have_count(0)
-                    expect(dialog.locator('select').filter(has=page.locator('option[value="r"]'))).to_have_value('')
+                    expect(dialog.get_by_role('combobox', name='运行环境', exact=True)).to_have_value('')
                     expect(dialog.get_by_role('button',name='保存',exact=True)).to_be_disabled()
                     dialog.get_by_role('button',name='取消',exact=True).click()
                     card.get_by_role('button',name='ModelScope 下载',exact=True).click()
@@ -189,7 +189,7 @@ def run():
                     jobs=context.request.get(fixture.BASE+'/api/jobs').json()['items']
                     completed=next(j for j in jobs if j['kind']=='download_model')
                     assert completed['state']=='completed' and completed['result']['profile_pending_reason']
-                    subprocess.run([str(fixture.ROOT/'.venv/bin/python'),'-c',"from onecat import db; db.patch('runtimes','r',{'release':{'version':'1.5.0'},'capabilities':{'vllm_version':'1.5.0'}})"],env=env,check=True)
+                    subprocess.run([str(fixture.ROOT/'.venv/bin/python'),'-c',"from onecat import db; db.patch('runtimes','r',{'validated':True,'release':{'version':'1.5.0'},'capabilities':{'vllm_version':'1.5.0'}})"],env=env,check=True)
                     page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
                     expect(card.get_by_role('button',name='使用推荐预设启动',exact=True)).to_be_enabled()
                     card.get_by_role('button',name='使用推荐预设启动',exact=True).click()

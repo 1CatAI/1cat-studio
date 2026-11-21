@@ -24,14 +24,15 @@ const SourceLine = memo(function SourceLine({ text, tokens, numbered }: {
       ? "block before:content-[counter(line)] before:inline-block before:[counter-increment:line] before:w-6 before:mr-4 before:text-[13px] before:text-right before:text-muted-foreground/50 before:font-mono before:select-none"
       : "block"}>
       {tokens && prefix && text.startsWith(prefix) ? <>
-        {tokens.map((token, i) => (
-          <span key={i} className="text-[var(--sdm-c,inherit)] dark:text-[var(--shiki-dark,var(--sdm-c,inherit))] bg-[var(--sdm-tbg,transparent)] dark:bg-[var(--shiki-dark-bg,var(--sdm-tbg,transparent))]"
-            style={{ ...token.htmlStyle, color: undefined, backgroundColor: undefined,
-              "--sdm-c": token.htmlStyle?.color ?? token.color,
-              "--sdm-tbg": token.htmlStyle?.["background-color"] ?? token.bgColor } as CSSProperties}>
-            {token.content}
-          </span>
-        ))}
+        {tokens.map((token, i) => {
+          const { color = token.color, "background-color": background = token.bgColor, ...style } = token.htmlStyle || {};
+          return (
+            <span key={i} className="text-[var(--sdm-c,inherit)] dark:text-[var(--shiki-dark,var(--sdm-c,inherit))] bg-[var(--sdm-tbg,transparent)] dark:bg-[var(--shiki-dark-bg,var(--sdm-tbg,transparent))]"
+              style={{ ...style, "--sdm-c": color, "--sdm-tbg": background } as CSSProperties}>
+              {token.content}
+            </span>
+          );
+        })}
         {text.slice(prefix.length)}
       </> : text || "\n"}
     </span>
