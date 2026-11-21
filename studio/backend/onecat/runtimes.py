@@ -493,7 +493,9 @@ def install(job: Job):
                 with wheel.open("rb") as stream:
                     cached = hashlib.file_digest(stream, "sha256").hexdigest() == asset["sha256"]
             if not cached:
-                download_file(job, asset["url"], wheel, asset["sha256"])
+                download_file(
+                    job, runtime_releases.wheel_download_url(asset["url"]), wheel, asset["sha256"]
+                )
             paths.append(wheel)
         env = {**os.environ, "UV_PYTHON_INSTALL_DIR": str(folder / "python")}
         # Installation subprocesses must not inherit another inference checkout or environment.
