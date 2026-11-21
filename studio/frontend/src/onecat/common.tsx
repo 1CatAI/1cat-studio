@@ -386,6 +386,8 @@ export function jobLabel(stage: string, t: ReturnType<typeof useText>) {
     creative_stop: ["停止创作服务", "Stop creative service"],
     creative_generate: ["画布生成任务", "Canvas generation"],
     creative_download: ["下载创作组件", "Download creative component"],
+    analyze_log: ["日志分析", "Log analysis"],
+    analyzing_log: ["正在分析日志", "Analyzing log"],
     encoding: ["编码素材", "Encoding references"],
     denoising: ["去噪中", "Denoising"],
     decoding: ["解码中", "Decoding"],

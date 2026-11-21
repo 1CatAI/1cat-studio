@@ -14,6 +14,7 @@ import { Input } from "@/onecat/ui";
 import { Switch } from "@/onecat/ui";
 import { useBrowserState } from "./browser-state";
 import { GPUControls } from "./gpu-controls";
+import { LogAnalysisSettings } from "./log-analysis";
 import { StudioUpdates } from "./studio-updates";
 import { modelLabel } from "./model-label";
 import { setLocale } from "@/onecat/locale";
@@ -119,6 +120,7 @@ export function SettingsPage() {
       <nav className="oc-settings-nav" aria-label={t("设置分类", "Settings sections")}>
         {[
           ["appearance", t("外观", "Appearance")], ["models", t("模型与环境", "Models and runtimes")],
+          ["log-analysis", t("日志分析", "Log analysis")],
           ["policy", t("服务策略", "Service policy")], ["data", t("数据维护", "Data")],
           ["updates", t("Studio 更新", "Studio updates")],
         ].map(([id, label]) => <a key={id} href={"#settings-" + id}>{label}</a>)}
@@ -218,6 +220,7 @@ export function SettingsPage() {
               </div>
             </Field>
           </div>
+          <LogAnalysisSettings />
       <div className="oc-panel">
         <div className="oc-row">
           <h2>{t("运行包版本", "Runtime versions")}</h2>

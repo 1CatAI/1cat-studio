@@ -137,6 +137,10 @@ npm run watch:onecat --prefix studio/frontend
 ssh -L 8888:127.0.0.1:8888 -p 22 user@your-server
 ```
 
+### 分析运行日志
+
+运行或任务出错时，可在「服务 → 日志」选择「让 Agent 分析」。先在「设置 → 日志分析」保存兼容 OpenAI Chat Completions 的 API 地址、模型名称和所需密钥。点击分析后，Studio 向所配置的 API 发送脱敏日志，并按需查询本机 GPU、系统资源、运行环境、模型配置及相关内核事件。分析任务在后台运行，报告可在原日志中查看。
+
 ### 启用 Agent
 
 在仓库根目录准备固定版本的 Codex 组件：

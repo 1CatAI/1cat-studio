@@ -67,6 +67,10 @@ def run(id: str):
             from .runtimes import export_runtime
 
             result = export_runtime(job)
+        elif kind == "analyze_log":
+            from .log_diagnostics import execute
+
+            result = execute(job)
         elif kind == "apply_gpu_settings":
             from .gpu_control import execute
 

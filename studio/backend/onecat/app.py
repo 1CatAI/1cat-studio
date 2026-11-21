@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import __version__, auth, db, engine, gpu, models, proxy, runtimes, telemetry, updates
+from . import __version__, auth, db, engine, gpu, log_diagnostics, models, proxy, runtimes, telemetry, updates
 from .config import automatic_gpu_actions, frontend_dist, initialize_paths, state_root
 from .jobs import TERMINAL, create_job, list_jobs, request_cancel
 from .network import lan_api_urls
@@ -806,6 +806,33 @@ def create_app() -> FastAPI:
         key = engine.private_state().get("api_key")
         text = engine.redact_log(text, key)
         return {"text": text}
+
+    @admin.get("/settings/log-analysis")
+    def log_analysis_settings():
+        return log_diagnostics.public_settings()
+
+    @admin.put("/settings/log-analysis")
+    def set_log_analysis_settings(payload: log_diagnostics.ProviderSettings):
+        return log_diagnostics.save_settings(payload)
+
+    @admin.get("/logs/{name}/analysis")
+    def log_analysis_status(name: str):
+        if not log_diagnostics.LOG_NAME.fullmatch(name):
+            raise HTTPException(404, "Log not found")
+        job = next((item for item in list_jobs() if item.get("analysis_source") == name), None)
+        return {"provider": log_diagnostics.public_settings(), "job": job}
+
+    @admin.post("/logs/{name}/analysis")
+    def start_log_analysis(name: str):
+        if not log_diagnostics.LOG_NAME.fullmatch(name):
+            raise HTTPException(404, "Log not found")
+        provider = log_diagnostics.provider_settings()
+        if not log_diagnostics.public_settings(provider)["configured"]:
+            raise ValueError("请先在设置中配置分析 API。 / Configure the analysis API in Settings.")
+        for job in list_jobs():
+            if job.get("analysis_source") == name and job["state"] not in TERMINAL:
+                return job
+        return scheduled_job("analyze_log", log_diagnostics.capture(name, provider))
 
     @admin.get("/jobs/{id}/download")
     def task_download(id: str):
