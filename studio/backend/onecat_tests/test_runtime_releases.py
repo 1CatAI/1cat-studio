@@ -301,7 +301,7 @@ def test_install_uses_isolated_prefix_correct_torch_and_all_wheels(state, tmp_pa
     db.put("runtimes", "existing", old)
     db.put("profiles", "p", {"id": "p", "runtime_id": "existing"})
     commands = []
-    monkeypatch.setattr(runtimes.shutil, "which", lambda name: "/test/uv")
+    monkeypatch.setattr(runtimes, "find_uv", lambda: "/test/uv")
     monkeypatch.setattr(
         runtimes.shutil, "disk_usage", lambda path: SimpleNamespace(free=100 * 1024**3)
     )

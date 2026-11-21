@@ -25,7 +25,9 @@ def source_paths(root=ROOT):
               "studio/third_party", "studio/docs", "studio/releases", ".github/workflows"]
     candidates = [root / name for name in top]
     candidates += list((root / "studio").glob("*.md"))
-    candidates += [root / "studio/LICENSE", root / "studio/pyproject.toml", root / "studio/requirements.lock"]
+    candidates += [root / "studio" / name for name in (
+        "LICENSE", "pyproject.toml", "requirements.lock", "requirements-source.lock",
+    )]
     frontend = root / "studio/frontend"
     candidates += [frontend / name for name in ["package.json", "package-lock.json", "index.html",
                    "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "tsconfig.onecat.json",

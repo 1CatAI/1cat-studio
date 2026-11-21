@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import copy
 import hashlib
-import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -27,8 +26,27 @@ def task(id="install", payload=None):
     return jobs.Job(id)
 
 
+def test_find_uv_prefers_manager_venv_and_falls_back_to_path(tmp_path, monkeypatch):
+    manager_bin = tmp_path / "venv" / "bin"
+    path_bin = tmp_path / "path-bin"
+    monkeypatch.setattr(runtimes, "sys", SimpleNamespace(executable=str(manager_bin / "python")))
+    monkeypatch.setenv("PATH", str(path_bin))
+
+    manager_uv = manager_bin / "uv"
+    path_uv = path_bin / "uv"
+    for uv in (manager_uv, path_uv):
+        uv.parent.mkdir(parents=True)
+        uv.touch(mode=0o755)
+
+    assert runtimes.find_uv() == str(manager_uv)
+    manager_uv.unlink()
+    assert runtimes.find_uv() == str(path_uv)
+    path_uv.unlink()
+    assert runtimes.find_uv() is None
+
+
 def test_retry_reuses_partial_environment_without_erasing_dependencies(state, monkeypatch):
-    uv = shutil.which("uv")
+    uv = runtimes.find_uv()
     if not uv:
         pytest.skip("uv is required for the real offline venv retry regression")
     row = recipe()
@@ -56,7 +74,7 @@ def test_retry_reuses_partial_environment_without_erasing_dependencies(state, mo
     real_run = subprocess.run
     monkeypatch.setattr(releases, "availability", lambda *args: [])
     monkeypatch.setattr(gpu, "snapshot", lambda: {"gpus": []})
-    monkeypatch.setattr(runtimes.shutil, "which", lambda name: uv)
+    monkeypatch.setattr(runtimes, "find_uv", lambda: uv)
     monkeypatch.setattr(
         runtimes.shutil, "disk_usage", lambda path: SimpleNamespace(free=100 * 1024**3)
     )

@@ -102,13 +102,15 @@ git clone https://github.com/1CatAI/1cat-studio.git
 cd 1cat-studio
 
 python3.12 -m venv .venv
-.venv/bin/python -m pip install --require-hashes -r studio/requirements.lock
+.venv/bin/python -m pip install --require-hashes -r studio/requirements-source.lock
 
 npm ci --prefix studio/frontend
 npm run build:onecat --prefix studio/frontend
 
 PYTHONPATH=studio/backend .venv/bin/python -m onecat --host 127.0.0.1 --port 8888
 ```
+
+源码依赖包含一键安装推理环境所需的 `uv`，可以直接用 `.venv/bin/python` 启动。已有源码部署可重跑上面的 `pip install` 命令并重启 Studio，再重试安装。
 
 打开 **http://127.0.0.1:8888**，设置管理员密码，然后：
 
