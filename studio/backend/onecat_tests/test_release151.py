@@ -368,7 +368,12 @@ def test_real_catalog_default_automatically_selects_qualified_draft(qualified_re
     runtime, recipe, draft_path = qualified_release_models
     profile = catalog.create_default_profile("target")
     assert profile["speculative_config"] == sm70_profiles.default_speculation(runtime, draft_path)
-    assert not catalog.launch_defaults(profile["catalog_id"], "target")["recommendations"]
+    defaults = catalog.launch_defaults(profile["catalog_id"], "target")
+    assert not defaults["recommendations"]
+    assert defaults["draft_download"] is None
+    assert defaults["draft_ready"]
+    card = next(row for row in catalog.supported()["items"] if row.get("catalog_id") == profile["catalog_id"])
+    assert card["draft_ready"] and card["draft_download"] is None
     args = _options(engine.build_argv(profile, runtime, 8000, None))
     assert json.loads(args["--speculative-config"])["revision"] == recipe["draft"]["revision"]
     for key in (
@@ -405,6 +410,43 @@ def test_draft_not_available_is_explicit_and_preserves_existing_choice(qualified
     )
     assert any("DFlash2" in note for note in card["recommendations"])
     assert sm70_profiles.recommended_update(profile, runtime) is None
+
+
+def test_model_card_tracks_the_release_draft_download(qualified_release_models):
+    from onecat import catalog, db
+
+    _, recipe, _ = qualified_release_models
+    # The fixture uses tiny local weights. Restore the catalog hashes for the
+    # missing draft so the release recipe can offer the real download.
+    draft = catalog.entry(recipe["draft"]["repo"])
+    hashes = {file["path"]: file["sha256"] for file in draft["files"]}
+    recipe["draft"]["config_sha256"] = hashes["config.json"]
+    recipe["draft"]["weights_sha256"] = hashes["model.safetensors"]
+    db.delete("models", "draft")
+    db.put("jobs", "matching", {
+        "id": "matching", "kind": "download_model", "state": "running",
+        "created_at": 1, "payload": {"repo_id": draft["id"], "revision": draft["revision"]},
+    })
+    db.put("jobs", "other-revision", {
+        "id": "other-revision", "kind": "download_model", "state": "failed",
+        "created_at": 2, "payload": {"repo_id": draft["id"], "revision": "master"},
+    })
+
+    def target_card():
+        return next(
+            row for row in catalog.supported()["items"]
+            if row.get("catalog_id") == "QUASAR-QAT/Qwen3.8-27B-QUASAR-NVFP4"
+        )
+
+    assert target_card()["draft_download"] == {
+        "repo_id": draft["repo_id"],
+        "revision": draft["revision"],
+        "bytes": sum(file["bytes"] for file in draft["files"]),
+        "job": {"id": "matching", "state": "running"},
+    }
+    assert not target_card()["draft_ready"]
+    recipe["draft"]["weights_sha256"] = "0" * 64
+    assert target_card()["draft_download"] is None
 
 
 def test_changed_draft_weights_are_not_selected(qualified_release_models):

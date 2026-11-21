@@ -94,6 +94,33 @@ def default_speculation(runtime: dict, draft_model: str) -> dict:
     return spec
 
 
+def _draft_hashes_match(files, draft: dict) -> bool:
+    hashes = {row["path"]: row.get("sha256") for row in files}
+    return (
+        hashes.get("config.json") == draft["config_sha256"]
+        and hashes.get("model.safetensors") == draft["weights_sha256"]
+    )
+
+
+def downloadable_draft(runtime: dict) -> dict | None:
+    from .catalog import entry
+
+    draft = release_profile(runtime)["draft"]
+    item = entry(draft["repo"])
+    if (
+        item
+        and item["role"] == "draft"
+        and item["revision"] == draft["modelscope_revision"]
+        and _draft_hashes_match(item["files"], draft)
+    ):
+        return {
+            "repo_id": item["repo_id"],
+            "revision": item["revision"],
+            "bytes": sum(row["bytes"] for row in item["files"]),
+        }
+    return None
+
+
 def qualified_draft(runtime: dict, model_path: str | None = None) -> str | None:
     """Reuse only the release payload whose verified files remain unchanged."""
     from . import catalog, db
@@ -106,17 +133,10 @@ def qualified_draft(runtime: dict, model_path: str | None = None) -> str | None:
         if record.get("repo_id") != draft["repo"]:
             continue
         item = catalog.model_entry(path)
-        hashes = {row["path"]: row.get("sha256") for row in record.get("manifest", [])}
         if (
             item
             and item["id"] == draft["repo"]
-            and all(
-                hashes.get(name) == draft[key]
-                for name, key in (
-                    ("config.json", "config_sha256"),
-                    ("model.safetensors", "weights_sha256"),
-                )
-            )
+            and _draft_hashes_match(record.get("manifest", []), draft)
         ):
             return path
     return None
