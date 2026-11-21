@@ -80,3 +80,22 @@ def test_excerpt_skips_frontmatter_badges_and_code():
     assert model_cards.excerpt("简短模型介绍", minimum_length=1) == "简短模型介绍"
     readme = "---\nlicense: apache-2.0\n---\n# Model\n\n[![badge](badge.svg)](https://example.test)\n\n```python\nprint('example')\n```\n\nA **useful model** published by [its author](https://example.test/model), with &amp; without quantization."
     assert model_cards.excerpt(readme) == "A useful model published by its author, with & without quantization."
+
+def test_organization_avatar_used_instead_of_model_image(monkeypatch):
+    import base64
+    import io
+    from PIL import Image
+
+    url = "https://resources.modelscope.cn/avatar/publisher.jpg"
+    raw = io.BytesIO()
+    Image.new("RGB", (320, 160), "red").save(raw, "JPEG")
+    original = httpx.Client
+    def handle(request):
+        assert str(request.url) == url
+        return httpx.Response(200, content=raw.getvalue())
+    monkeypatch.setattr(httpx, "Client", lambda **kw: original(transport=httpx.MockTransport(handle)))
+    result = model_cards.publisher_avatar({**metadata(), "Avatar": "https://example.com/model.png",
+                                          "Organization": {"Name": "QUASAR-QAT", "Avatar": url}})
+    image = Image.open(io.BytesIO(base64.b64decode(result.split(",", 1)[1])))
+    assert image.format == "PNG" and image.size == (96, 48)
+    assert model_cards.publisher_avatar({**metadata(), "Avatar": url, "CreatedBy": "another-user"}) is None

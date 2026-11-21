@@ -3,13 +3,13 @@ import { Phase } from "./motion";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Download, ExternalLink, Play, Search, Settings2 } from "lucide-react";
+import { Activity, CircleCheck, CloudDownload, Download, HardDriveDownload, LoaderCircle, ScanLine, Play, Search } from "lucide-react";
 import { Input } from "@/onecat/ui";
 import { Button } from "@/onecat/ui";
 import { useBrowserState } from "./browser-state";
 import { useQuery, mutation, api, type Profile, type Job, type Engine, type Model } from "./api";
 import { Action, Empty, ErrorNotice, bytes, useText } from "./common";
-import { DownloadRate } from "./download-rate";
+import { DownloadProgressBar } from "./download-progress";
 import { ModelCard, ModelIdentity } from "./model-card";
 
 type Support = {
@@ -17,11 +17,7 @@ type Support = {
   name: string;
   family: string;
   quantization: string;
-  runtime: string;
-  hardware: string;
   features: string[];
-  note: string;
-  evidence: string[];
   catalog_id: string | null;
   downloadable: boolean;
   compatible: boolean;
@@ -35,6 +31,24 @@ type Support = {
     | (Job & { state: string; error?: string; cancel_requested?: boolean })
     | null;
 };
+
+const libraryStates = {
+  running: { icon: Activity, zh: "运行中", en: "Running" },
+  starting: { icon: LoaderCircle, zh: "启动中", en: "Starting" },
+  downloading: { icon: HardDriveDownload, zh: "下载中", en: "Downloading" },
+  verifying: { icon: ScanLine, zh: "校验中", en: "Verifying" },
+  downloaded: { icon: CircleCheck, zh: "已下载", en: "Downloaded" },
+  available: { icon: CloudDownload, zh: "可下载", en: "Download available" },
+} as const;
+
+function LibraryStatus({ state }: { state: keyof typeof libraryStates }) {
+  const t = useText();
+  const { icon: Icon, zh, en } = libraryStates[state];
+  return <span className="oc-library-status" data-state={state}>
+    <Icon size={15} strokeWidth={2} aria-hidden="true" />
+    {t(zh, en)}
+  </span>;
+}
 
 export type LaunchDefaults = {
   profile: Profile | null;
@@ -79,7 +93,7 @@ export function SupportedModels({
     detailTrigger.current = button;
     setSelected(item);
   }
-  const all = data?.items || [];
+  const all = (data?.items || []).filter(item => item.downloadable);
   // The task endpoint includes transfer timestamps and avoids rescanning GPUs.
   const hasDownload = all.some(
     (item) =>
@@ -90,7 +104,7 @@ export function SupportedModels({
     hasDownload ? "/api/jobs" : null,
     1000,
   );
-  const machineMatches = (item: Support) => item.downloadable && item.reasons.every(reason => reason.startsWith("需要运行环境 / Requires runtime:"));
+  const machineMatches = (item: Support) => item.reasons.every(reason => reason.startsWith("需要运行环境 / Requires runtime:"));
   const machineCount = all.filter(machineMatches).length;
   const filtered = all.filter(
     (item) =>
@@ -103,9 +117,8 @@ export function SupportedModels({
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
-  const downloadable = filtered.filter((item) => item.downloadable).sort((a, b) =>
+  const downloadable = filtered.sort((a, b) =>
     Number(b.compatible) - Number(a.compatible) || Number(!!b.model_id) - Number(!!a.model_id));
-  const references = filtered.filter((item) => !item.downloadable);
   const reasonText = (reason: string) => {
     const runtime = "需要运行环境 / Requires runtime: ";
     if (reason.startsWith(runtime))
@@ -137,8 +150,8 @@ export function SupportedModels({
           <h2>{downloadedOnly ? t("已下载 · 随时启动", "Downloaded · Ready to launch") : t("为这台机器选择模型", "Find a model for this machine")}</h2>
           <p className="oc-muted">
             {t(
-              `${all.filter((item) => item.downloadable).length} 个版本 · ${machineCount} 个适合本机`,
-              `${all.filter((item) => item.downloadable).length} versions · ${machineCount} hardware matches`,
+              `${all.length} 个版本 · ${machineCount} 个适合本机`,
+              `${all.length} versions · ${machineCount} hardware matches`,
             )}
           </p>
         </div>
@@ -182,6 +195,7 @@ export function SupportedModels({
               : item.job;
           const downloading =
             !!job && !["completed", "failed", "cancelled"].includes(job.state);
+          const verifying = downloading && job?.stage === "checking_model";
           const isActive = !!engine?.profile && (engine.profile.catalog_id === item.catalog_id ||
             models?.items.some(model => model.id === item.model_id && model.path === engine.profile?.model_path));
           const ready = isActive && engine?.state === "ready";
@@ -195,11 +209,7 @@ export function SupportedModels({
             >
               <div className="oc-row">
                 <span className="oc-kicker">{item.family}</span>
-                <span className={ready || item.compatible ? "oc-status-good" : "oc-status-warn"}>
-                  {ready ? t("运行中", "Running") : starting ? t("启动中", "Starting") : item.model_id
-                    ? t("已下载", "Downloaded")
-                    : t("可下载", "Download available")}
-                </span>
+                <LibraryStatus state={ready ? "running" : starting ? "starting" : verifying ? "verifying" : downloading ? "downloading" : item.model_id ? "downloaded" : "available"} />
               </div>
               <h2><button className="oc-model-name-button" onClick={event => openDetails(item, event.currentTarget)}>{item.name}</button></h2>
               <ModelIdentity repo={item.catalog_id!} onOpen={button => openDetails(item, button)} />
@@ -208,56 +218,13 @@ export function SupportedModels({
                   <span key={feature}>{translate(feature)}</span>
                 ))}
               </div>
-              {!item.compatible && !ready && <p className="oc-model-fit">{needsRuntime ? t("需准备运行环境", "Runtime setup needed") : t("需要其他硬件或部署配置", "Different hardware or deployment required")}</p>}
+              {!item.compatible && !ready && <p className="oc-model-fit">{item.reasons.map(reasonText).join(" · ") || t("需要其他硬件或部署配置", "Different hardware or deployment required")}</p>}
               {!!item.recommendations.length && !ready && (
                 <p className="oc-status-warn">
                   {item.recommendations.map(reasonText).join(" · ")}
                 </p>
               )}
-              <p className="oc-muted">{item.gpu?.count} GPU · {item.quantization} · {item.recommended?.max_model_len ? `${item.recommended.max_model_len / 1024}K ${t("上下文", "context")}` : t("查看配置要求", "See requirements")}</p>
-              <details className="oc-default-recipe">
-                <summary>
-                  <Settings2 size={14} />{" "}
-                  {t("配置与验证详情", "Configuration and validation")}
-                </summary>
-                <p>{item.hardware} · 1Cat-vLLM {item.runtime}</p>
-                <p>{translate(item.note)}</p>
-                {item.reasons.length > 0 && <p className="oc-status-warn">{item.reasons.map(reasonText).join(" · ")}</p>}
-                <div className="oc-support-evidence">{item.evidence.map(link => <a href={link} target="_blank" rel="noreferrer" key={link}>
-                  <ExternalLink size={12} />{link.includes("/pull/") ? `PR #${link.split("/").at(-1)}` : link.split("/").at(-1)}
-                </a>)}</div>
-                <dl>
-                  <dt>{t("计算精度", "Compute dtype")}</dt>
-                  <dd>FP16</dd>
-                  <dt>{t("权重量化", "Weight quantization")}</dt>
-                  <dd>{item.quantization}</dd>
-                  <dt>{t("并行配置", "Parallelism")}</dt>
-                  <dd>
-                    TP{item.gpu?.tp} / PP{item.gpu?.pp}
-                  </dd>
-                  <dt>{t("KV 精度", "KV dtype")}</dt>
-                  <dd>{item.recommended?.kv_cache_dtype || "auto"}</dd>
-                  <dt>{t("总上下文", "Context length")}</dt>
-                  <dd>
-                    {item.recommended?.max_model_len?.toLocaleString() ||
-                      t("模型默认", "Model default")}
-                  </dd>
-                  <dt>{t("最大输出", "Max output")}</dt>
-                  <dd>{t("自动：跟随模型", "Auto: follow model")}</dd>
-                  <dt>{t("加速", "Acceleration")}</dt>
-                  <dd>{t("默认关闭", "Off by default")}</dd>
-                </dl>
-                {item.gpu?.pp === 1 && (
-                  <Action variant="outline" run={() => configure(item)}>
-                    {t("编辑默认配置", "Edit default settings")}
-                  </Action>
-                )}
-                {!!item.reasons.length && (
-                  <Link to="/setup" className="oc-runtime-link">
-                    {t("安装 / 导入运行环境", "Install / import runtime")}
-                  </Link>
-                )}
-              </details>
+              <p className="oc-muted">{item.gpu?.count} GPU · {item.quantization}{item.recommended?.max_model_len ? ` · ${item.recommended.max_model_len / 1024}K ${t("上下文", "context")}` : ""}</p>
               {(downloading || item.job?.state === "failed" || item.job?.state === "cancelled") && <div className="oc-download-stage"><Phase phase={downloading ? job?.cancel_requested ? "cancelling" : job?.stage || "downloading" : item.model_id ? "downloaded" : item.job?.state || "available"} className="oc-download-phase">
               {downloading && (
                 <div className="oc-model-download" role="status">
@@ -268,12 +235,7 @@ export function SupportedModels({
                         ? t("正在校验模型…", "Verifying model…")
                         : t("正在下载…", "Downloading…")}
                   </span>
-                  <DownloadRate job={job!} />
-                  <progress max={100} value={job?.progress || 0} />
-                  <span>
-                    {bytes(job?.downloaded_bytes || 0)} /{" "}
-                    {bytes(job?.expected_bytes || item.bytes || 0)}
-                  </span>
+                  <DownloadProgressBar job={job!} expectedBytes={item.bytes} />
                   <Action
                     variant="ghost"
                     disabled={job?.cancel_requested}
@@ -296,11 +258,14 @@ export function SupportedModels({
                     ? bytes(item.bytes)
                     : t("按专用配方部署", "Requires a dedicated recipe")}
                 </span>
+                {item.gpu?.pp === 1 && <Action variant="ghost" run={() => configure(item)}>
+                  {t("编辑默认配置", "Edit default settings")}
+                </Action>}
                 {ready ? <Button asChild><Link to="/chat">{t("开始聊天", "Chat now")}</Link></Button>
                 : starting ? <Button asChild variant="outline"><Link to="/service">{t("查看启动进度", "View startup")}</Link></Button>
                 : item.model_id && !item.compatible ? needsRuntime
                   ? <Button asChild variant="outline"><Link to="/setup">{t("准备运行环境", "Set up runtime")}</Link></Button>
-                  : <Button variant="outline" onClick={event => { const details = event.currentTarget.closest("article")?.querySelector("details"); if (details) details.open = true; }}>{t("查看配置要求", "View requirements")}</Button>
+                  : null
                 : <Action
                   disabled={
                     downloading || !!engine?.maintenance
@@ -345,41 +310,6 @@ export function SupportedModels({
             {(query || family || publisher) && <Button variant="ghost" onClick={() => { setQuery(""); setFamily(""); setPublisher(""); }}>{t("清除筛选", "Clear filters")}</Button>}
           </div>
         </div>
-      )}
-      {references.length > 0 && (
-        <details className="oc-support-references oc-spaced">
-          <summary>
-            {t(
-              `其他项目支持记录（${references.length}）`,
-              `Other project support records (${references.length})`,
-            )}
-          </summary>
-          <p className="oc-muted">
-            {t(
-              "打开验证记录查看适配条件。",
-              "Open a validation record to see its requirements.",
-            )}
-          </p>
-          {references.map((item) => (
-            <article className="oc-panel oc-support-reference" key={item.id}>
-              <h3>{translate(item.name)}</h3>
-              <p>
-                {item.hardware} · {item.runtime}
-              </p>
-              <p>{translate(item.note)}</p>
-              <div className="oc-support-evidence">
-                {item.evidence.map((link) => (
-                  <a href={link} target="_blank" rel="noreferrer" key={link}>
-                    <ExternalLink size={12} />
-                    {link.includes("/pull/")
-                      ? `PR #${link.split("/").at(-1)}`
-                      : link.split("/").at(-1)}
-                  </a>
-                ))}
-              </div>
-            </article>
-          ))}
-        </details>
       )}
       {selected?.catalog_id && <ModelCard key={selected.catalog_id} repo={selected.catalog_id} name={selected.name} quantization={selected.quantization} size={selected.bytes} returnFocusRef={detailTrigger} onClose={() => setSelected(null)} />}
     </section>

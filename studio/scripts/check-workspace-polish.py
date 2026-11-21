@@ -53,17 +53,20 @@ def run():
                     page.keyboard.press('Escape'); expect(page.get_by_role('dialog')).to_have_count(0)
                     page.goto(fixture.BASE+'/settings')
                     model_path=page.get_by_label('Model directory',exact=True)
-                    model_path.fill('/tmp/keep-polish-'+theme)
+                    original = model_path.input_value()
+                    model_path.fill(original+'-polish-'+theme)
                     def fail_save(route):
                         if route.request.method=='PUT': route.fulfill(status=503,json={'detail':'Temporary save failure'})
                         else: route.continue_()
                     page.route('**/api/settings',fail_save)
-                    page.get_by_role('button',name='Save settings',exact=True).click()
+                    model_path.press('Tab')
                     expect(page.get_by_text('Temporary save failure',exact=False).first).to_be_visible()
-                    expect(model_path).to_have_value('/tmp/keep-polish-'+theme)
+                    expect(model_path).to_have_value(original)
                     page.unroute('**/api/settings',fail_save)
-                    page.get_by_role('button',name='Save settings',exact=True).click()
-                    expect(page.get_by_text('All settings saved',exact=True)).to_be_visible()
+                    with page.expect_response(lambda r: r.url.endswith('/api/settings') and r.request.method == 'PUT'):
+                        model_path.fill(original+'-polish-'+theme)
+                        model_path.press('Enter')
+                    expect(model_path).to_have_value(original+'-polish-'+theme)
                     page.goto(fixture.BASE+'/chat')
                 # Compare exact planned composition with both supplied references.
                 page.evaluate('localStorage.setItem("onecat_locale","zh-CN");localStorage.setItem("onecat_theme","light")')
@@ -97,7 +100,7 @@ def run():
                 expect(page.locator('.oc-chat-composer textarea')).to_have_value('Preserve pane draft')
                 # Motion preference does not change saved content or usage.
                 record_before=context.request.get(fixture.BASE+'/api/chat/threads/'+chat).json()
-                page.evaluate('localStorage.setItem("onecat_ui_motion","off")');page.reload()
+                page.emulate_media(reduced_motion="reduce");page.reload()
                 expect(page.locator('html')).to_have_attribute('data-ui-motion','off')
                 record_after=context.request.get(fixture.BASE+'/api/chat/threads/'+chat).json()
                 assert record_before['messages']==record_after['messages']

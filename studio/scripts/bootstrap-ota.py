@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--prefix", type=Path, required=True)
     parser.add_argument("--channel", required=True)
     parser.add_argument("--service", default="onecat-studio.service")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host")
     parser.add_argument("--port", type=int, default=8888)
     parser.add_argument(
         "--install", action="store_true", help="Explicitly switch to the signed release"
@@ -30,7 +30,8 @@ def main():
         ONECAT_STUDIO_PREFIX=str(args.prefix.expanduser().resolve()),
         ONECAT_UPDATE_CHANNEL=args.channel,
         ONECAT_STUDIO_SERVICE=args.service,
-        ONECAT_STUDIO_LISTEN_HOST=args.host,
+        ONECAT_STUDIO_LISTEN_HOST=args.host or "0.0.0.0",
+        ONECAT_STUDIO_BIND_MODE="explicit" if args.host else "auto",
         ONECAT_STUDIO_LISTEN_PORT=str(args.port),
     )
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))

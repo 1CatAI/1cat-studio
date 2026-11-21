@@ -124,7 +124,7 @@ def test_qwen_catalog_context_migration_is_one_time_and_preserves_custom_profile
     assert migration["updated_profiles"] == ["catalog"]
 
 
-def test_bf16_save_and_launch_validation_share_hardware_gate(client, monkeypatch):
+def test_v100_save_and_launch_use_half_for_legacy_precision(client, monkeypatch):
     uuid = "GPU-" + "a" * 36
     monkeypatch.setattr(gpu, "selected_devices", lambda ids: [{"compute_capability": [7, 0]}])
     db.put("runtimes", "r", {"id": "r", "validated": True})
@@ -132,9 +132,9 @@ def test_bf16_save_and_launch_validation_share_hardware_gate(client, monkeypatch
         name="test", model_path="/model", runtime_id="r", gpu_uuids=[uuid], dtype="bfloat16"
     ).model_dump()
     response = client.post("/api/profiles", json=payload)
-    assert response.status_code == 400 and "BF16" in response.text
-    with pytest.raises(ValueError, match="BF16"):
-        catalog.validate_features(payload)
+    assert response.status_code == 200 and response.json()["dtype"] == "half"
+    catalog.validate_features(payload)
+    assert payload["dtype"] == "half"
     payload["dtype"] = "auto"
     catalog.validate_features(payload)
     assert payload["dtype"] == "half"

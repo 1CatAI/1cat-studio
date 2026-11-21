@@ -103,10 +103,32 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.oc-profile-advanced > summary {
-  cursor: pointer;
-  padding: 8px 0;
+.oc-profile-advanced { margin-block: 18px; }
+.oc-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding-block: 6px;
+  color: var(--foreground);
   font-size: 14px;
+  cursor: pointer;
+}
+.oc-advanced-toggle svg { color: var(--muted-foreground); }
+.oc-advanced-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.oc-advanced-reveal { display: grid; grid-template-rows: 0fr; }
+.oc-profile-advanced[data-expanded="true"] .oc-advanced-reveal { grid-template-rows: 1fr; }
+.oc-advanced-fields {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.oc-profile-advanced[data-expanded="true"] .oc-advanced-fields { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .oc-advanced-reveal { transition: grid-template-rows 320ms cubic-bezier(.35,0,.2,1); }
+  .oc-advanced-toggle svg { transition: transform 260ms var(--oc-motion-ease); }
+  .oc-advanced-fields { transition: opacity 180ms ease-out, transform 260ms var(--oc-motion-ease); }
 }
 .oc-field input,
 .oc-field textarea,

@@ -35,7 +35,7 @@ def run():
                     except OSError:
                         time.sleep(.1)
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch(headless=True, ignore_default_args=["--hide-scrollbars"])
+                    browser = pw.chromium.launch(headless=True, executable_path=os.environ.get("ONECAT_BROWSER_EXECUTABLE") or None, ignore_default_args=["--hide-scrollbars"])
                     context = browser.new_context(viewport={"width": 1500, "height": 1000})
                     assert context.request.post(fixture.BASE + "/api/auth/setup", data={"password": "audit-fixture-password"}).ok
 
@@ -247,17 +247,16 @@ def run():
                     def supported_inventory(page):
                         page.goto(fixture.BASE + '/models')
                         cards = page.locator('.oc-support-card')
-                        expect(cards).to_have_count(8)
-                        page.get_by_role('combobox',name='模型系列').select_option('DeepSeek')
-                        expect(cards).to_have_count(0)
-                        page.locator('.oc-support-references > summary').click()
-                        expect(page.locator('.oc-support-reference')).to_contain_text('8 × V100')
-                        expect(page.get_by_role('button',name='ModelScope 下载')).to_have_count(0)
-                        page.get_by_role('combobox',name='模型系列').select_option('')
-                        page.get_by_placeholder('搜索模型、量化或能力…').fill('Qwen3.6-27B')
-                        expect(cards).to_have_count(2)
-                        page.get_by_placeholder('搜索模型、量化或能力…').fill('')
-                        expect(cards).to_have_count(8)
+                        page.get_by_role('button', name='全部支持', exact=True).click()
+                        expect(cards.first).to_be_visible()
+                        count = cards.count()
+                        expect(page.locator('.oc-support-references')).to_have_count(0)
+                        expect(page.get_by_text('配置与验证详情', exact=True)).to_have_count(0)
+                        search = page.get_by_placeholder('搜索模型、发布者或量化…')
+                        search.fill('Qwen3.6-27B')
+                        expect(cards.first).to_contain_text('Qwen3.6-27B')
+                        search.fill('')
+                        expect(cards).to_have_count(count)
                         page.screenshot(path=str(fixture.ARTIFACTS/'supported-models.png'))
                         page.set_viewport_size({'width':390,'height':844})
                         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

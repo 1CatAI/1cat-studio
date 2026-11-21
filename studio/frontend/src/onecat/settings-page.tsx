@@ -1,10 +1,8 @@
-import { useInterfaceMotion } from "./motion";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Download,
-  Save,
   PackageOpen,
   FileDown,
   ExternalLink,
@@ -12,25 +10,21 @@ import {
 import { Button } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
 import { Switch } from "@/onecat/ui";
-import { useBrowserState } from "./browser-state";
 import { GPUControls } from "./gpu-controls";
 import { LogAnalysisSettings } from "./log-analysis";
 import { StudioUpdates } from "./studio-updates";
-import { modelLabel } from "./model-label";
 import { setLocale } from "@/onecat/locale";
 import { toast } from "sonner";
 import {
   useQuery,
   mutation,
   type Settings,
-  type Profile,
   type Runtime,
   type GPU,
 } from "./api";
 import {
   Page,
   Field,
-  NumberField,
   Action,
   ErrorNotice,
   Modal,
@@ -38,79 +32,93 @@ import {
   saveFile,
 } from "./common";
 
+// Order partial writes even when the settings page is reopened during a save.
+let settingsWrites = Promise.resolve();
+
+function SettingInput({ value, onCommit, type = "text", min, max, ...label }: {
+  id?: string;
+  "aria-labelledby"?: string;
+  value: string | number;
+  onCommit: (raw: string) => void;
+  type?: "text" | "url" | "number";
+  min?: number;
+  max?: number;
+}) {
+  const [draft, setDraft] = useState<string>();
+  return <Input {...label} type={type} required min={min} max={max}
+    value={draft ?? String(value)}
+    onChange={e => setDraft(e.target.value)}
+    onKeyDown={e => {
+      if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
+    }}
+    onBlur={e => {
+      if (draft === undefined) return;
+      const raw = draft.trim();
+      if (!raw || !e.currentTarget.validity.valid) {
+        toast.error(e.currentTarget.validationMessage || (document.documentElement.lang === "en"
+          ? "Enter a value." : "请填写有效值。"));
+      } else if (raw !== String(value)) {
+        onCommit(raw);
+      }
+      setDraft(undefined);
+    }} />;
+}
+
 export function SettingsPage() {
   const t = useText();
-  const uiMotion = useInterfaceMotion();
-  const { data, error } = useQuery<Settings>("/api/settings");
-  const { data: profiles } = useQuery<{ items: Profile[] }>("/api/profiles");
+  const { data, error, refresh } = useQuery<Settings>("/api/settings");
   const { data: runtimes } = useQuery<{ items: Runtime[] }>("/api/runtimes");
   const { data: cap } = useQuery<{
     version: string;
     gpu_control: boolean;
-    automatic_gpu_actions: boolean;
-    startup: { service_enabled: boolean; linger_enabled: boolean; user: string };
     upstream_commit: string;
   }>("/api/studio/capabilities");
-  type Draft = { changes: Partial<Settings> };
-  const [draft, setDraft] = useBrowserState<Draft | Settings | undefined>("onecat:settings-draft", undefined);
   const [saved, setSaved] = useState<Settings>();
-  const baseline = saved || data;
-  // Older versions stored even pristine settings as a full snapshot. Convert
-  // that format once, preserving its differences, then store only edits.
-  function changesOf(value: typeof draft): Partial<Settings> {
-    if (!value) return {};
-    if ("changes" in value) return value.changes;
-    return Object.fromEntries(Object.entries(value).filter(([key, value]) =>
-      key !== "modelscope_token_set" && value !== baseline?.[key as keyof Settings]));
-  }
-  const changes = changesOf(draft);
-  const settings = baseline ? { ...baseline, ...changes } : undefined;
-  const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState<Partial<Settings>>({});
+  const versions = useRef<Partial<Record<keyof Settings, number>>>({});
+  const baseline = saved ?? data;
+  const settings = baseline && { ...baseline, ...pending };
   const [modelscopeToken, setModelscopeToken] = useState(""),
     [backup, setBackup] = useState(""),
     [restore, setRestore] = useState(""),
     [passwordOpen, setPasswordOpen] = useState(false),
     [oldPassword, setOldPassword] = useState(""),
     [newPassword, setNewPassword] = useState("");
+  useEffect(() => { setSaved(undefined); }, [data]);
   useEffect(() => {
-    setSaved(undefined);
-    if (data && draft && !("changes" in draft)) setDraft({ changes: changesOf(draft) });
-  }, [data]);
+    let mounted = true;
+    void settingsWrites.then(() => { if (mounted) refresh(); });
+    return () => { mounted = false; };
+  }, [refresh]);
+
   function change<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setDraft(previous => {
-      const next = { ...changesOf(previous), [key]: value };
-      if (value === baseline?.[key]) delete next[key];
-      return { changes: next };
+    const version = (versions.current[key] ?? 0) + 1;
+    versions.current[key] = version;
+    setPending(current => ({ ...current, [key]: value }));
+    settingsWrites = settingsWrites.then(async () => {
+      try {
+        const { restart_required, ...values } = await mutation<Settings & { restart_required: boolean }>(
+          "/api/settings", { [key]: value }, "PUT",
+        );
+        setSaved(values);
+        if (key === "theme") {
+          applyTheme(values.theme);
+          localStorage.setItem("onecat_theme", values.theme);
+        }
+        if (key === "locale") await setLocale(values.locale);
+        if (restart_required) toast.info(t("重启 Studio 后应用新的监听地址或端口。", "Restart Studio to apply the new address or port."));
+      } catch (error) {
+        toast.error(t("设置未保存", "Setting could not be saved") + " · " + String(error instanceof Error ? error.message : error));
+        refresh();
+      } finally {
+        setPending(current => {
+          if (versions.current[key] !== version) return current;
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
     });
-  }
-  const dirty = Object.keys(changes).some(key => changes[key as keyof Settings] !== baseline?.[key as keyof Settings]);
-  const invalid = settings && (
-    !Number.isInteger(settings.port) || settings.port < 1024 || settings.port > 65535
-      ? t("监听端口必须为 1024–65535 的整数。", "Port must be an integer between 1024 and 65535.")
-      : !Number.isInteger(settings.idle_unload_minutes) || settings.idle_unload_minutes < 0 || settings.idle_unload_minutes > 1440
-        ? t("空闲卸载时间必须为 0–1440 的整数分钟。", "Idle unload must be an integer between 0 and 1440 minutes.")
-        : !settings.model_directory.trim() ? t("请填写模型存储目录。", "Enter a model directory.") : undefined
-  );
-  async function saveSettings() {
-    if (!settings || invalid) return;
-    const submitted = { ...changes };
-    setSaving(true);
-    try {
-      const { restart_required, ...values } = await mutation<Settings & { restart_required: boolean }>("/api/settings", submitted, "PUT");
-      setSaved(values);
-      setDraft(previous => {
-        const next = { ...changesOf(previous) };
-        for (const key of Object.keys(submitted) as (keyof Settings)[])
-          if (next[key] === submitted[key]) delete next[key];
-        return { changes: next };
-      });
-      localStorage.setItem("onecat_theme", values.theme);
-      applyTheme(values.theme);
-      await setLocale(values.locale);
-      toast.success(restart_required
-        ? t("设置已保存。重启 Studio 后应用新的地址或端口。", "Settings saved. Restart Studio to apply address or port changes.")
-        : t("设置已保存", "Settings saved"));
-    } finally { setSaving(false); }
   }
   return (
     <Page
@@ -133,9 +141,7 @@ export function SettingsPage() {
             <div className="oc-form-grid">              <Field label={t("界面语言", "Language")}>
                 <select
                   value={settings.locale}
-                  onChange={(e) =>
-                    { change("locale", e.target.value as Settings["locale"]); void setLocale(e.target.value as Settings["locale"]); }
-                  }
+                  onChange={e => change("locale", e.target.value as Settings["locale"])}
                 >
                   <option value="zh-CN">简体中文</option>
                   <option value="en">English</option>
@@ -144,10 +150,7 @@ export function SettingsPage() {
               <Field label={t("主题", "Appearance")}>
                 <select
                   value={settings.theme}
-                  onChange={(e) => {
-                    change("theme", e.target.value as Settings["theme"]);
-                    applyTheme(e.target.value);
-                  }}
+                  onChange={e => change("theme", e.target.value as Settings["theme"])}
                 >
                   <option value="system">{t("跟随系统", "System")}</option>
                   <option value="light">{t("浅色", "Light")}</option>
@@ -155,14 +158,6 @@ export function SettingsPage() {
                 </select>
               </Field>
 </div>
-            <label className="oc-toggle-row"><Switch checked={uiMotion.preference} onCheckedChange={uiMotion.setPreference} />
-              {t("界面动效", "Interface motion")}
-            </label>
-            <label className="oc-toggle-row"><Switch defaultChecked={localStorage.getItem("onecat_stream_animation") !== "off"}
-              onCheckedChange={value => { localStorage.setItem("onecat_stream_animation", value ? "on" : "off"); window.dispatchEvent(new Event("onecat:animation")); }} />
-              {t("柔和流式动画", "Soft streaming animation")}
-            </label>
-            <p className="oc-muted">{t("界面动效遵循系统的减少动态效果设置。", "Interface motion follows the system’s reduced-motion setting.")}</p>
           </div>
           <div className="oc-panel" id="settings-models">
             <div className="oc-row oc-spaced">
@@ -171,18 +166,12 @@ export function SettingsPage() {
             </div>
             <div className="oc-form-grid">
               <Field label={t("模型存储目录", "Model directory")}>
-                <Input
-                  value={settings.model_directory}
-                  onChange={(e) => change("model_directory", e.target.value)}
-                />
+                <SettingInput value={settings.model_directory}
+                  onCommit={raw => change("model_directory", raw)} />
               </Field>
               <Field label={t("ModelScope 下载源", "ModelScope endpoint")}>
-                <Input
-                  value={settings.modelscope_endpoint}
-                  onChange={(e) =>
-                    change("modelscope_endpoint", e.target.value)
-                  }
-                />
+                <SettingInput type="url" value={settings.modelscope_endpoint}
+                  onCommit={raw => change("modelscope_endpoint", raw)} />
               </Field>
             </div>
             <Field
@@ -265,69 +254,21 @@ export function SettingsPage() {
           <div className="oc-panel" id="settings-policy">
             <h2>{t("服务与资源策略", "Service and resource policy")}</h2>
             <div className="oc-form-grid">
-              <Field
-                label={t("开机自动加载模型", "Load model on boot")}
-                hint={t("选择已保存的启动预设，点击保存后生效。Studio 随系统启动时会自动加载它。", "Choose a saved launch profile and save. Studio loads it when the system starts.")}
-              >
-                <select
-                  value={settings.autostart_profile || ""}
-                  onChange={(e) =>
-                    change("autostart_profile", e.target.value || null)
-                  }
-                >
-                  <option value="">
-                    {t("不自动加载模型", "Do not load a model automatically")}
-                  </option>
-                  {profiles?.items.map((p) => (
-                    <option value={p.id} key={p.id}>
-                      {modelLabel(p)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {cap?.startup && (
-                <div className="oc-muted">
-                  <p>{cap.startup.service_enabled
-                    ? t("Studio 用户服务已设为开机启动。", "Studio user service is enabled at boot.")
-                    : t("启用 Studio 用户服务后可随系统启动。请以服务模式安装，或运行 systemctl --user enable --now onecat-studio.service。", "Enable the Studio user service to start at boot. Install in service mode or run systemctl --user enable --now onecat-studio.service.")}</p>
-                  <p>{cap.startup.linger_enabled
-                    ? t("无需登录也会启动。", "Starts without a user login.")
-                    : t(`目前需用户登录才会启动；管理员可执行 sudo loginctl enable-linger ${cap.startup.user}。`, `A user login is currently required; an administrator can run sudo loginctl enable-linger ${cap.startup.user}.`)}</p>
-                  {!cap.automatic_gpu_actions && (
-                    <p className="oc-status-warn">{t("管理员已暂停自动 GPU 操作。请手动启动模型。", "An administrator paused automatic GPU actions. Start the model manually.")}</p>
-                  )}
-                </div>
-              )}
-              <NumberField
-                label={t(
+              <label className="oc-toggle-row">
+                <Switch checked={settings.restore_model_on_boot}
+                  onCheckedChange={(value) => change("restore_model_on_boot", value)} />
+                {t("开机自动加载上次使用的模型", "Restore the last model on boot")}
+              </label>
+              <Field label={t(
                   "空闲卸载分钟数（0 为关闭）",
                   "Idle unload minutes (0 = disabled)",
-                )}
-                value={settings.idle_unload_minutes}
-                onChange={(v) => change("idle_unload_minutes", v)}
-                min={0}
-                max={1440}
-              />
-              <NumberField
-                label={t("Studio 监听端口", "Studio port")}
-                value={settings.port}
-                onChange={(v) => change("port", v)}
-                min={1024}
-                max={65535}
-              />
-              <Field
-                label={t("允许局域网访问 Studio 与 API", "Allow LAN access to Studio and API")}
-                hint={t(
-                  "保存设置并重启 Studio。访问网页需登录，调用 API 使用 API Key。地址见「服务 → API」。",
-                  "Save the settings and restart Studio. Sign in for web access and use an API key for requests. Find the address under Service → API.",
-                )}
-              >
-                <Switch
-                  checked={settings.host === "0.0.0.0"}
-                  onCheckedChange={(v) =>
-                    change("host", v ? "0.0.0.0" : "127.0.0.1")
-                  }
-                />
+                )}>
+                <SettingInput type="number" value={settings.idle_unload_minutes} min={0} max={1440}
+                  onCommit={raw => change("idle_unload_minutes", Number(raw))} />
+              </Field>
+              <Field label={t("Studio 监听端口", "Studio port")}>
+                <SettingInput type="number" value={settings.port} min={1024} max={65535}
+                  onCommit={raw => change("port", Number(raw))} />
               </Field>
             </div>
             <Button variant="outline" onClick={() => setPasswordOpen(true)}>
@@ -336,8 +277,8 @@ export function SettingsPage() {
           </div>
         </>
       )}
-      <GPUControls />
-      <StudioUpdates dirty={dirty} />
+      <GPUControls showWhen="incomplete" />
+      <StudioUpdates saving={Object.keys(pending).length > 0} />
       <div className="oc-panel" id="settings-data">
         <h2>{t("备份与诊断", "Backup and diagnostics")}</h2>
         <p className="oc-muted">
@@ -434,18 +375,6 @@ export function SettingsPage() {
           </Button>
         </div>
       </div>
-      {settings && <div className="oc-settings-savebar">
-        <span className={invalid ? "oc-status-warn" : "oc-muted"} role="status">{invalid || (dirty ? t("有未保存的更改 · 草稿已暂存", "Unsaved changes · Draft kept") : t("所有设置已保存", "All settings saved"))}</span>
-        <div className="oc-actions">
-        {dirty && <Button variant="ghost" disabled={saving} onClick={() => {
-          setDraft({ changes: {} });
-          if (baseline) { applyTheme(baseline.theme); void setLocale(baseline.locale); }
-        }}>{t("撤销更改", "Discard changes")}</Button>}
-        <span className={dirty ? "oc-save-pending" : ""}><Action run={saveSettings} disabled={!dirty || saving || !!invalid}>
-          <Save />{t("保存设置", "Save settings")}
-        </Action></span>
-        </div>
-      </div>}
       <Modal
         open={passwordOpen}
         onOpenChange={setPasswordOpen}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -103,11 +104,11 @@ def info() -> dict:
     }
 
 
-def prepare(project: dict, task: dict, socket_path: Path) -> tuple[list[str], dict]:
+def prepare(project: dict, task: dict, socket_path: Path, *, native_port=None, token=None) -> tuple[list[str], dict]:
     status = info()
     if not status["installed"]:
         raise ValueError("Codex 组件未安装，请更新完整 Studio 安装包 / Codex component is missing")
-    if not status["sandbox_ready"]:
+    if not native_port and not status["sandbox_ready"]:
         raise ValueError(
             "Agent 沙箱尚未就绪 / Agent sandbox is unavailable: " + status["sandbox_error"]
         )
@@ -126,11 +127,14 @@ def prepare(project: dict, task: dict, socket_path: Path) -> tuple[list[str], di
         "check_for_update_on_startup": False,
         "project_doc_max_bytes": 16384,
     }
+    if native_port:
+        config.update(approval_policy="never", sandbox_mode="danger-full-access")
     lines = [f"{key} = {json.dumps(value)}" for key, value in config.items()]
     lines += [
         "[model_providers.onecat]",
         'name = "1Cat Studio local model"',
-        'base_url = "http://127.0.0.1:9467/v1"',
+        f'base_url = "http://127.0.0.1:{native_port or 9467}/v1"',
+        *([f'http_headers = {{ "x-studio-turn" = "{token}" }}'] if native_port else []),
         'wire_api = "responses"',
         "requires_openai_auth = false",
         "supports_websockets = false",
@@ -151,6 +155,11 @@ def prepare(project: dict, task: dict, socket_path: Path) -> tuple[list[str], di
         'LANG = "C.UTF-8"',
         'PYTHONDONTWRITEBYTECODE = "1"',
     ]
+    if native_port:
+        lines = lines[:lines.index("[shell_environment_policy]")] + ["[shell_environment_policy]", 'inherit = "all"']
+        (home / "config.toml").write_text("\n".join(lines) + "\n")
+        env = {**os.environ, "HOME": str(Path.home()), "CODEX_HOME": str(home)}
+        return [str(component_root() / "bin/codex"), "app-server"], env
     (home / "config.toml").write_text("\n".join(lines) + "\n")
     args = namespace_command() + [
         "--ro-bind"

@@ -56,8 +56,8 @@ def partial_settings_save(page, context):
     context.request.put(BASE + '/api/settings', data={'idle_unload_minutes': 8})
     refresh(page)
     page.wait_for_timeout(200)
-    page.get_by_role('button', name='保存设置', exact=True).click()
-    expect(page.get_by_role('button', name='保存设置', exact=True)).to_be_disabled()
+    with page.expect_response(lambda r: r.url.endswith('/api/settings') and r.request.method == 'PUT'):
+        page.get_by_label('Studio 监听端口', exact=True).press('Enter')
     saved = context.request.get(BASE + '/api/settings').json()
     assert saved['idle_unload_minutes'] == 8, saved
     assert saved['port'] == 9999
@@ -71,10 +71,10 @@ def pending_save_draft(page, context):
         window.auditSaving = true; await new Promise(r => setTimeout(r, 800));
       } return native(url, options);
     }; }''')
-    page.get_by_role('button', name='保存设置', exact=True).click()
+    page.get_by_label('空闲卸载分钟数（0 为关闭）', exact=True).press('Enter')
     page.wait_for_function('window.auditSaving')
     page.get_by_label('空闲卸载分钟数（0 为关闭）', exact=True).fill('10')
-    expect(page.get_by_role('button', name='保存设置', exact=True)).to_be_enabled(timeout=3000)
+    page.get_by_label('空闲卸载分钟数（0 为关闭）', exact=True).press('Enter')
     page.get_by_role('link', name='模型库', exact=True).click()
     page.get_by_role('link', name='设置', exact=True).click()
     expect(page.get_by_label('空闲卸载分钟数（0 为关闭）', exact=True)).to_have_value('10')
@@ -149,15 +149,16 @@ def simultaneous_image_uploads(page, context):
 def mobile_settings_validation(page, context):
     page.set_viewport_size({'width':390,'height':844})
     page.goto(BASE + '/settings')
-    page.get_by_label('Studio 监听端口',exact=True).fill('9')
-    expect(page.get_by_role('button',name='保存设置',exact=True)).to_be_disabled()
-    expect(page.locator('.oc-settings-savebar')).to_contain_text('1024–65535')
-    page.get_by_role('button',name='撤销更改',exact=True).click()
-    expect(page.get_by_label('Studio 监听端口',exact=True)).to_have_value('8888')
+    port = page.get_by_label('Studio 监听端口', exact=True)
+    original = port.input_value()
+    port.fill('9')
+    port.press('Enter')
+    expect(port).to_have_value(original)
+    assert context.request.get(BASE+'/api/settings').json()['port'] == int(original)
     page.get_by_label('界面语言',exact=True).select_option('en')
     page.get_by_label('Appearance',exact=True).select_option('dark')
-    expect(page.get_by_role('button',name='Save settings',exact=True)).to_be_in_viewport()
-    expect(page.get_by_role('button',name='Discard changes',exact=True)).to_be_in_viewport()
+    expect(page.get_by_role('button',name='Save settings',exact=True)).to_have_count(0)
+    expect(page.get_by_role('button',name='Discard changes',exact=True)).to_have_count(0)
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     expect(page.locator('html')).to_have_class('dark')
 

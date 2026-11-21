@@ -15,7 +15,7 @@ from collections import deque
 from fastapi import HTTPException, Request
 from starlette.responses import StreamingResponse
 
-from . import db, proxy
+from . import chat_titles, db, proxy
 
 _runs: dict[str, Run] = {}
 _tasks: dict[str, asyncio.Task] = {}
@@ -82,6 +82,7 @@ async def shutdown():
             task.cancel("Studio is restarting")
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
+    await chat_titles.shutdown()
 
 
 class Run:
@@ -246,6 +247,9 @@ class Run:
                 except Exception:
                     logger.exception("Unable to close chat stream %s", self.record["id"])
             self.finish()
+        if self.record["state"] == "completed":
+            body = await request.json()
+            chat_titles.schedule(self.record["thread_id"], body.get("model"))
 
 
 def start(thread: str, payload: dict) -> dict:
@@ -320,16 +324,6 @@ def start(thread: str, payload: dict) -> dict:
                 settings.get("thinking_effort"),
             ),
         }
-    if submission and submission["settings"].get("sampling_mode", "auto") == "auto":
-        from .model_controls import recommended_sampling
-        from .engine import private_state
-
-        recommended = recommended_sampling(private_state().get("profile") or {})
-        if recommended:
-            # Follow the model card for the selected mode unless the user set
-            # their own temperature or top-p for this conversation.
-            mode = "thinking" if submission["settings"].get("thinking") else "instruct"
-            body.update(recommended[mode])
     record = {
         "id": db.uid(),
         "thread_id": thread,

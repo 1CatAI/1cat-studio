@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 from . import __version__, db, update_protocol as protocol
 from .config import state_root
 
-DEFAULT_CHANNEL = "http://156.226.174.161:8089/onecat/studio/latest.json"
+DEFAULT_CHANNEL = "http://211.154.19.149:8089/onecat/studio/latest.json"
 APP_ROOT = Path(__file__).resolve().parents[3]
 CACHE_SECONDS = 900
 _cache: dict = {}
@@ -233,13 +233,13 @@ def start(manifest: dict, *, port: int, switch_to_release: bool = False) -> dict
             str(state_root()),
             "--port",
             os.environ.get("ONECAT_STUDIO_LISTEN_PORT", str(port)),
-            "--host",
-            os.environ.get("ONECAT_STUDIO_LISTEN_HOST", db.settings()["host"]),
             "--service",
             manager,
             "--operation",
             operation,
         ]
+        if os.environ.get("ONECAT_STUDIO_BIND_MODE") != "auto":
+            command.extend(["--host", os.environ.get("ONECAT_STUDIO_LISTEN_HOST", db.settings()["host"])])
         unit = Path.home() / ".config/systemd/user" / unit_name
         unit.parent.mkdir(parents=True, exist_ok=True)
         unit.write_text(

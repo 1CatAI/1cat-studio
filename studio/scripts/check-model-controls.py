@@ -92,9 +92,10 @@ def main():
                 expect(picker).to_contain_text("NVFP4")
                 picker.click()
                 expect(page.locator(".oc-model-choice-source")).to_have_count(3)
-                assert sorted(
-                    page.locator(".oc-model-choice-source").all_text_contents()
-                ) == sorted(["Unsloth", "QUASAR-QAT", "QUASAR-QAT · 本地导入"])
+                sources = page.locator(".oc-model-choice-source")
+                assert sorted(row.locator("span").all_text_contents() for row in sources.all()) == sorted(
+                    [["Unsloth", "NVFP4"], ["QUASAR-QAT", "NVFP4"], ["QUASAR-QAT", "本地导入", "NVFP4"]]
+                )
                 page.screenshot(path=str(OUT / "publishers.png"))
                 page.get_by_label("搜索已下载模型").fill("unsloth")
                 expect(page.locator(".oc-model-choice")).to_have_count(1)
@@ -103,8 +104,12 @@ def main():
                 think.click()
                 slider = page.get_by_role("slider", name="思考强度")
                 expect(slider).to_have_attribute("aria-valuetext", "关闭")
-                slider.fill("1")
+                popup = page.locator(".oc-thinking-popover")
+                expect(popup.get_by_role("button")).to_have_text(["关闭", "低", "中", "极高"])
+                trigger_box = think.bounding_box()
+                popup.get_by_role("button", name="低", exact=True).click()
                 expect(think).to_contain_text("思考 · 低")
+                assert think.bounding_box()["width"] == trigger_box["width"]
                 slider.press("ArrowRight")
                 expect(slider).to_have_attribute("aria-valuetext", "中")
                 page.screenshot(path=str(OUT / "thinking-desktop.png"))
@@ -112,11 +117,13 @@ def main():
                 page.reload()
                 expect(think).to_contain_text("思考 · 中")
                 page.set_viewport_size({"width": 390, "height": 844})
+                page.emulate_media(reduced_motion="reduce")
                 think.click()
                 slider = page.get_by_role("slider", name="思考强度")
-                slider.fill("3")
+                slider.press("End")
                 expect(slider).to_have_attribute("aria-valuetext", "极高")
-                popup = page.locator(".oc-thinking-popover")
+                expect(popup).to_have_css("animation-name", "none")
+                expect(popup.locator(".oc-thinking-cursor")).to_have_css("transition-duration", "0s")
                 bounds = popup.bounding_box()
                 assert bounds and bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 390
                 page.screenshot(path=str(OUT / "thinking-mobile.png"))

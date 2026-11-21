@@ -103,7 +103,7 @@ export function GPUControls({
   if (showWhen === "ready" && stage !== "ready") return null;
   // The setup page owns the guided flow until GPU control actually works, so
   // the wizard is never hidden behind a collapsed section when it is needed.
-  if (showWhen === "incomplete" && (!data || stage === "ready")) return null;
+  if (showWhen === "incomplete" && ((!data && !error) || stage === "ready")) return null;
 
   const statusLabels: Record<Stage, string> = {
     unsupported: t("缺少控制组件", "Control component missing"),

@@ -20,10 +20,10 @@ import { ModelPicker, ThinkingToggle, thinkingEffort, type ThinkingSupport, type
 import { AgentStats } from "./agent-stats";
 import { PreviewPanel } from "./preview-panel";
 import { SubagentTree } from "./agent-swarm";
-type Project = { id: string; name: string; repository?: string };
+type Project = { id: string; name: string };
 type EngineStatus = { installed: boolean; ready?: boolean; sandbox_ready?: boolean; sandbox_error?: string; error?: string;
   version: string; protocol?: string; upstream_commit?: string; capabilities?: Record<string, boolean> };
-type AgentStatus = EngineStatus & { source: string; pi?: EngineStatus;
+type AgentStatus = EngineStatus & { desktop?: boolean; source: string; pi?: EngineStatus;
   engines?: { codex?: EngineStatus; pi?: EngineStatus };
   model: { ready: boolean; name?: string; label?: string; context_window?: number; tool_calling: boolean; max_num_seqs?: number; running_requests?: number; waiting_requests?: number; thinking?: ThinkingSupport } };
 
@@ -128,14 +128,14 @@ export function AgentPage() {
   const [draft, setDraft] = useBrowserState("onecat:agent-draft:" + (taskId || projectId || "new"), "");
   useLayoutEffect(() => {
     const carry = pendingProjectDraft.current;
-    if (carry && carry.id === projectId && !taskId) {
+    if (carry && project?.id === carry.id && !taskId) {
       pendingProjectDraft.current = null;
       setDraft(carry.text);
     }
-  }, [projectId, taskId, setDraft]);
+  }, [project?.id, taskId, setDraft]);
   const [submission, setSubmission] = useBrowserState<{ text: string; id: string } | null>("onecat:agent-submit:" + (taskId || projectId || "new"), null);
   const { data: sourceChat, error: sourceError } = useQuery<{ thread: Thread; messages: Message[] }>(source ? `/api/chat/threads/${source}` : null);
-  const [createOpen, setCreateOpen] = useState(false), [name, setName] = useState(""), [repository, setRepository] = useState("");
+  const [createOpen, setCreateOpen] = useState(false), [name, setName] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [creating, setCreating] = useState(false);
   const [uploadNotice, setUploadNotice] = useState("");
   const [notice, setNotice] = useState("");
@@ -146,6 +146,8 @@ export function AgentPage() {
   const [preferredEngine, setAgentEngine] = useBrowserState<"codex" | "pi">("onecat:agent-engine", "codex");
   const [preferredCollaboration, setCollaboration] = useBrowserState<"single" | "auto" | "swarm">("onecat:agent-collaboration", "single");
   const agentEngine = taskId ? task?.engine || "codex" : preferredEngine === "pi" ? "pi" : "codex";
+  const desktopProject = !!status?.desktop && projectId.startsWith("desktop-") && agentEngine === "codex";
+  const writableLabel = desktopProject ? t("本机完全访问", "Full access") : t("项目写入", "Workspace write");
   const requestedCollaboration = taskId ? task?.collaboration : preferredCollaboration;
   const collaboration = agentEngine === "pi" && (requestedCollaboration === "auto" || requestedCollaboration === "swarm") ? requestedCollaboration : "single";
   const input = useRef<HTMLTextAreaElement>(null), permissionInput = useRef<HTMLSelectElement>(null);
@@ -195,6 +197,7 @@ export function AgentPage() {
     if (candidate) setPreview(current => current && (current.source !== candidate!.source || current.complete !== candidate!.complete) ? candidate : current);
   }, [task?.items, file?.text, file?.path]);
   useEffect(() => {
+    if (pendingProjectDraft.current?.id === selected) return;
     if (projects && !projects.items.some(p => p.id === selected)) select(projects.items[0]?.id || "");
   }, [projects?.items, selected, select]);
   useEffect(() => {
@@ -221,7 +224,7 @@ export function AgentPage() {
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [taskId, !!task]);
   const selectedRuntime = agentEngine === "pi" ? (status?.pi || status?.engines?.pi) : status;
-  const engineReady = !!selectedRuntime?.installed && (agentEngine === "pi" ? !!selectedRuntime.ready : !!status?.sandbox_ready);
+  const engineReady = !!selectedRuntime?.installed && (agentEngine === "pi" ? !!selectedRuntime.ready : ((desktopProject && mode !== "plan" && permission !== "read-only") || !!status?.sandbox_ready));
   const reason = statusError ? t("暂时无法确认 Agent 状态，请稍后重试。", "Agent status is unavailable. Please try again shortly.")
     : !status ? t("正在检查 Agent…", "Checking Agent…")
     : !engineReady ? selectedRuntime?.error || selectedRuntime?.sandbox_error || t(agentEngine === "pi" ? "PI（Oh My Pi）运行时不可用，请安装固定版本 omp。" : "Codex 运行环境不可用，请检查组件与沙箱。", agentEngine === "pi" ? "PI (Oh My Pi) requires the pinned omp runtime. Install it to continue." : "Codex is unavailable. Check the runtime and sandbox setup.")
@@ -419,7 +422,7 @@ export function AgentPage() {
             <input hidden type="file" multiple ref={fileInput} onChange={e => void upload(e.target.files)} />
             <input hidden type="file" multiple ref={element => { folderInput.current = element; element?.setAttribute("webkitdirectory", ""); }} onChange={e => void upload(e.target.files)} />
             <Button type="button" size="icon-sm" variant="ghost" aria-label={t("上传文件", "Upload files")} title={t("上传文件", "Upload files")} disabled={!project || running || busy} onClick={() => fileInput.current?.click()}><Plus size={18} /></Button>
-            <button type="button" className="oc-agent-permission" disabled={running || busy} onClick={() => setInfoPanel("permissions")}><ShieldCheck size={14} /><span>{mode === "plan" ? t("计划 · 只读", "Plan · Read only") : (running ? task?.execution_permission : permission) === "read-only" ? t("只读", "Read only") : t("项目写入", "Workspace write")}</span><ChevronDown size={12} /></button>
+            <button type="button" className="oc-agent-permission" disabled={running || busy} onClick={() => setInfoPanel("permissions")}><ShieldCheck size={14} /><span>{mode === "plan" ? t("计划 · 只读", "Plan · Read only") : (running ? task?.execution_permission : permission) === "read-only" ? t("只读", "Read only") : writableLabel}</span><ChevronDown size={12} /></button>
             <ThinkingToggle value={thinking ?? task?.thinking ?? false} effort={selectedEffort} onChange={(enabled, level) => { setThinking(enabled); setEffort(level || null); }} support={status?.model.thinking} disabled={running || busy} />
             <ModelPicker agent compact disabled={running || busy} opened={infoPanel === "model"} onOpenChange={open => setInfoPanel(open ? "model" : null)} />
             {running && canSteer && draft.trim() && <Button type="submit" size="icon" aria-label={t("补充要求", "Add instructions")} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}</Button>}
@@ -472,8 +475,8 @@ export function AgentPage() {
     <Modal open={!!infoPanel && infoPanel !== "model"} onOpenChange={open => { if (!open) setInfoPanel(null); }} title={infoPanel === "help" ? t("Agent 命令", "Agent commands") : infoPanel === "history" ? t("继续任务", "Resume a task") : infoPanel === "permissions" ? t("工作方式", "Working mode") : t("模型与任务信息", "Model and task details")}>
       {infoPanel === "permissions" ? <div className="oc-agent-details">
         <Field label={t("工作模式", "Mode")}><select value={mode} disabled={running || busy} onChange={e => setMode(e.target.value as typeof mode)}><option value="default">{t("执行：读取、修改并测试", "Execute: read, edit and test")}</option><option value="plan">{t("计划：分析与规划，不写入项目", "Plan: analyze and plan without editing")}</option></select></Field>
-        <Field label={t("项目权限", "Project permissions")}><select ref={permissionInput} value={mode === "plan" ? "read-only" : permission} disabled={running || busy || mode === "plan"} onChange={e => setPermission(e.target.value as typeof permission)}><option value="workspace-write">{t("项目写入", "Workspace write")}</option><option value="read-only">{t("只读", "Read only")}</option></select></Field>
-        <p className="oc-agent-note">{t("文件访问范围为当前项目。联网已关闭。权限更改在下一轮任务生效。", "File access is scoped to this project. Networking is off. Permission changes apply on the next turn.")}</p>
+        <Field label={t("项目权限", "Project permissions")}><select ref={permissionInput} value={mode === "plan" ? "read-only" : permission} disabled={running || busy || mode === "plan"} onChange={e => setPermission(e.target.value as typeof permission)}><option value="workspace-write">{writableLabel}</option><option value="read-only">{t("只读", "Read only")}</option></select></Field>
+        <p className="oc-agent-note">{desktopProject ? t("执行模式下，Codex 可以使用当前系统账号的文件、网络和工具。", "In execute mode, Codex can use your local account’s files, network and tools.") : t("文件访问范围为当前项目。联网已关闭。权限更改在下一轮任务生效。", "File access is scoped to this project. Networking is off. Permission changes apply on the next turn.")}</p>
         <Button onClick={() => setInfoPanel(null)}>{t("完成", "Done")}</Button>
       </div> : infoPanel === "history" ? <AgentHistory /> : infoPanel === "help" ? <div className="oc-agent-command-help">
         {agentCommands.map(([name, zh, en]) => <button type="button" key={name} onClick={() => { setInfoPanel(null); chooseCommand(name); }}><code>/{name}</code><span>{t(zh, en)}</span></button>)}
@@ -482,7 +485,7 @@ export function AgentPage() {
         <dl><dt>{t("当前模型", "Current model")}</dt><dd>{status?.model.label || status?.model.name || "—"}</dd>
           {task && <><dt>{t("本任务上次使用", "Last used for this task")}</dt><dd>{task.model_label || task.model}</dd></>}
           <dt>{agentEngine === "pi" ? "PI" : "Codex"}</dt><dd>{task?.runtime_version || task?.codex_version || selectedRuntime?.version || "—"}</dd>
-          <dt>{task ? t("本轮执行权限", "Turn permissions") : t("权限", "Permissions")}</dt><dd>{(task ? task.execution_permission : mode === "plan" ? "read-only" : permission) === "read-only" ? t("只读项目 · 外网关闭", "Read-only project · Network off") : t("可写当前项目 · 外网关闭", "Writable project · Network off")}</dd>
+          <dt>{task ? t("本轮执行权限", "Turn permissions") : t("权限", "Permissions")}</dt><dd>{(task ? task.execution_permission : mode === "plan" ? "read-only" : permission) === "read-only" ? t("只读项目 · 外网关闭", "Read-only project · Network off") : desktopProject ? writableLabel : t("可写当前项目 · 外网关闭", "Writable project · Network off")}</dd>
           <dt>{t("总上下文", "Context window")}</dt><dd>{format(task?.context_window || status?.model.context_window, 0)} tokens</dd>
           <dt>{t("Agent 上下文预算", "Agent context budget")}</dt><dd>{task?.context_usage?.modelContextWindow ? format(task.context_usage.modelContextWindow, 0) + " tokens" : "—"}</dd>
           <dt>{t("最近上下文用量", "Latest context usage")}</dt><dd>{task?.context_usage?.last ? format(task.context_usage.last.totalTokens, 0) + " tokens" : "—"}</dd>
@@ -496,12 +499,11 @@ export function AgentPage() {
     <Modal open={createOpen} onOpenChange={setCreateOpen} title={t("新建 Agent 项目", "New Agent project")}>
       <form onSubmit={async e => {
         e.preventDefault(); if (creating) return; setCreating(true); setError("");
-        try { const result = await mutation<Project>("/api/agent/projects", { name, repository: repository.trim() || null }); if (!taskId) pendingProjectDraft.current = { id: result.id, text: draft }; select(result.id); setCreateOpen(false); setName(""); setRepository(""); refreshData(); }
+        try { const result = await mutation<Project>("/api/agent/projects", { name }); if (!taskId) pendingProjectDraft.current = { id: result.id, text: draft }; select(result.id); setCreateOpen(false); setName(""); refreshData(); }
         catch (e) { setError((e as Error).message); } finally { setCreating(false); }
       }}>
         <Field label={t("项目名称", "Project name")}><Input autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required /></Field>
-        <Field label={t("GitHub 仓库（可选）", "GitHub repository (optional)")} hint={t("输入公开仓库地址，或留空创建空白项目。", "Enter a public repository URL, or leave it blank to start an empty project.")}><Input value={repository} onChange={e => setRepository(e.target.value)} placeholder="https://github.com/owner/repository" /></Field>
-        <p className="oc-agent-note">{t("文件保存在这台服务器的独立项目目录，可上传文件或下载整个项目。", "Files live in an isolated project on this server. Upload files or download the entire project.")}</p>
+        <p className="oc-agent-note">{status?.desktop ? t("新项目默认允许 Codex 使用当前系统账号操作这台电脑。", "Codex can use this computer as your signed-in OS user.") : t("文件保存在这台服务器的独立项目目录，可上传文件或下载整个项目。", "Files live in an isolated project on this server. Upload files or download the entire project.")}</p>
         <ErrorNotice error={error} /><Button type="submit" disabled={creating || !name.trim()}>{creating ? <LoaderCircle className="animate-spin" /> : <FolderOpen />}{creating ? t("正在创建…", "Creating…") : t("创建项目", "Create project")}</Button>
       </form>
     </Modal>

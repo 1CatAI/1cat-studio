@@ -12,7 +12,7 @@
 /path/to/existing-studio/.venv/bin/python /path/to/0.5-source/studio/scripts/bootstrap-ota.py \
   --state "$HOME/.local/share/onecat-studio" \
   --prefix "$HOME/.local/share/onecat-studio-app" \
-  --channel http://156.226.174.161:8089/onecat/studio/latest.json
+  --channel http://211.154.19.149:8089/onecat/studio/latest.json
 ```
 
 先显示已验证的版本与摘要；加 `--install` 执行迁移。自定义部署需要填写实际 `--service`、`--host`、`--port`。服务必须为当前用户管理的 `onecat-studio[-名称].service`，并使用 `KillMode=process` 保留独立推理进程。非 systemd、容器及其他架构暂不支持此 OTA 路径。
@@ -28,7 +28,7 @@ python studio/scripts/package.py --base /data/studio-build/base --output /data/s
 python studio/scripts/publish-update.py \
   --bundle /data/studio-build/releases/onecat-studio-VERSION-linux-x86_64.tar.gz \
   --out /data/studio-build/channel \
-  --base-url http://156.226.174.161:8089/onecat/studio \
+  --base-url http://211.154.19.149:8089/onecat/studio \
   --signing-key /secure/offline/studio-release.pem --key-id studio-2026-09 \
   --notes '本次更新说明'
 ```
@@ -41,18 +41,17 @@ python studio/scripts/publish-update.py \
 
 ## VPS 发布顺序
 
-现有 Nginx 通道对应 `/var/www/onecat-studio-updates/studio/`。先上传包和不可变版本清单，确认公网可下载，最后原子替换 `latest.json`。不要先覆盖 latest 再上传大包。
+国内正式更新服务器是 `211.154.19.149:8089`，公开目录为 `/srv/onecat-updates/public/onecat/studio/`。在同一文件系统的非公开目录 `/srv/onecat-updates/stage/` 暂存文件，核对签名、序号和包摘要后先发布包和版本清单，再原子替换 `latest.json`。不要改写已签名清单中的 URL。
 
 ```bash
-scp /data/studio-build/channel/onecat-studio-VERSION-linux-x86_64.tar.gz root@VPS:/var/www/onecat-studio-updates/studio/.bundle.upload
-ssh root@VPS 'mv /var/www/onecat-studio-updates/studio/.bundle.upload /var/www/onecat-studio-updates/studio/onecat-studio-VERSION-linux-x86_64.tar.gz'
-scp /data/studio-build/channel/VERSION.json root@VPS:/var/www/onecat-studio-updates/studio/VERSION.json
+scp /data/studio-build/channel/{onecat-studio-VERSION-linux-x86_64.tar.gz,VERSION.json} root@211.154.19.149:/srv/onecat-updates/stage/
+ssh root@211.154.19.149 '/usr/local/sbin/onecat-studio-promote prepare VERSION'
 ```
 
 先让隔离测试实例的 `ONECAT_UPDATE_CHANNEL` 指向 `VERSION.json` 完成验证，再执行：
 
 ```bash
-ssh root@VPS 'cp /var/www/onecat-studio-updates/studio/VERSION.json /var/www/onecat-studio-updates/studio/.latest.next && chmod 644 /var/www/onecat-studio-updates/studio/.latest.next && mv /var/www/onecat-studio-updates/studio/.latest.next /var/www/onecat-studio-updates/studio/latest.json'
+ssh root@211.154.19.149 '/usr/local/sbin/onecat-studio-promote activate VERSION'
 ```
 
 正式发布者应串行执行这些步骤，不覆盖已有版本文件。需要撤回有问题的版本时，发布序号更大的修复版本；已见过较高序号的客户端拒绝重放较旧通道清单。

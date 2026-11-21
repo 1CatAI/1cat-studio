@@ -48,6 +48,20 @@ def test_engine_api_key_is_parsed_as_a_value_and_redacted(key):
     assert key not in engine.redact_log(" ".join(argv))
 
 
+def test_model_preflight_accepts_shared_gpu(monkeypatch, tmp_path):
+    uuid = "GPU-" + "a" * 36
+    device = {"uuid": uuid, "index": 0, "compute_capability": [7, 0],
+              "processes": [{"pid": 12345}], "utilization": 50}
+    monkeypatch.setattr(gpu, "snapshot", lambda: {"gpus": [device]})
+    db.put("runtimes", "r", {"id": "r", "validated": True})
+    (tmp_path / "config.json").write_text("{}")
+    (tmp_path / "model.safetensors").touch()
+    profile, _ = engine.validate_profile({
+        "name": "shared", "runtime_id": "r", "model_path": str(tmp_path), "gpu_uuids": [uuid],
+    })
+    assert profile["gpu_uuids"] == [uuid]
+
+
 def test_engine_command_preview_omits_api_key():
     argv = engine.build_argv(
         {"name": "test", "model_path": "/model", "runtime_id": "r"},

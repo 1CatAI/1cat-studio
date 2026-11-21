@@ -251,3 +251,16 @@ def test_disk_failure_does_not_stop_manager(signed, tmp_path, state, monkeypatch
     assert updates.read_status()["stage"] == "failed"
     assert services.calls == []
     assert not op.journal_path.exists()
+
+
+@pytest.mark.parametrize("host", [None, "127.0.0.1", "0.0.0.0"])
+def test_activation_preserves_automatic_and_explicit_listener_modes(signed, tmp_path, state, monkeypatch, host):
+    op, _ = operation(signed, tmp_path, state, monkeypatch)
+    op.args.host = host
+    op.activate(op.prefix / "releases/new")
+    command = next(line for line in op.dropin.read_text().splitlines() if line.startswith('ExecStart="'))
+    assert '--port 8898' in command
+    if host:
+        assert f'--host "{host}"' in command
+    else:
+        assert '--host' not in command

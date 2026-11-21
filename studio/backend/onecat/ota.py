@@ -368,9 +368,8 @@ class Operation:
         self.dropin.write_text(
             "[Service]\nExecStart=\nExecStart="
             + quoted
-            + ' --host "'
-            + self.args.host.replace("%", "%%")
-            + '" --port '
+            + (' --host "' + self.args.host.replace("%", "%%") + '"' if self.args.host else "")
+            + " --port "
             + str(self.args.port)
             + "\nWorkingDirectory="
             + str(release).replace("%", "%%")
@@ -445,7 +444,7 @@ def main():
     parser.add_argument("--prefix", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host")
     parser.add_argument("--service", default="onecat-studio.service")
     parser.add_argument("--operation", required=True)
     args = parser.parse_args()

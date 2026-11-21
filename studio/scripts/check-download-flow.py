@@ -28,7 +28,7 @@ item['files']=[{'path':n,'bytes':len(v),'sha256':hashlib.sha256(v).hexdigest()} 
 catalog.directory=lambda:inventory
 devices.append({**devices[0],'index':4,'uuid':'GPU-'+'a'*36,'name':'Quadro P400','compute_capability':[6,1],'memory_total_mib':2048})
 gpu.snapshot=lambda:{'gpus':devices,'available':True,'timestamp':time.time()}
-db.patch('runtimes','r',{'release':{'version':'dev'},'capabilities':{'vllm_version':'dev'}})
+db.patch('runtimes','r',{'validated':False,'release':{'version':'dev'},'capabilities':{'vllm_version':'dev'}})
 class Hub:
  def list_repo_files(self,*args,**kwargs):
   return [SimpleNamespace(path=f['path'],size=f['bytes'],sha256=f['sha256'],is_dir=False) for f in item['files']]
@@ -83,6 +83,10 @@ def check_download_speed(page):
     page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
     rate = page.locator('.oc-support-card').first.locator('.oc-download-rate')
     expect(rate).to_have_text('下载速率 12.5 MB/s')
+    card = page.locator('.oc-support-card').first
+    expect(card.locator('.oc-kit-download-caption strong')).to_have_text('25.0%')
+    expect(card.locator('.oc-download-eta')).to_contain_text('完成')
+    expect(card.locator('.oc-default-recipe')).to_have_count(0)
     for speed, text in [(512*1024,'512 KB/s'),(150,'150 B/s'),(0,'0 B/s'),(None,'—')]:
         job.update(bytes_per_second=speed, updated_at=time.time())
         page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
@@ -143,19 +147,25 @@ def run():
                     page.get_by_role('button',name='全部支持',exact=True).click()
                     check_download_speed(page)
                     cards=page.locator('.oc-support-card')
-                    expect(cards).to_have_count(9)
-                    expect(page.get_by_role('button',name='ModelScope 下载',exact=True)).to_have_count(9)
+                    supported = context.request.get(fixture.BASE+'/api/models/supported').json()['items']
+                    downloadable = [row for row in supported if row['downloadable']]
+                    assert any(row.get('catalog_id') == 'RadixArk/Qwen3.8-Flash-Next-NVFP4' for row in downloadable)
+                    page.get_by_role('button',name='全部支持',exact=True).click()
+                    expect(cards).to_have_count(len(downloadable))
+                    expect(page.get_by_role('button',name='ModelScope 下载',exact=True)).to_have_count(len(downloadable))
                     assert page.get_by_role('button',name='ModelScope 下载',exact=True).evaluate_all('buttons=>buttons.every(b=>!b.disabled)')
                     card=cards.first
-                    card.locator('.oc-default-recipe summary').click()
-                    expect(card.locator('.oc-default-recipe')).to_contain_text('自动：跟随模型')
+                    expect(card.locator('.oc-default-recipe')).to_have_count(0)
+                    expect(page.get_by_text('配置与验证详情', exact=True)).to_have_count(0)
                     card.get_by_role('button',name='编辑默认配置').click()
                     dialog=page.get_by_role('dialog')
                     expect(dialog).to_be_visible()
-                    dialog.locator('.oc-profile-advanced').evaluate("element => element.open = true")
+                    advanced = dialog.get_by_role("button", name="高级设置", exact=True)
+                    if advanced.get_attribute("aria-expanded") == "false":
+                        advanced.click()
                     expect(dialog.locator('.oc-gpu-choices [role=checkbox][data-state=checked]')).to_have_count(4)
-                    expect(dialog.get_by_label('最大生成长度', exact=True)).to_have_value('')
-                    expect(dialog.locator('select').filter(has=page.locator('option[value="r"]'))).to_have_value('')
+                    expect(dialog.get_by_label('最大生成长度', exact=True)).to_have_count(0)
+                    expect(dialog.get_by_role('combobox', name='运行环境', exact=True)).to_have_value('')
                     expect(dialog.get_by_role('button',name='保存',exact=True)).to_be_disabled()
                     dialog.get_by_role('button',name='取消',exact=True).click()
                     card.get_by_role('button',name='ModelScope 下载',exact=True).click()
@@ -179,28 +189,31 @@ def run():
                     jobs=context.request.get(fixture.BASE+'/api/jobs').json()['items']
                     completed=next(j for j in jobs if j['kind']=='download_model')
                     assert completed['state']=='completed' and completed['result']['profile_pending_reason']
-                    subprocess.run([str(fixture.ROOT/'.venv/bin/python'),'-c',"from onecat import db; db.patch('runtimes','r',{'release':{'version':'1.5.0'},'capabilities':{'vllm_version':'1.5.0'}})"],env=env,check=True)
+                    subprocess.run([str(fixture.ROOT/'.venv/bin/python'),'-c',"from onecat import db; db.patch('runtimes','r',{'validated':True,'release':{'version':'1.5.0'},'capabilities':{'vllm_version':'1.5.0'}})"],env=env,check=True)
                     page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
                     expect(card.get_by_role('button',name='使用推荐预设启动',exact=True)).to_be_enabled()
                     card.get_by_role('button',name='使用推荐预设启动',exact=True).click()
-                    page.wait_for_timeout(700)
+                    expect(card.get_by_role('link',name='开始聊天',exact=True)).to_be_visible(timeout=10000)
                     state_result=context.request.get(fixture.BASE+'/api/inference/status').json()
                     profile=state_result['profile']
                     assert state_result['profile_id'].startswith('catalog-'),state_result
                     assert len(profile['gpu_uuids'])==4 and profile['dtype']=='half'
-                    assert profile['kv_cache_dtype']=='fp8_e5m2' and profile['max_model_len']==262144
+                    recipe_path = fixture.ROOT / 'studio/backend/onecat/data/sm70-qwen38-release-profile.json'
+                    expected = json.loads(recipe_path.read_text())['args']
+                    assert profile['kv_cache_dtype'] == expected['kv_cache_dtype']
+                    assert profile['max_model_len'] == expected['max_model_len']
                     assert profile['default_sampling']['max_tokens'] is None and profile['speculative_config'] is None
+                    assert profile['vision_enabled'] and profile['max_images']==1
                     assert profile['model_path']==local['path']
-                    expect(card.get_by_role('link',name='开始聊天',exact=True)).to_be_visible()
                     page.get_by_role('tab',name='已下载',exact=True).click()
                     local_card=page.locator('.oc-support-card').filter(has_text='Qwen3.8-27B')
-                    local_card.locator('.oc-default-recipe summary').click()
                     local_card.get_by_role('button',name='编辑默认配置').click()
                     expect(dialog.locator('.oc-gpu-choices [role=checkbox][data-state=checked]')).to_have_count(4)
                     dialog.get_by_role('button',name='取消',exact=True).click()
                     page.get_by_role('tab',name='发现模型',exact=True).click()
                     page.set_viewport_size({'width':390,'height':844})
-                    expect(cards).to_have_count(9)
+                    page.get_by_role('button',name='全部支持',exact=True).click()
+                    expect(cards).to_have_count(len(downloadable))
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                     cards.first.scroll_into_view_if_needed()
                     page.screenshot(path=str(fixture.ARTIFACTS/'download-mobile.png'))

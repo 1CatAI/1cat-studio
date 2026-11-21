@@ -146,6 +146,10 @@ def recommended_update(profile: dict, runtime: dict) -> dict | None:
     values = recommendation(runtime)
     is_legacy = all(profile.get(key) == value for key, value in legacy.items())
     spec = profile.get("speculative_config")
+    # Studio's managed 27B preset uses a 4096-token batch even for wheels
+    # whose own default is larger. Preserve it when offering a draft update.
+    if not is_legacy and profile.get("max_num_batched_tokens") == 4096:
+        values["max_num_batched_tokens"] = 4096
     is_current = not spec and all(profile.get(key) == values[key] for key in legacy)
     if not is_legacy and not is_current:
         return None
@@ -172,6 +176,12 @@ def recommended_update(profile: dict, runtime: dict) -> dict | None:
             return None
         values["speculative_config"] = wanted
     else:
+        from .mtp_profiles import family_mtp
+
+        family = family_mtp(runtime, profile.get("model_path") or "", profile.get("catalog_id"))
+        if family:
+            values["speculative_config"] = family
+            return values
         draft_path = qualified_draft(runtime)
         if draft_path:
             values["speculative_config"] = default_speculation(runtime, draft_path)

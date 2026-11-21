@@ -2,7 +2,7 @@
 export type ConversationMode = "chat" | "agent";
 export type ConversationLocation = {
   last: ConversationMode;
-  chat: { thread?: string };
+  chat: { thread?: string; draft?: string };
   agent: { task?: string; source?: string };
 };
 
@@ -10,12 +10,17 @@ const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const id = (value: unknown) => typeof value === "string" && value.length ? value : undefined;
 
+function chatSearch(params: Record<string, unknown>) {
+  const thread = id(params.thread), draft = id(params.draft);
+  return !thread && draft ? { draft } : { thread };
+}
+
 /** Browser storage is optional and untrusted; only route parameters are remembered. */
 export function conversationLocation(value: unknown): ConversationLocation {
   const stored = record(value), chat = record(stored.chat), agent = record(stored.agent);
   return {
     last: stored.last === "agent" ? "agent" : "chat",
-    chat: { thread: id(chat.thread) },
+    chat: chatSearch(chat),
     agent: { task: id(agent.task), source: id(agent.source) },
   };
 }
@@ -32,7 +37,7 @@ export function rememberConversation(value: unknown, path: string, search: unkno
     ...previous,
     last: mode,
     [mode]: mode === "chat"
-      ? { thread: id(params.thread) }
+      ? chatSearch(params)
       : { task: id(params.task), source: id(params.source) },
   };
 }

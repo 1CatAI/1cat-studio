@@ -293,15 +293,8 @@ async def test_delayed_stop_is_bound_to_its_generation(monkeypatch):
         await chat_runs.cancel(id, second["id"])
 
 
-@pytest.mark.parametrize(
-    "settings,expected",
-    [
-        ({"thinking": True}, {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "presence_penalty": 0.0}),
-        ({"thinking": False}, {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 0.0}),
-        ({"thinking": True, "sampling_mode": "custom"}, {"temperature": 0.3, "top_p": 0.5}),
-    ],
-)
-def test_chat_follows_model_card_sampling_unless_custom(monkeypatch, settings, expected):
+@pytest.mark.parametrize("settings", [{"thinking": True}, {"thinking": False}, {"sampling_mode": "custom"}])
+def test_chat_does_not_inject_sampling(monkeypatch, settings):
     from onecat import engine, model_controls
 
     calls = fixture(monkeypatch)
@@ -320,7 +313,7 @@ def test_chat_follows_model_card_sampling_unless_custom(monkeypatch, settings, e
                 "messages": history,
                 "expected_message_ids": [m["id"] for m in history],
                 "settings": settings,
-                "request": {"messages": [], "temperature": 0.3, "top_p": 0.5},
+                "request": {"messages": []},
             },
         )
         for _ in range(100):
@@ -331,10 +324,7 @@ def test_chat_follows_model_card_sampling_unless_custom(monkeypatch, settings, e
 
     asyncio.run(scenario())
     sent = calls[0]
-    for key, value in expected.items():
-        assert sent[key] == value
-    if settings.get("sampling_mode") == "custom":
-        assert "top_k" not in sent and "presence_penalty" not in sent
+    assert not {"temperature", "top_p", "top_k", "min_p", "presence_penalty", "repetition_penalty"} & sent.keys()
 
 
 def test_recommended_sampling_only_for_qwen3_reasoning_models():

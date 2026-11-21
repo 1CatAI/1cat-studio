@@ -51,7 +51,7 @@ def run():
                     except OSError:
                         time.sleep(.1)
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch(headless=True)
+                    browser = pw.chromium.launch(headless=True, executable_path=os.environ.get("ONECAT_BROWSER_EXECUTABLE") or None)
                     context = browser.new_context(viewport={"width": 1500, "height": 1100})
                     assert context.request.post(
                         fixture.BASE + "/api/auth/setup", data={"password": "monitor-fixture-password"}
@@ -60,20 +60,20 @@ def run():
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(fixture.BASE + "/performance")
-                    monitor = page.locator(".oc-telemetry")
-                    cards = monitor.locator(".oc-gpu-card")
+                    monitor = page.locator(".oc-performance")
+                    cards = monitor.locator(".perf-board")
                     expect(cards).to_have_count(5)
-                    expect(monitor.locator(".oc-gpu-model-badge")).to_have_count(1)
-                    expect(cards.first).to_contain_text("当前模型使用")
-                    expect(monitor.get_by_test_id("live-power")).to_have_text("200 W")
-                    expect(monitor.get_by_test_id("power-coverage")).to_contain_text("4/5 GPU")
-                    expect(monitor.locator(".oc-telemetry-stats")).to_contain_text("130 GiB")
-                    expect(cards.last).to_contain_text("此显卡未提供功率读数")
+                    expect(monitor.locator(".perf-rack > .perf-board")).to_have_count(1)
+                    expect(monitor.get_by_test_id("live-power")).to_have_text("50 W")
+                    monitor.locator(".perf-rack summary").click()
+                    cards.last.get_by_role("button").click()
+                    expect(monitor.get_by_test_id("live-power")).to_have_text("— W")
+                    expect(monitor.locator(".perf-board-detail")).to_contain_text("GiB")
+                    monitor.locator(".perf-reset").click()
                     initial = context.request.get(fixture.BASE + "/api/gpu/live").json()
                     assert len(initial["gpus"]) == 5
                     assert initial["history"][-1]["power_w"] is None
                     assert initial["history"][-1]["measured_power_w"] == 200
-                    page.evaluate("window.originalGPUCards=[...document.querySelectorAll('.oc-gpu-card')]")
 
                     # Change only the disposable instance's assignment, without launching anything.
                     def assign(model_state, ids):
@@ -87,16 +87,12 @@ def run():
                         page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
 
                     assign("ready", ["GPU-" + str(i) * 36 for i in (1, 2)])
-                    expect(monitor.locator(".oc-gpu-model-badge")).to_have_count(2)
-                    expect(cards.nth(1)).to_contain_text("当前模型使用")
-                    expect(monitor.get_by_test_id("live-power")).to_have_text("200 W")
+                    expect(monitor.locator(".perf-rack > .perf-board")).to_have_count(2)
+                    expect(monitor.get_by_test_id("live-power")).to_have_text("100 W")
                     assign("stopped", ["GPU-" + "0" * 36])
-                    expect(monitor.locator(".oc-gpu-model-badge")).to_have_count(0)
-                    expect(cards).to_have_count(5)
+                    expect(monitor.locator(".perf-rack > .perf-board")).to_have_count(5)
                     expect(monitor.get_by_test_id("live-power")).to_have_text("200 W")
-                    assert page.evaluate(
-                        "originalGPUCards.every((e,i)=>e===document.querySelectorAll('.oc-gpu-card')[i])"
-                    )
+                    expect(monitor.get_by_test_id("power-coverage")).to_contain_text("4/5")
                     later = context.request.get(fixture.BASE + "/api/gpu/live").json()
                     assert later["timestamp"] > initial["timestamp"]
                     assert all(point["measured_power_w"] == 200 for point in later["history"])
@@ -108,7 +104,7 @@ def run():
                     page.route("**/api/gpu/live", lambda route: route.fulfill(json=stale))
                     page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
                     expect(monitor.get_by_test_id("live-power")).to_have_text("— W")
-                    expect(monitor).to_contain_text("数据已暂停")
+                    expect(monitor).to_contain_text("采样已暂停")
                     expect(cards).to_have_count(5)
                     page.unroute("**/api/gpu/live")
                     page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
@@ -122,9 +118,9 @@ def run():
                         monitor.screenshot(path=str(fixture.ARTIFACTS / f"hardware-{theme}-{width}.png"))
                     page.evaluate("localStorage.setItem('onecat_locale','en')")
                     page.reload()
-                    expect(monitor).to_contain_text("All hardware")
+                    expect(monitor).to_contain_text("Measured GPU power")
                     expect(cards).to_have_count(5)
-                    expect(monitor.get_by_test_id("power-coverage")).to_contain_text("Missing readings excluded")
+                    expect(monitor.get_by_test_id("power-coverage")).to_contain_text("4/5")
                     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
                     assert not errors, errors
                     print(json.dumps({

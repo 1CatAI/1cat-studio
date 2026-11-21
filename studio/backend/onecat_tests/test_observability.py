@@ -180,6 +180,7 @@ def test_power_window_integrates_boundaries_and_rejects_gaps():
     assert result["average_gpu_w"] == pytest.approx(150)
     assert result["energy_wh"] == pytest.approx(120 / 3600)
     assert not telemetry.request_energy(["mine"], 9.9, 10.9)
+    assert not telemetry.request_energy(["mine"], 11.01, 11.0105)
     assert not telemetry.request_energy(["missing"], 10.1, 10.9)
     telemetry.samples[1]["gpus"][0]["power_w"] = None
     assert not telemetry.request_energy(["mine"], 10.1, 10.9)

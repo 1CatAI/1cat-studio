@@ -16,6 +16,7 @@ class StudioSettings(StrictModel):
     model_directory: str = Field(min_length=1)
     modelscope_endpoint: str
     idle_unload_minutes: int = Field(ge=0, le=1440, strict=True)
+    restore_model_on_boot: bool = Field(default=False, strict=True)
     autostart_profile: str | None
     host: Literal["127.0.0.1", "0.0.0.0"]
     port: int = Field(ge=1024, le=65535, strict=True)
