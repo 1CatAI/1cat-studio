@@ -101,10 +101,12 @@ def retained_bytes(folder: Path, manifest: list[dict]) -> int:
 
 def download(job: Job):
     repo_id = job.payload["repo_id"]
-    revision = job.payload.get("revision") or "master"
     from .catalog import require_download
 
-    approved = require_download(repo_id, revision, job.payload.get("runtime_id"))
+    approved = require_download(
+        repo_id, job.payload.get("revision"), job.payload.get("runtime_id")
+    )
+    revision = approved["revision"]
     api = hub()
     job.update("resolving_model", 0)
     files = api.list_repo_files(repo_id, "model", revision=revision)

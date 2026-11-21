@@ -7,6 +7,7 @@ from onecat.jobs import Job
 
 
 def test_modelscope_download_verifies_manifest_and_resumes(state, monkeypatch):
+    revision = "b" * 40
     contents = {"config.json": b'{"model_type":"llama"}', "model.safetensors": b"fixture weights"}
     files = [
         SimpleNamespace(path=n, size=len(v), sha256=hashlib.sha256(v).hexdigest(), is_dir=False)
@@ -18,15 +19,18 @@ def test_modelscope_download_verifies_manifest_and_resumes(state, monkeypatch):
         "require_download",
         lambda *args: {
             "id": "onecat/tiny",
+            "revision": revision,
             "files": [{"path": f.path, "bytes": f.size, "sha256": f.sha256} for f in files],
         },
     )
 
     class Hub:
-        def list_repo_files(self, repo, type, revision):
+        def list_repo_files(self, repo, type, **kw):
+            assert kw["revision"] == revision
             return files
 
         def download_repo(self, repo, type, **kw):
+            assert kw["revision"] == revision
             calls.append(kw["local_dir"])
             folder = kw["local_dir"]
             folder.mkdir(parents=True, exist_ok=True)
