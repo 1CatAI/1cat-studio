@@ -175,6 +175,24 @@ def supported():
         key=lambda j: j.get("created_at", 0),
         reverse=True,
     )
+
+    def download_job(repo_id, revision=None):
+        for job in downloads:
+            payload = job.get("payload", {})
+            if payload.get("repo_id") != repo_id or (
+                revision is not None and payload.get("revision") != revision
+            ):
+                continue
+            return {
+                key: job[key]
+                for key in (
+                    "id", "state", "stage", "progress", "error", "expected_bytes",
+                    "downloaded_bytes", "bytes_per_second", "result", "cancel_requested",
+                )
+                if key in job
+            }
+        return None
+
     local = db.all_records("models")
     result = []
     for item in directory().get("support", []):
@@ -190,19 +208,14 @@ def supported():
             ),
             None,
         )
-        job = next(
-            (
-                j
-                for j in downloads
-                if checkpoint and j.get("payload", {}).get("repo_id") == checkpoint["id"]
-            ),
-            None,
-        )
         notes = recommendations(checkpoint, devices) if checkpoint else []
+        draft_download = None
         if checkpoint and model and checkpoint["id"] in MODEL_IDS:
-            notes = launch_defaults(checkpoint["id"], model["id"], devices=devices)[
-                "recommendations"
-            ]
+            defaults = launch_defaults(checkpoint["id"], model["id"], devices=devices)
+            notes = defaults["recommendations"]
+            draft = defaults["draft_download"]
+            if draft:
+                draft_download = {**draft, "job": download_job(draft["repo_id"], draft["revision"])}
         result.append(
             {
                 **item,
@@ -214,24 +227,8 @@ def supported():
                 "recommended": checkpoint.get("recommended", {}) if checkpoint else None,
                 "gpu": checkpoint["gpu"] if checkpoint else None,
                 "model_id": model["id"] if model else None,
-                "job": {
-                    k: job[k]
-                    for k in (
-                        "id",
-                        "state",
-                        "stage",
-                        "progress",
-                        "error",
-                        "expected_bytes",
-                        "downloaded_bytes",
-                        "bytes_per_second",
-                        "result",
-                        "cancel_requested",
-                    )
-                    if k in job
-                }
-                if job
-                else None,
+                "job": download_job(checkpoint["id"]) if checkpoint else None,
+                "draft_download": draft_download,
             }
         )
     return {
@@ -288,6 +285,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
     topology = item["gpu"]
     selected = recommended_devices(devices, topology)
     profile = None
+    draft_download = None
     recommended = item.get("recommended", {})
     if topology["pp"] == 1:
         values = Profile(
@@ -297,7 +295,9 @@ def launch_defaults(repo, model_id=None, *, devices=None):
             served_model_name=repo.split("/")[-1],
         ).model_dump()
         values.update(item.get("recommended", {}))
-        from .sm70_profiles import MODEL_IDS, default_speculation, qualified_draft, recommendation
+        from .sm70_profiles import (
+            MODEL_IDS, default_speculation, downloadable_draft, qualified_draft, recommendation,
+        )
 
         speculative = copy.deepcopy(item.get("default_speculative_config"))
         if repo in MODEL_IDS:
@@ -307,6 +307,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
             if draft_path:
                 speculative = default_speculation(runtime, draft_path)
             else:
+                draft_download = downloadable_draft(runtime)
                 notes.append(
                     "DFlash2 未启用：请下载发布配置对应的草稿模型；当前仅目标模型推理，"
                     "速度不等同于 DFlash2 发布配置 / DFlash2 is disabled: download the "
@@ -336,6 +337,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
         "runtime_options": [{"id": r["id"], "name": r["name"]} for r in installed],
         "reasons": reasons,
         "recommendations": notes,
+        "draft_download": draft_download,
         "can_create": bool(model and profile and not reasons),
     }
 

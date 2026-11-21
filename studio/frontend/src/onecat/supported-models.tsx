@@ -12,6 +12,13 @@ import { Action, Empty, ErrorNotice, bytes, useText } from "./common";
 import { DownloadRate } from "./download-rate";
 import { ModelCard, ModelIdentity } from "./model-card";
 
+type DraftDownload = {
+  repo_id: string;
+  revision: string;
+  bytes: number;
+  job: Job | null;
+};
+
 type Support = {
   id: string;
   name: string;
@@ -34,6 +41,7 @@ type Support = {
   job:
     | (Job & { state: string; error?: string; cancel_requested?: boolean })
     | null;
+  draft_download?: DraftDownload | null;
 };
 
 export type LaunchDefaults = {
@@ -46,6 +54,59 @@ export type LaunchDefaults = {
 export async function modelDefaults(catalogId: string, modelId?: string) {
   return api<LaunchDefaults>(
     `/api/models/launch-defaults?catalog_id=${encodeURIComponent(catalogId)}${modelId ? `&model_id=${encodeURIComponent(modelId)}` : ""}`,
+  );
+}
+
+function isDownloading(job: Job | null | undefined) {
+  return !!job && !["completed", "failed", "cancelled"].includes(job.state);
+}
+
+function DraftDownloadAction({ draft, job }: { draft: DraftDownload; job?: Job | null }) {
+  const t = useText();
+  if (job && isDownloading(job)) {
+    return (
+      <div className="oc-model-download">
+        <span role="status">
+          {job.cancel_requested
+            ? t("正在取消草稿下载…", "Cancelling draft download…")
+            : job.stage === "checking_model"
+              ? t("正在校验 DFlash2 草稿…", "Verifying DFlash2 draft…")
+              : t("正在下载 DFlash2 草稿…", "Downloading DFlash2 draft…")}
+        </span>
+        <DownloadRate job={job} />
+        <progress
+          aria-label={t("DFlash2 草稿下载进度", "DFlash2 draft download progress")}
+          max={100}
+          value={job.progress || 0}
+        />
+        <span>{bytes(job.downloaded_bytes || 0)} / {bytes(job.expected_bytes || draft.bytes)}</span>
+        <Action
+          variant="ghost"
+          disabled={job.cancel_requested}
+          run={() => mutation(`/api/jobs/${job.id}/cancel`)}
+        >
+          {t("取消草稿下载", "Cancel draft download")}
+        </Action>
+      </div>
+    );
+  }
+  return (
+    <div className="oc-draft-download">
+      <div className="oc-draft-download-actions">
+        <Action
+          variant="outline"
+          run={() => mutation("/api/hub/download", { repo_id: draft.repo_id, revision: draft.revision })}
+        >
+          <Download />
+          {job?.state === "failed"
+            ? t("重试下载 DFlash2 草稿", "Retry DFlash2 draft download")
+            : t("下载 DFlash2 草稿", "Download DFlash2 draft")}
+        </Action>
+        <span className="oc-muted">ModelScope · {bytes(draft.bytes)}</span>
+      </div>
+      {job?.state === "cancelled" && <span className="oc-muted">{t("草稿下载已取消", "Draft download cancelled")}</span>}
+      <ErrorNotice error={job?.state === "failed" ? job.error : undefined} />
+    </div>
   );
 }
 
@@ -81,15 +142,13 @@ export function SupportedModels({
   }
   const all = data?.items || [];
   // The task endpoint includes transfer timestamps and avoids rescanning GPUs.
-  const hasDownload = all.some(
-    (item) =>
-      item.job &&
-      !["completed", "failed", "cancelled"].includes(item.job.state),
-  );
+  const hasDownload = all.some(item => isDownloading(item.job) || isDownloading(item.draft_download?.job));
   const { data: jobs } = useQuery<{ items: Job[] }>(
     hasDownload ? "/api/jobs" : null,
     1000,
   );
+  const latestJob = (job: Job | null | undefined) =>
+    job && isDownloading(job) ? jobs?.items.find(item => item.id === job.id) || job : job;
   const machineMatches = (item: Support) => item.downloadable && item.reasons.every(reason => reason.startsWith("需要运行环境 / Requires runtime:"));
   const machineCount = all.filter(machineMatches).length;
   const filtered = all.filter(
@@ -175,13 +234,9 @@ export function SupportedModels({
       <ErrorNotice error={error} />
       <div className="oc-model-grid oc-support-grid">
         {downloadable.map((item) => {
-          const job =
-            item.job &&
-            !["completed", "failed", "cancelled"].includes(item.job.state)
-              ? jobs?.items.find((job) => job.id === item.job?.id) || item.job
-              : item.job;
-          const downloading =
-            !!job && !["completed", "failed", "cancelled"].includes(job.state);
+          const job = latestJob(item.job);
+          const downloading = isDownloading(job);
+          const draft = item.draft_download;
           const isActive = !!engine?.profile && (engine.profile.catalog_id === item.catalog_id ||
             models?.items.some(model => model.id === item.model_id && model.path === engine.profile?.model_path));
           const ready = isActive && engine?.state === "ready";
@@ -214,6 +269,7 @@ export function SupportedModels({
                   {item.recommendations.map(reasonText).join(" · ")}
                 </p>
               )}
+              {draft && <DraftDownloadAction draft={draft} job={latestJob(draft.job)} />}
               <p className="oc-muted">{item.gpu?.count} GPU · {item.quantization} · {item.recommended?.max_model_len ? `${item.recommended.max_model_len / 1024}K ${t("上下文", "context")}` : t("查看配置要求", "See requirements")}</p>
               <details className="oc-default-recipe">
                 <summary>

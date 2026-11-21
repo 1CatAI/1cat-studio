@@ -703,6 +703,18 @@
 .oc-model-download button {
   margin-left: auto;
 }
+.oc-draft-download {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.oc-draft-download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
 .oc-support-references > summary {
   cursor: pointer;
   font-weight: 550;
