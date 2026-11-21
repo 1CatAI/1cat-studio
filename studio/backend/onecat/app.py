@@ -348,7 +348,7 @@ def create_app() -> FastAPI:
             "disk_total_bytes": disk.total,
             "state_directory": str(root),
             "gpu": gpu.snapshot(),
-            "uv_available": shutil.which("uv") is not None,
+            "uv_available": runtimes.find_uv() is not None,
         }
 
     @admin.get("/gpu")

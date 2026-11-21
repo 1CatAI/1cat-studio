@@ -11,6 +11,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tarfile
 import time
 import zipfile
@@ -414,6 +415,11 @@ def wheel_dependencies(
     return pinned
 
 
+def find_uv() -> str | None:
+    # A source deployment can invoke its venv's Python without activating the venv.
+    return shutil.which("uv", path=str(Path(sys.executable).parent)) or shutil.which("uv")
+
+
 def install(job: Job):
     from . import gpu, runtime_releases
 
@@ -427,9 +433,6 @@ def install(job: Job):
         raise ValueError("; ".join(problems))
     if not re.fullmatch(r"(?:github-\d+-[a-f0-9]{12}|1cat-vllm-[\d.]+)", release["id"]):
         raise ValueError("Invalid runtime identifier")
-    uv = shutil.which("uv")
-    if not uv:
-        raise RuntimeError("uv is missing; use the 1Cat installer to prepare the manager")
     root = state_root() / "runtimes"
     root.mkdir(exist_ok=True)
     # Separate worker processes, including retries, cannot mutate one environment together.
@@ -449,6 +452,12 @@ def install(job: Job):
                     "Registered environment is missing its Python executable; import a repaired environment"
                 )
             return {"runtime_id": existing["id"], "already_installed": True}
+        uv = find_uv()
+        if not uv:
+            raise RuntimeError(
+                "uv is missing; install Studio's source dependencies from "
+                "studio/requirements-source.lock or repair the Studio bundle"
+            )
         folder = root / release["id"]
         for runtime in db.all_records("runtimes"):
             if Path(runtime["python_path"]).is_relative_to(folder):

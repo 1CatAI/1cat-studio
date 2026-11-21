@@ -1,0 +1,6 @@
+# Linux x86_64 source installs also need the uv CLI for one-click runtimes.
+-r requirements.lock
+
+uv==0.13.9 \
+    --hash=sha256:d7f459fe4fd247d830351c75686d3996ace3c6f3f728eb0e85a30b7ada0cef19 \
+    --hash=sha256:2c45530751517d6c3bbc69a19473f6effe47cce047bede01ffd8af7ea7b36b25
