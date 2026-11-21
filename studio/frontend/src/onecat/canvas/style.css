@@ -68,12 +68,6 @@
 	box-shadow: inset 0 0 0 2px
 		color-mix(in srgb, var(--primary) 50%, transparent);
 }
-.oc-canvas-eyebrow {
-	font-size: 10px;
-	letter-spacing: .13em;
-	font-weight: 600;
-	color: var(--oc-accent-text);
-}
 .oc-canvas-welcome {
 	display: flex;
 	flex: 1;

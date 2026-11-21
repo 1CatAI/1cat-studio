@@ -10,7 +10,7 @@ export const AgentStats = memo(function AgentStats({ task, onDetails, details = 
   const rate = ["cancelled", "failed", "interrupted"].includes(task.state) ? null : live ? live.decode_tokens_s : m && m.decode_s > 0 ? m.decode_tokens / m.decode_s : null;
   const ttft = live ? live.ttft_s : m && m.ttft_count ? m.ttft_s / m.ttft_count : null;
   const output = task.usage.output_tokens + (live?.output_tokens ?? 0);
-  if (!details) return <button type="button" className="oc-agent-stats" onClick={onDetails} aria-label={t("查看任务统计", "Task statistics")} title={t("本机 token 流观测 · 点击查看计时与用量", "Local token stream observation · Timing and usage details")}>
+  if (!details) return <button type="button" className="oc-agent-stats" onClick={onDetails} aria-label={t("查看任务统计", "Task statistics")} title={t("查看生成计时和 token 用量", "View timing and token usage")}>
     <Gauge size={13} />{rate != null && <span>{format(rate, 1)} tok/s</span>}
     <span>{task.usage.missing_calls > 0 && !live?.output_tokens ? t("用量详情", "Usage details") : `${format(output, 0)} tokens`}</span><ChevronDown size={12} />
   </button>;
@@ -25,6 +25,6 @@ export const AgentStats = memo(function AgentStats({ task, onDetails, details = 
     [t("缓存命中", "Cache hits"), task.usage.cache_missing_calls > 0 ? "—" : format(task.usage.cached_tokens, 0)],
   ];
   return <><dl>{rows.map(([label, value]) => <div className="oc-agent-stat-row" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {!!task.timing_missing_calls && <p className="oc-agent-note">{t(`早期 ${task.timing_missing_calls} 次调用未记录计时，耗时仅统计后续调用。`, `${task.timing_missing_calls} earlier calls have no timing; durations include later measured calls only.`)}</p>}
-    {task.usage.missing_calls > 0 && <p className="oc-agent-note">{t("部分请求未返回用量；上面仅合计已知 token。", "Some requests omitted usage; totals include known tokens only.")}</p>}</>;
+    {!!task.timing_missing_calls && <p className="oc-agent-note">{t(`早期 ${task.timing_missing_calls} 次调用缺少计时。`, `Timing is missing for ${task.timing_missing_calls} earlier calls.`)}</p>}
+    {task.usage.missing_calls > 0 && <p className="oc-agent-note">{t("部分请求缺少 token 用量记录。", "Token usage is missing for some requests.")}</p>}</>;
 });

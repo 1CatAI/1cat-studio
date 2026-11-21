@@ -148,12 +148,11 @@ export default function CanvasPage() {
 					<div className="oc-canvas-welcome-mark">
 						<Sparkles size={30} />
 					</div>
-					<span className="oc-canvas-eyebrow">1CAT CREATIVE</span>
-					<h1>{t("让想法在画布上延续", "Give your ideas room to grow")}</h1>
+					<h1>{t("创作画布", "Creative canvas")}</h1>
 					<p>
 						{t(
-							"把文字、图片和视频连接起来。每一次生成，都是下一次创作的起点。",
-							"Connect text, images and video. Every result is a starting point for what comes next.",
+							"把文字、图片和视频连接到生成节点，作为参考素材。",
+							"Connect text, images and video to a generation node as references.",
 						)}
 					</p>
 					<ErrorNotice error={loadError} />
@@ -391,8 +390,8 @@ function CanvasEditor({
 				if (!canConnect(p.nodes, p.edges, source, end)) {
 					toast.error(
 						t(
-							"请选择一个素材和一个生成节点，不能形成循环引用。",
-							"Connect a reference asset to a generation node without cycles.",
+							"请连接素材和生成节点，并检查是否存在循环引用。",
+							"Connect a reference asset to a generation node and check for circular connections.",
 						),
 					);
 					return p;
@@ -1038,12 +1037,12 @@ function CanvasEditor({
 										{workflow?.provider === "h3" && (
 											<p className="oc-canvas-notice">
                                                 {activeService?.kind === "h3-local"
-                                                    ? t("生成时自动准备模型；需要切换服务时会先提示。", "The model is prepared automatically. Service switches are confirmed first.")
+                                                    ? t("生成时会准备模型。如果需要切换服务，请先确认。", "Studio prepares the model and asks you to confirm any service switch.")
                                                     : t("使用所选模型服务生成，作品会保存在工作台。", "Your selected service generates the result, which is saved in the workbench.")}
 											</p>
 										)}
                     <div className="oc-creative-output-fields"><OutputFields kind={workflow?.output === "image" ? "image" : "video"} value={selected.parameters} onChange={value => updateNode({ parameters: { ...selected.parameters, ...value } })} model={catalog.models?.find(m => m.id === (activeService?.checkpoint || "h3"))} legacySizes={activeService?.output_sizes || (activeService?.kind === "image-api" ? [[1024,1024],[1536,1024],[1024,1536]] : undefined)} /></div>
-                    {workflow?.partition === "fl2va" && workflow.min_images > 0 && <small>{t("首尾帧会按输出比例居中裁切，保留原图比例。", "Keyframes are center-cropped to the output aspect ratio, without stretching.")}</small>}
+                    {workflow?.partition === "fl2va" && workflow.min_images > 0 && <small>{t("首尾帧按输出比例居中裁切。", "Keyframes are center-cropped to the output aspect ratio.")}</small>}
                     <div className="oc-canvas-input-list">
 											<h3>{t("参考输入", "References")}</h3>
 											<small>
@@ -1170,8 +1169,8 @@ function CanvasEditor({
 													</Field>
 													<small>
 														{t(
-															"采样步数自动跟随已加载的 LoRA 配方，避免 Turbo 步数与 sigma 点混淆。",
-															"Sampling follows the loaded LoRA recipe to avoid confusing denoising steps with sigma points.",
+															"采样步数沿用已加载的 LoRA 配方。",
+															"Sampling steps follow the loaded LoRA recipe.",
 														)}
 													</small>
 												</>
@@ -1253,8 +1252,8 @@ function CanvasEditor({
 									)}
 									<small>
 										{t(
-											"结果保存在服务器；离开页面不会中断任务。",
-											"Results stay on the server. Leaving this page does not interrupt tasks.",
+											"任务在后台运行，结果保存在服务器。",
+											"Tasks run in the background and save results on the server.",
 										)}
 									</small>
 								</footer>

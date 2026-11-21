@@ -435,7 +435,7 @@ export function ChatPage() {
     } catch (error) {
       if (stopAttempt.current === attempt) {
         setError((error as Error).name === "TimeoutError"
-          ? t("停止结果尚未确认，可以重试；后台状态会继续同步。", "Stop is unconfirmed; retry while status sync continues.")
+          ? t("正在确认是否已停止。你可以重试。", "Checking whether generation stopped. You can retry.")
           : (error as Error).message);
         if (!target || target.state !== "running") { running.current = false; setBusy(false); }
       }
@@ -458,7 +458,7 @@ export function ChatPage() {
       <div className={"oc-chat-page" + (!messages.length ? " oc-chat-empty" : "")}>
         <div className="oc-chat-toolbar">
           <span>{title}</span>
-          {reconnecting && <span role="status" className="oc-muted">{t("正在重新连接，后台继续生成", "Reconnecting; generation continues")}</span>}
+          {reconnecting && <span role="status" className="oc-muted">{t("正在重新连接，后台继续生成", "Reconnecting. Generation continues in the background.")}</span>}
           <div>
             {threadId && <TooltipIconButton tooltip={t("以此创建 Agent 任务", "Create an Agent task from this chat")}
               onClick={() => navigate({ to: "/agent", search: { source: threadId } })}><Bot /></TooltipIconButton>}
@@ -580,19 +580,7 @@ export function ChatPage() {
             <div ref={contentView} className="oc-conversation-content">
             {!messages.length ? (
               <div className="oc-chat-welcome">
-                <div className="oc-welcome-mark">01 / FROM IDEA TO REALITY</div>
-                <h1>MAKE IT.<span>{t("用想法，创造。", "Make room for ideas.")}</span></h1>
-                <p>
-                  {ready
-                    ? t(
-                        "少一点犹豫，多一点动手。",
-                        "A little less hesitation. A little more creation.",
-                      )
-                    : t(
-                        "可以先写下想法，再选择模型开始聊天。",
-                        "Draft your idea, then choose a model to begin.",
-                      )}
-                </p>
+                <h1>{t("开始对话", "Start a chat")}</h1>
                 {!ready && (
                   <Button asChild>
                     <Link to="/models">
@@ -720,7 +708,7 @@ export function ChatPage() {
               placeholder={
                 ready
                   ? t("输入消息…", "Message…")
-                  : t("先写下想法，模型就绪后即可发送…", "Draft your message; send when a model is ready…")
+                  : t("写下草稿…", "Draft a message…")
               }
               rows={1}
               aria-label={t("消息草稿", "Message draft")}
@@ -887,8 +875,8 @@ export function ChatPage() {
             <Field
               label={t("最大生成长度", "Maximum generated tokens")}
               hint={t(
-                `总上下文 ${engine?.profile?.max_model_len?.toLocaleString() || "—"} tokens；自动由服务分配剩余空间。`,
-                `Total context ${engine?.profile?.max_model_len?.toLocaleString() || "—"} tokens; automatic uses the remaining budget.`,
+                    `总上下文 ${engine?.profile?.max_model_len?.toLocaleString() || "—"} tokens。自动模式按剩余上下文分配生成长度。`,
+                    `Total context ${engine?.profile?.max_model_len?.toLocaleString() || "—"} tokens. Auto uses the remaining context for generation.`,
               )}
             >
               <Input
@@ -1103,8 +1091,8 @@ const MessageRow = memo(function MessageRow({
         <div className="oc-output-limit" role="status">
           <span>
             {t(
-              "回答达到生成长度限制，内容可能不完整。",
-              "The generation limit was reached; this reply may be incomplete.",
+              "已达到生成长度上限。",
+              "The reply reached its generation limit.",
             )}
           </span>
           <Button
@@ -1123,12 +1111,12 @@ const MessageRow = memo(function MessageRow({
           <div className="oc-output-limit oc-output-interrupted" role="status">
             {m.metadata?.finish_reason === "cancelled"
               ? t(
-                  "生成已停止，以上内容可能不完整。",
-                  "Generation stopped; the reply above may be incomplete.",
+                  "已停止生成。",
+                  "Generation stopped.",
                 )
               : t(
-                  "生成中断，已保留收到的内容。可点击重新生成重试。",
-                  "Generation was interrupted. Received content was saved; use Regenerate to retry.",
+                  "生成中断，已保存收到的内容。可重新生成。",
+                  "Generation was interrupted. The partial reply was saved. Select Regenerate to try again.",
                 )}
           </div>
         )}
@@ -1207,8 +1195,8 @@ function Timing({
       <span
         className="oc-live-decode"
         title={t(
-          "按服务端实际输出 token 计数与到达时间累计计算，包含思考输出，排除首批 token 与等待首批的时间。生成中为本机流观测，结束后回填最终统计。",
-          "Cumulative server-local token arrival rate, including reasoning and excluding the first batch and its wait. Final statistics replace this live observation after completion.",
+          "生成速率从首批 token 到达后开始计算，包含思考内容。生成结束后显示最终统计。",
+          "Generation speed is measured after the first batch and includes reasoning tokens. Final stats appear when generation ends.",
         )}
       >
         {t("实时", "Live")}{" "}

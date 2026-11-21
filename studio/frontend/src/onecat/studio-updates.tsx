@@ -36,8 +36,8 @@ export function StudioUpdates({ dirty }: { dirty: boolean }) {
     restarting: t("Studio 正在重启", "Restarting Studio"),
     rolling_back: t("正在恢复原版本", "Restoring the previous version"),
     installed: t("更新完成", "Update complete"),
-    rolled_back: t("更新未完成，已恢复原版本", "Update failed; previous version restored"),
-    failed: t("更新未完成，可以重试", "Update failed; you can retry"),
+    rolled_back: t("更新失败，已恢复原版本", "Update failed. The previous version was restored."),
+    failed: t("更新失败，可以重试", "Update failed. Try again."),
   };
   const blocked = dirty ? t("请先保存或撤销设置更改。", "Save or discard your settings changes first.") : progress.data?.blocked_reason;
   const total = status?.total_bytes || 0;
@@ -63,7 +63,7 @@ export function StudioUpdates({ dirty }: { dirty: boolean }) {
     </div>}
     {progress.error && <p role="status">{busy
       ? t("正在等待 Studio 重新连接…", "Waiting for Studio to reconnect…")
-      : t("暂时无法连接 Studio，正在重试…", "Studio is unreachable; retrying…")}</p>}
+      : t("正在重新连接 Studio…", "Reconnecting to Studio…")}</p>}
     {blocked && !busy && <p className="oc-muted">{blocked}</p>}
     <div className="oc-actions oc-spaced">
       <Action variant="outline" disabled={busy} run={async () => {
@@ -77,8 +77,8 @@ export function StudioUpdates({ dirty }: { dirty: boolean }) {
     </div>
     <Modal open={!!selected} onOpenChange={open => { if (!open) setSelected(undefined); }} title={t("确认更新 Studio", "Confirm Studio update")}>
       <p>{t("更新至", "Update to")} {selected?.latest}</p>
-      <p>{t("下载完成后 Studio 会短暂重启。模型文件、推理环境、会话和配置会保留；更新失败会自动恢复原版本。", "Studio will briefly restart after the download. Models, runtimes, conversations and settings are retained. A failed activation restores the previous version.")}</p>
-      {selected?.deployment.mode === "source" && <p>{t("当前运行源码版。此次更新会切换到正式安装版，原源码目录会保留。", "This instance runs from source. Updating switches to a managed release and keeps the source directory.")}</p>}
+      <p>{t("下载后 Studio 会短暂重启，继续使用当前模型、运行环境、会话和设置。更新失败时自动恢复原版本。", "Studio restarts briefly after downloading and picks up your current models, runtimes, conversations and settings. It rolls back automatically if the update fails.")}</p>
+      {selected?.deployment.mode === "source" && <p>{t("更新后，Studio 会从正式安装目录运行。源码目录可继续用于开发。", "Studio will run from the managed installation after updating. You can keep developing in the source directory.")}</p>}
       <Action disabled={!!blocked || busy} run={async () => {
         await mutation("/api/updates/install", { release_id: selected?.release_id, switch_to_release: selected?.deployment.mode === "source" });
         setSelected(undefined);

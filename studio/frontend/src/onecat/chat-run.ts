@@ -49,7 +49,7 @@ export async function observeRun(
   let settled = false;
   const accept = (message: Message, run: ChatRun) => {
     if (lifetime.signal.aborted || settled) return;
-    if (run.id !== runId) throw Object.assign(new Error("生成已切换，请查看最新回复 / Generation changed; showing the latest reply"), { terminal: true });
+    if (run.id !== runId) throw Object.assign(new Error("会话已开始新的回复，请查看最新一条。 / Generation changed. Open the latest reply."), { terminal: true });
     settled = run.state !== "running";
     onMessage(message, run);
   };
@@ -72,7 +72,7 @@ export async function observeRun(
         const { run, message } = await response.json() as { run: ChatRun; message: Message | null };
         if (lifetime.signal.aborted) return;
         if (run.id !== runId)
-          throw Object.assign(new Error("生成已切换，请查看最新回复 / Generation changed; showing the latest reply"), { terminal: true });
+          throw Object.assign(new Error("会话已开始新的回复，请查看最新一条。 / Generation changed. Open the latest reply."), { terminal: true });
         if (run.state !== "running") {
           if (!message) throw Object.assign(new Error("回复已结束，但消息不存在 / Generation ended but its message is missing"), { terminal: true });
           accept(message, run);
@@ -135,7 +135,7 @@ async function readEvents(
           if (!data) continue;
           if (data === "[DONE]") {
             if (run && run.state !== "running") return;
-            throw new Error("Completion state missing; reconnecting");
+            throw new Error("Checking the generation status again");
           }
           const chunk = JSON.parse(data);
           if (chunk.onecat_snapshot) {
@@ -177,7 +177,7 @@ async function readEvents(
         }
       }
       if (run && run.state !== "running") return;
-      throw new Error("Connection ended; reconnecting");
+      throw new Error("Reconnecting to the generation");
     } catch (error) {
       if (signal.aborted) return;
       if ((error as { terminal?: boolean }).terminal) throw error;

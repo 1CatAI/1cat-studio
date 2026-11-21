@@ -41,7 +41,7 @@ async function readQuery<T>(path: string, signal: AbortSignal): Promise<T> {
   const cancel = () => request.abort(signal.reason);
   if (signal.aborted) cancel();
   else signal.addEventListener("abort", cancel, { once: true });
-  const timer = setTimeout(() => request.abort(new Error("连接超时，请重试 / Connection timed out; please retry")), 15000);
+  const timer = setTimeout(() => request.abort(new Error("连接超时，请重试 / Connection timed out. Try again.")), 15000);
   try { return await api<T>(path, { signal: request.signal }); }
   finally { clearTimeout(timer); signal.removeEventListener("abort", cancel); }
 }

@@ -110,8 +110,8 @@ export function LaunchProgress({ compact = false }: { compact?: boolean }) {
           {e.state === "loading" && (
             <p className="oc-muted">
               {t(
-                "编译和 Graph 捕获可能需要数分钟；显存占用不代表服务已经就绪。",
-                "Compilation and graph capture may take several minutes. Allocated memory does not mean the service is ready.",
+                "编译和 CUDA Graph 捕获可能需要几分钟。服务就绪时会更新状态。",
+                "Compilation and CUDA graph capture can take a few minutes. The status updates when the service is ready.",
               )}
             </p>
           )}

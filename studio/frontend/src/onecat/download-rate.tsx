@@ -34,8 +34,8 @@ export function DownloadRate({ job }: { job: Job }) {
       title={
         fresh
           ? t(
-              "根据实际新增下载字节计算，每秒刷新",
-              "Measured from newly downloaded bytes; refreshed every second",
+              "下载速度每秒更新",
+              "Download speed updates every second",
             )
           : t(
               "等待新的下载速率数据",

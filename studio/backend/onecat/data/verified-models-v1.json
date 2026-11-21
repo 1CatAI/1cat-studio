@@ -126,7 +126,7 @@
       ],
       "tool_parser": "qwen3_coder",
       "vision": true,
-      "vision_reason": "已验证单图问答；支持 PNG、JPEG 和 WebP / Single-image prompting validated; PNG, JPEG and WebP supported",
+      "vision_reason": "已验证单图问答，支持 PNG、JPEG 和 WebP / Single-image prompts are validated for PNG, JPEG and WebP",
       "max_images": 1,
       "draft_repo_id": "incoai/Qwen3.8-27B-DFlash2",
       "accelerators": [
@@ -366,7 +366,7 @@
       ],
       "tool_parser": null,
       "vision": false,
-      "vision_reason": "尚未记录此检查点的完整视觉问答验证 / Vision checkpoint gate pending",
+      "vision_reason": "此检查点的图片问答待验证 / Image prompting awaits validation for this checkpoint",
       "max_images": 4,
       "draft_repo_id": null,
       "accelerators": [],
@@ -2506,7 +2506,7 @@
       ],
       "tool_parser": "qwen3_coder",
       "vision": false,
-      "vision_reason": "此配方只加载文本模型，尚未验证图片输入 / This recipe loads the text model only; image input is not validated",
+      "vision_reason": "此配方用于文本模型。图片输入待验证 / This recipe is for the text model. Image input awaits validation",
       "max_images": 0,
       "draft_repo_id": null,
       "accelerators": [
@@ -5355,7 +5355,7 @@
         "基础推理 / Base inference",
         "MTP4"
       ],
-      "note": "一键启动；只加载文本模型，每卡需 32 GB / One-click launch; text model only, needs 32 GB per GPU."
+      "note": "文本模型可一键启动，每卡需要 32 GB 显存 / One-click launch for the text model requires 32 GB per GPU."
     },
     {
       "id": "qwen38-flash-next-awq",
@@ -5392,7 +5392,7 @@
       "features": [
         "基础推理 / Base inference"
       ],
-      "note": "TP8 与 TP4/PP2 是不同验证配置；当前四卡机器不能启动 / TP8 and TP4/PP2 are separate contracts; requires eight GPUs."
+      "note": "TP8 需要 8 张 GPU。TP4/PP2 的验证单独记录 / TP8 requires eight GPUs. TP4/PP2 has a separate validation record."
     },
     {
       "id": "qwen38-flash-next-vision",

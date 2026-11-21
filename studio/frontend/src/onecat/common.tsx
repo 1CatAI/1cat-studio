@@ -43,7 +43,7 @@ export function ErrorNotice({ error }: { error?: string }) {
       {detailed ? <div>
         <strong>{/out of memory|CUDA error: out of memory/i.test(error)
           ? t("显存不足，请检查模型和上下文配置。", "Insufficient GPU memory. Check the model and context settings.")
-          : t("操作未完成，查看详情了解原因。", "The operation could not finish. View details for the cause.")}</strong>
+          : t("操作未完成。", "The operation could not finish.")}</strong>
         <details><summary>{t("查看错误详情", "Error details")}</summary><pre className="oc-log">{error}</pre></details>
       </div> : error}
     </motion.div>

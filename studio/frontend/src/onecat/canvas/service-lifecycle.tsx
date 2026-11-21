@@ -33,7 +33,7 @@ export function ServiceLifecycle({ service }: { service: Service }) {
       <Progress value={s.phase_progress.percent} />
       <small>{s.phase_progress.done} / {s.phase_progress.total}</small>
     </> : <div className="oc-progress-indeterminate" />)}
-    {busy && <small className="oc-creative-detail">{s.detail || t("请求已接收；正在等待服务就绪，暂无可量化进度。", "Request received. Waiting for readiness; no measurable progress yet.")}</small>}
+    {busy && <small className="oc-creative-detail">{s.detail || t("已接收请求，正在准备服务。", "Request received. Preparing the service.")}</small>}
     <ErrorNotice error={submitError || s.operation_error || s.error} />
     <div className="oc-creative-controls">
       {!busy && s.state !== "ready" && <Action run={() => submit("load")}><Play size={15} />{local ? t("加载所选模型", "Load selected model") : t("连接所选服务", "Connect service")}</Action>}

@@ -9,8 +9,8 @@ function FailedPreview({ onClose, onRetry, error }: { onClose: () => void; onRet
     <aside className="oc-preview-panel oc-preview-failed" role="alert">
       <p>
         {t(
-          "预览暂时无法显示，对话仍可继续。可以重试打开预览。",
-          "Preview could not render. You can keep chatting and retry the preview.",
+          "预览加载失败。请重试打开预览。",
+          "The preview could not load. Open it again to retry.",
         )}
       </p>
       <div className="oc-actions">

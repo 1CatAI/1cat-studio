@@ -359,8 +359,8 @@ export function ProfileEditor({
           <Field
             label={t("最大生成长度", "Maximum generated tokens")}
             hint={t(
-              "留空自动跟随模型，并由服务按剩余上下文约束。",
-              "Empty follows the model; the engine constrains output to remaining context.",
+              "留空时使用模型默认值，生成长度受剩余上下文限制。",
+              "Leave blank to use the model default within the remaining context.",
             )}
           >
             <Input
@@ -470,8 +470,8 @@ export function ProfileEditor({
             <Field
               label={t("MTP 预测 token 数", "MTP speculative tokens")}
               hint={t(
-                "默认 4；实际加速取决于接受率和工作负载，数量越大不一定越快。",
-                "Default: 4. Speedup depends on acceptance and workload; a larger count is not always faster.",
+                "默认 4。可按工作负载和草稿接受率调整。",
+                "The default is 4. Tune it for your workload and draft acceptance rate.",
               )}
             >
               <Segments className="oc-segments" role="radiogroup" aria-label={t("MTP 预测 token 数", "MTP speculative tokens")}
@@ -555,7 +555,7 @@ export function ProfileEditor({
               </Button>
             ))}
           </div>
-          <small className="oc-muted">{t("这是整个 vLLM 服务的最大并发序列数。PI task.maxConcurrency 与它分开；修改后保存并重新加载模型生效。", "Maximum concurrent sequences for the whole vLLM service. PI task.maxConcurrency is separate; save the preset and reload the model to apply changes.")}</small>
+          <small className="oc-muted">{t("限制 vLLM 服务同时处理的序列数。PI 任务并发由 task.maxConcurrency 设置。保存后重新加载模型。", "Limits concurrent sequences for the vLLM service. PI task concurrency uses task.maxConcurrency. Save the profile and reload the model.")}</small>
         </div>
 
         <Field label={t("计算精度", "Compute precision")}>
@@ -624,8 +624,8 @@ export function ProfileEditor({
             "Speculative decoding (JSON)",
           )}
           hint={t(
-            "由当前模型与运行版本决定支持范围；开启后需单独验证能效。",
-            "Support depends on the model and runtime. Speculation requires separate efficiency validation.",
+            "可用选项取决于模型和运行环境。开启后可测试能效。",
+            "Available options depend on the model and runtime. Measure efficiency with speculation enabled.",
           )}
         >
           <Textarea
@@ -663,8 +663,8 @@ export function ProfileEditor({
             "Launch hardware settings (JSON)",
           )}
           hint={t(
-            "使用 power_limit_w、graphics_clock_mhz、reset_clocks；需先配置控制助手。",
-            "Use power_limit_w, graphics_clock_mhz, reset_clocks. Requires the GPU helper.",
+            "先配置 GPU 控制助手，再设置 power_limit_w、graphics_clock_mhz 或 reset_clocks。",
+            "Configure the GPU helper before setting power_limit_w, graphics_clock_mhz or reset_clocks.",
           )}
         >
           <Textarea
@@ -787,8 +787,8 @@ export function ModelsPage() {
                         mutation("/api/models/" + m.id, undefined, "DELETE")
                       }
                       success={t(
-                        "已移除模型库条目，文件仍保留",
-                        "Library entry removed; files retained",
+                        "已从模型库移除，可重新导入本地文件",
+                        "Removed from the library. You can import the local files again.",
                       )}
                     >
                       <Trash2 />
@@ -863,7 +863,7 @@ export function ModelsPage() {
                   </span>
                 </div>
                 {engine?.profile_id === p.id && engine?.profile && ["max_model_len", "dtype", "kv_cache_dtype", "tensor_parallel_size", "runtime_id", "speculative_config", "tool_calling", "vision_enabled", "extra_args"].some(key => JSON.stringify(p[key as keyof Profile]) !== JSON.stringify(engine?.profile?.[key as keyof Profile])) &&
-                  <p className="oc-profile-change">{t("已保存的新配置尚未应用；重新启动后生效。", "Saved changes are pending; restart to apply.")}</p>}
+                  <p className="oc-profile-change">{t("重启模型后应用已保存的设置。", "Restart the model to apply the saved settings.")}</p>}
                 <div className="oc-actions oc-spaced">
                   <Action
                     disabled={!!engine?.maintenance}

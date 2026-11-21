@@ -48,8 +48,8 @@ export function RequestHistory({ data }: { data?: History }) {
       </div>
       <p className="oc-muted">
         {t(
-          "包括聊天、Agent 与 API 请求。速度按真实 token 数计算，预填充、解码与总耗时分别记录。",
-          "Chat, Agent and API requests, with actual token counts and separate prefill, decode, and total timing.",
+          "查看聊天、Agent 和 API 请求的预填充、解码及总耗时。",
+          "Review prefill, decode and total times for chat, Agent and API requests.",
         )}
       </p>
       <div className="oc-request-stats">
@@ -197,15 +197,15 @@ export function RequestHistory({ data }: { data?: History }) {
       {!data?.items.length && (
         <p className="oc-muted oc-spaced">
           {t(
-            "发送一条消息或调用 API 后，这里会出现真实请求记录。",
-            "Send a message or call the API to see measured requests here.",
+            "发送消息或调用 API 后即可查看请求记录。",
+            "Send a message or call the API to see request history.",
           )}
         </p>
       )}
       <p className="oc-muted oc-chart-caption">
         {t(
-          "Prefill 扣除命中缓存的 tokens；Decode 不含预填充时间。功率来自活动 GPU 的 0.5 秒采样，耗电按请求时间窗积分估算；并发时是同期总量，不作为单请求独占耗电。历史未采集项与无法隔离的计时显示 —。",
-          "Prefill excludes cached tokens; decode excludes prefill time. Power is sampled every 0.5 s and energy is integrated over the request window. Concurrent energy is shared board consumption. Missing or non-isolatable measurements remain —.",
+          "Prefill 统计未命中缓存的 token，Decode 单独计时。功率每 0.5 秒采样，耗电按请求时间窗估算。并发请求共享同期 GPU 用量。缺测或无法单独计时的项显示 —。",
+          "Prefill uses uncached tokens and decode is timed separately. GPU power is sampled every 0.5 s. Energy covers the request window and is shared by overlapping requests. A dash marks missing or non-isolatable measurements.",
         )}
       </p>
     </section>

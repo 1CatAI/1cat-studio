@@ -190,8 +190,8 @@ export function LiveGPUs() {
       </div>
       <p className="oc-muted oc-chart-caption">
         {t(
-          "最近 2 分钟 · 全部可测 GPU 板卡功率 · 不含 CPU、内存和电源损耗",
-          "Last 2 minutes · all reporting GPU boards · excludes CPU, RAM, and PSU losses",
+          "最近 2 分钟 · 有功率读数的 GPU 板卡总功率",
+          "Last 2 minutes · total board power across GPUs with readings",
         )}
       </p>
       <div className="oc-gpu-grid">

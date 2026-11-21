@@ -171,7 +171,7 @@ export function GPUControls({
         <p className="oc-muted">
           {t(
             "安装包缺少 GPU 控制组件，请更新 Studio 后再试。",
-            "This build is missing the GPU control component; update Studio and retry.",
+            "Update Studio to get the GPU control component, then try again.",
           )}
         </p>
       );
@@ -189,8 +189,8 @@ export function GPUControls({
           {bindingWarning()}
           <p className="oc-muted">
             {t(
-              "可在性能与能效页切换功耗模式；更换显卡后 Studio 会自动按同一范围重新绑定。",
-              "Change power modes on Performance. Replacing the cards re-binds the same scope automatically.",
+              "在「性能与能效」切换功耗模式。更换显卡后，Studio 会按原范围重新绑定。",
+              "Change power modes on the Performance page. Studio rebinds the same scope when you replace GPUs.",
             )}
           </p>
           {data.restricted && (
@@ -215,8 +215,8 @@ export function GPUControls({
         <div className="oc-spaced">
           <p className="oc-status-warn">
             {t(
-              `Studio 已识别 ${data.gpu_count} 张 GPU。请管理员在服务器上完成 GPU 控制授权。`,
-              `Studio sees ${data.gpu_count} NVIDIA GPU(s). Ask an administrator to authorize GPU control on the server.`,
+              `已识别 ${data.gpu_count} 张 GPU。请让服务器管理员授权 GPU 控制。`,
+              `Detected ${data.gpu_count} NVIDIA ${data.gpu_count === 1 ? "GPU" : "GPUs"}. Ask a server administrator to authorize GPU control.`,
             )}
           </p>
         </div>
@@ -242,8 +242,8 @@ export function GPUControls({
         {data.upgrade_required && (
           <p className="oc-muted">
             {t(
-              "新版控制组件已随 Studio 提供，授权后即可更新；现有权限与功耗设置会保留。",
-              "Studio ships an updated component. Authorize to upgrade; existing permissions and power settings are kept.",
+              "授权后安装新版 GPU 控制组件，沿用当前权限和功耗设置。",
+              "Authorize the update to install the new GPU control component with your current permissions and power settings.",
             )}
           </p>
         )}
@@ -284,7 +284,7 @@ export function GPUControls({
                 title={t("手动选择显卡", "Choose GPUs manually")}
                 detail={t(
                   "指定具体序列号，换卡后需要重新绑定",
-                  "Pin exact serials; replacing a card needs a re-bind",
+                  "Bind by serial number. Rebind after replacing a card.",
                 )}
               />
             </div>
@@ -358,12 +358,12 @@ export function GPUControls({
     const drivers = diagnostic?.pci_drivers?.join(" / ") ?? "";
     const messages = {
       visible: t(
-        `nvidia-smi 列出了 ${diagnostic?.smi_gpu_count} 张 GPU，Studio 当前无法枚举可绑定设备。请检查 Studio 服务使用的 NVML 库和设备权限。`,
-        `nvidia-smi lists ${diagnostic?.smi_gpu_count} GPU(s), but Studio cannot enumerate them. Check the service's NVML library and device permissions.`,
+        `nvidia-smi 已识别到 ${diagnostic?.smi_gpu_count} 张 GPU。Studio 无法读取设备，请检查服务的 NVML 库和设备权限。`,
+        `nvidia-smi detected ${diagnostic?.smi_gpu_count} GPUs. Studio cannot read them. Check the service's NVML library and device permissions.`,
       ),
       pci_not_visible: t(
-        "当前环境的 PCIe 列表里没有 NVIDIA GPU。请检查显卡供电、插槽连接或虚拟机的 GPU 直通配置。",
-        "No NVIDIA GPU is enumerated on PCIe in this environment. Check card power, slot connections, or GPU passthrough.",
+        "PCIe 未识别到 NVIDIA GPU。请检查供电、插槽连接或 GPU 直通。",
+        "PCIe did not detect an NVIDIA GPU. Check card power, slot connections or GPU passthrough.",
       ),
       driver_unbound: t(
         "这些 GPU 尚未绑定内核驱动。请检查 NVIDIA 驱动模块是否加载，以及设备是否初始化成功。",
@@ -418,12 +418,12 @@ export function GPUControls({
   function authorizationHint() {
     return data?.desktop_authorization
       ? t(
-          "授权窗口会显示在服务器桌面。密码由系统处理，Studio 不接收或保存。",
-          "The authorization dialog opens on the server desktop. The system handles the password; Studio never receives or stores it.",
+          "请在服务器桌面的系统授权窗口输入密码。",
+          "Enter your password in the system authorization dialog on the server desktop.",
         )
       : t(
-          "使用无密码 sudo 在当前用户的终端完成授权；密码不会经过 Studio。",
-          "Authorization uses passwordless sudo in the current user's terminal; no password passes through Studio.",
+          "在当前用户的终端用免密 sudo 授权。",
+          "Authorize from the current user's terminal with passwordless sudo.",
         );
   }
 }
