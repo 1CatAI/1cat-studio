@@ -256,10 +256,24 @@ def _model_config(model_path: str) -> dict:
             data = json.loads(stream.read(512 * 1024))
         if not isinstance(data, dict):
             return {}
-        value = _select("model_type architectures torch_dtype dtype max_position_embeddings", data)
+        value = {
+            key: item[:200]
+            for key, item in _select("model_type torch_dtype dtype", data).items()
+            if isinstance(item, str)
+        }
+        positions = data.get("max_position_embeddings")
+        if type(positions) is int:
+            value["max_position_embeddings"] = positions
+        architectures = data.get("architectures")
+        if isinstance(architectures, list):
+            value["architectures"] = [item[:200] for item in architectures[:16] if isinstance(item, str)]
         quantization = data.get("quantization_config")
         if isinstance(quantization, dict):
-            value["quantization_config"] = _select("quant_method format bits", quantization)
+            value["quantization_config"] = {
+                key: item[:200] if isinstance(item, str) else item
+                for key, item in _select("quant_method format bits", quantization).items()
+                if type(item) in (str, int)
+            }
         return value
     except (OSError, ValueError):
         return {}

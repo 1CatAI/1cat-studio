@@ -74,6 +74,21 @@ def test_capture_rejects_log_symlink_outside_log_root(state):
         analysis.capture("engine", {"revision": "test"})
 
 
+def test_model_metadata_omits_unexpected_nested_values(tmp_path):
+    (tmp_path / "config.json").write_text(json.dumps({
+        "model_type": "fixture",
+        "architectures": ["FixtureForCausalLM", {"notes": "unexpected metadata"}],
+        "dtype": {"notes": "unexpected metadata"},
+        "max_position_embeddings": 8192,
+        "quantization_config": {"quant_method": "awq", "format": {"notes": "unexpected metadata"}, "bits": 4},
+    }), encoding="utf-8")
+    result = analysis.inspect("engine_configuration", {"model_path": str(tmp_path)})
+    assert result["model_config"] == {
+        "model_type": "fixture", "architectures": ["FixtureForCausalLM"],
+        "max_position_embeddings": 8192, "quantization_config": {"quant_method": "awq", "bits": 4},
+    }
+
+
 def test_provider_errors_do_not_echo_response_or_follow_redirects():
     provider = {"base_url": "https://provider.example/v1", "api_key": API_KEY,
                 "model": "diagnostic-model"}
