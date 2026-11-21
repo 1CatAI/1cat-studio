@@ -302,22 +302,24 @@ def main():
                 page.goto(BASE+'/models')
                 page.get_by_role('tab',name='启动预设',exact=True).click()
                 page.get_by_role('button',name='新建预设',exact=True).click()
-                details=page.locator('.oc-dialog details').last
-                summary=details.locator('summary').first
-                # Profiles without a bound GPU initially show advanced settings.
-                if details.evaluate('element => element.open'):
-                    summary.click()
-                    expect(details).not_to_have_attribute('open','')
-                    page.wait_for_function('element => !element.dataset.expanding',arg=details.element_handle())
-                summary.click()
-                expect(details).to_have_attribute('open','')
-                page.wait_for_function('element=>element.style.height===""',arg=details.element_handle(),timeout=1500)
-                summary.evaluate('element=>element.click()')
+                toggle = page.get_by_role('button',name='高级设置',exact=True)
+                reveal = page.locator('.oc-profile-advanced .oc-advanced-reveal')
+                if toggle.get_attribute('aria-expanded') == 'true':
+                    toggle.click()
+                    expect(toggle).to_have_attribute('aria-expanded','false')
+                    expect(reveal).to_have_attribute('inert','')
+                toggle.click()
+                expect(toggle).to_have_attribute('aria-expanded','true')
+                toggle.evaluate('element=>element.click()')
                 page.wait_for_timeout(40)
-                summary.evaluate('element=>element.click()')
-                page.wait_for_function('element=>element.style.height===""',arg=details.element_handle(),timeout=1500)
-                expect(details).to_have_attribute('open','')
-                assert details.evaluate('element=>element.style.height')==''
+                toggle.evaluate('element=>element.click()')
+                expect(toggle).to_have_attribute('aria-expanded','true')
+                expect(reveal).not_to_have_attribute('inert','')
+                reveal.evaluate("""async el => {
+                    const animations = el.closest('.oc-dialog-fixed').getAnimations();
+                    await Promise.allSettled(animations.map(animation => animation.finished));
+                }""")
+                assert reveal.evaluate('el=>el.style.height === "" && el.clientHeight > 0')
                 passed.append('disclosure latest-intent wins and clears temporary styles')
                 page.keyboard.press('Escape')
                 page.goto(BASE+'/performance')
