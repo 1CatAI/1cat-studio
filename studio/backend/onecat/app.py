@@ -820,7 +820,9 @@ def create_app() -> FastAPI:
         if not log_diagnostics.LOG_NAME.fullmatch(name):
             raise HTTPException(404, "Log not found")
         job = next((item for item in list_jobs() if item.get("analysis_source") == name), None)
-        return {"provider": log_diagnostics.public_settings(), "job": job}
+        from . import log_repairs
+
+        return {"provider": log_diagnostics.public_settings(), "job": job, "repair": log_repairs.latest(name)}
 
     @admin.post("/logs/{name}/analysis")
     def start_log_analysis(name: str):
@@ -833,6 +835,14 @@ def create_app() -> FastAPI:
             if job.get("analysis_source") == name and job["state"] not in TERMINAL:
                 return job
         return scheduled_job("analyze_log", log_diagnostics.capture(name, provider))
+
+    @admin.post("/logs/{name}/repair")
+    async def start_log_repair(name: str):
+        if not log_diagnostics.LOG_NAME.fullmatch(name):
+            raise HTTPException(404, "Log not found")
+        from . import log_repairs
+
+        return await log_repairs.start(name)
 
     @admin.get("/jobs/{id}/download")
     def task_download(id: str):
