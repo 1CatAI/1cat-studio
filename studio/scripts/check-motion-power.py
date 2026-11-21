@@ -3,6 +3,7 @@
 """0.4 interactions on simulated GPUs; never calls a real GPU helper or inference engine."""
 import json
 import os
+import re
 from pathlib import Path
 import runpy
 import socket
@@ -66,6 +67,30 @@ with socket.socket() as sock:
 BASE = f'http://127.0.0.1:{port}'
 
 
+def trace_layout(page):
+    page.evaluate("""() => {
+        const card = document.querySelector('.perf-controls');
+        const next = document.querySelector('.perf-signal');
+        const samples = window.powerLayout = [];
+        function sample() {
+            samples.push(next.getBoundingClientRect().top - card.getBoundingClientRect().top);
+            if (window.powerLayout === samples) requestAnimationFrame(sample);
+        }
+        sample();
+    }""")
+
+
+def check_travel(page, opening):
+    samples = page.evaluate("() => {const samples = window.powerLayout; window.powerLayout = null; return samples}")
+    direction = 1 if opening else -1
+    travel = (samples[-1] - samples[0]) * direction
+    positions = [(y - samples[0]) * direction for y in samples]
+    assert travel > 40, (travel, samples)
+    interior = {round(y) for y in positions if travel * .05 < y < travel * .95}
+    assert len(interior) >= 5, (travel, positions)
+    assert max(abs(b - a) for a, b in zip(positions, positions[1:])) < travel * .45, positions
+
+
 def main():
     passed = []
     with tempfile.TemporaryDirectory(prefix='onecat-motion-') as state, (OUT / 'server.log').open('w') as log:
@@ -87,18 +112,21 @@ def main():
                 assert context.request.post(BASE+'/api/auth/setup',data={'password':'motion-fixture-password'}).ok
                 context.request.put(BASE+'/api/settings',data={'theme':'dark'})
                 page.goto(BASE+'/performance')
-                expect(page.locator('.oc-power-mode').filter(has_text='性能模式')).to_contain_text('1530 MHz')
+                expect(page.locator('.perf-switch button').filter(has_text='性能模式')).to_have_attribute('title', re.compile('1530 MHz'))
+                expect(page.get_by_role('heading', name='能效测量')).to_have_count(0)
+                expect(page.get_by_role('button', name='一键校准')).to_have_count(0)
+                assert not page.evaluate("performance.getEntriesByType('resource').some(r => new URL(r.name).pathname.startsWith('/api/efficiency'))")
                 if os.environ.get('ONECAT_POWER_MAX_ONLY'):
-                    mode = page.locator('.oc-power-mode').filter(has_text='性能模式')
+                    mode = page.locator('.perf-switch button').filter(has_text='性能模式')
                     expect(mode).to_be_enabled()
-                    expect(mode).to_contain_text('300')
-                    expect(mode).to_contain_text('闲置自动降频')
+                    expect(mode).to_have_attribute('title', re.compile('300'))
+                    expect(mode).to_have_attribute('title', re.compile('闲置自动降频'))
                     page.screenshot(path=str(OUT/'performance-1530.png'))
                     print(json.dumps({'passed':['1530 MHz maximum performance card', '300 W driver limit', 'mode enabled'], 'screenshot':str(OUT/'performance-1530.png')}))
                     browser.close()
                     return
                 expect(page.locator('html')).to_have_class('dark')
-                eco=page.locator('.oc-power-mode').filter(has=page.get_by_role('heading',name='省电模式',exact=True,include_hidden=True))
+                eco=page.locator('.perf-switch button').filter(has_text='省电模式')
                 expect(eco).to_be_enabled()
                 def open_scope():
                     page.get_by_role('button',name='更改 GPU 控制范围',exact=True).click()
@@ -113,7 +141,7 @@ def main():
                 page.on('request',lambda r: writes.append(r.url) if r.method=='POST' and '/api/gpu/' in r.url else None)
                 expect(page.locator('.oc-power-device')).to_have_count(0)
                 assert eco.bounding_box()['height'] < 190
-                assert page.locator('.oc-telemetry').bounding_box()['y'] < 700
+                assert page.locator('.perf-signal').bounding_box()['y'] < 700
                 page.screenshot(path=str(OUT/'power-compact-dark.png'))
                 open_scope()
                 expect(page.locator('.oc-power-device')).to_have_count(8)
@@ -127,6 +155,7 @@ def main():
                 expect(page.get_by_role('button',name='更改 GPU 控制范围',exact=True)).to_be_focused()
                 assert not writes,writes
                 passed.append('compact overview, on-demand GPU details and read-only keyboard selection')
+                trace_layout(page)
                 with page.expect_response(lambda r: r.request.method=='POST' and r.url.endswith('/api/gpu/power-mode')) as applied:
                     eco.click()
                 assert applied.value.ok,applied.value.text()
@@ -134,15 +163,38 @@ def main():
                 assert len(pending['gpu_uuids'])==8
                 expect(page.locator('.oc-power-status')).to_contain_text('当前：均衡模式')
                 expect(page.locator('.oc-power-status')).to_contain_text('等待模型启动、停止或校准完成')
-                expect(page.locator('.oc-power-target')).to_have_count(1)
+                transition = page.locator('.perf-transition')
+                expect(transition).to_contain_text('切换至省电模式')
+                expect(transition.locator('.perf-transition-boards span')).to_have_count(8)
+                wave = transition.locator('.perf-wave i').nth(2)
+                expect(wave).to_have_css('animation-name', 'perf-wave')
+                shape = wave.evaluate("el=>getComputedStyle(el).transform")
+                page.wait_for_function("(shape)=>getComputedStyle(document.querySelector('.perf-wave i:nth-child(3)')).transform !== shape", arg=shape)
+                page.screenshot(path=str(OUT/'power-switch-wait.png'))
+                page.wait_for_timeout(500)
+                check_travel(page, opening=True)
+                page.emulate_media(reduced_motion='reduce')
+                expect(wave).to_have_css('animation-name', 'none')
+                expect(transition).to_contain_text('等待模型启动、停止或校准完成')
+                page.emulate_media(reduced_motion='no-preference')
                 page.get_by_role('button',name='任务详情',exact=True).click()
                 expect(page.get_by_role('dialog').get_by_text('等待模型启动、停止或校准完成',exact=False)).to_be_visible()
                 expect(page.locator('.oc-power-task-details')).to_contain_text('GPU 0, GPU 1, GPU 2, GPU 3, GPU 4, GPU 5, GPU 6, GPU 7')
                 page.keyboard.press('Escape')
+                trace_layout(page)
                 assert context.request.post(BASE+'/fixture/finish/'+pending['job']).ok
                 page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
                 expect(eco).to_have_attribute('aria-pressed','true')
-                passed.append('stopped model: all 8 GPUs including external workload; confirmed state')
+                expect(transition.locator('[role=status]')).to_contain_text('设置已应用并确认')
+                expect(transition).to_have_count(0)
+                page.wait_for_timeout(50)
+                check_travel(page, opening=False)
+                expect(page.locator('.perf-readback')).to_contain_text('已确认 8/8')
+                line=page.locator('.perf-plot .recharts-reference-line-line').first
+                line.wait_for(state='attached',timeout=10000)
+                assert line.evaluate("el=>el.getTotalLength()>50 && el.getAttribute('stroke') !== 'none'")
+                expect(page.locator('.perf-plot').get_by_text('省电',exact=True)).to_be_visible()
+                passed.append('stopped model: all 8 GPUs confirmed and chart marked after completion')
                 # Return stale all-GPU data for the new scope: it must never be submitted.
                 stale=context.request.get(BASE+'/api/gpu/power-modes').json()
                 page.route('**/api/gpu/power-modes?*',lambda route: route.fulfill(json=stale))
@@ -156,7 +208,7 @@ def main():
                 page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
                 expect(eco).to_be_enabled()
                 with page.expect_response(lambda r: r.request.method=='POST' and r.url.endswith('/api/gpu/power-mode')) as applied:
-                    page.locator('.oc-power-mode').filter(has=page.get_by_role('heading',name='均衡模式',exact=True)).click()
+                    page.locator('.perf-switch button').filter(has_text='均衡模式').click()
                 assert applied.value.ok,applied.value.text()
                 pending=context.request.get(BASE+'/api/gpu/power-modes?gpu_uuids=GPU-'+36*'0').json()['pending']
                 assert pending['gpu_uuids']==['GPU-'+36*'0']
@@ -180,7 +232,7 @@ def main():
                 assert pending['gpu_uuids']==['GPU-'+36*'0']
                 context.request.post(BASE+'/fixture/finish/'+pending['job'])
                 page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
-                expect(page.locator('.oc-power-mode').nth(1)).to_have_attribute('aria-pressed','true')
+                expect(page.locator('.perf-switch button').nth(1)).to_have_attribute('aria-pressed','true')
                 choose_scope('全部已授权 GPU')
                 expect(page.locator('.oc-power-status')).to_contain_text('混合配置')
                 page.screenshot(path=str(OUT/'power-dark.png'),full_page=True)
@@ -195,9 +247,9 @@ def main():
                     fixture['devices'][1]['uuid']:{'state':'restored','restored_exact':False}}}}
                 page.route('**/api/gpu/power-modes',lambda route: route.fulfill(json=fixture))
                 page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
-                expect(page.locator('.oc-power-section > [role=alert]')).to_contain_text('模拟设置失败')
+                expect(page.locator('.perf-controls > [role=alert]')).to_contain_text('模拟设置失败')
                 expect(page.locator('.oc-power-status')).to_contain_text('尚无确认读数')
-                expect(page.locator('.oc-power-mode[aria-pressed=true]')).to_have_count(0)
+                expect(page.locator('.perf-switch button[aria-pressed=true]')).to_have_count(0)
                 page.get_by_role('button',name='任务详情',exact=True).click()
                 expect(page.get_by_role('dialog')).to_contain_text('待恢复：GPU 0')
                 expect(page.locator('.oc-power-result')).to_contain_text('待恢复')
@@ -206,22 +258,15 @@ def main():
                 page.keyboard.press('Escape')
                 page.unroute_all(behavior='wait')
                 page.evaluate("window.dispatchEvent(new Event('onecat:refresh'))")
-                expect(page.locator('.oc-power-section > [role=alert]')).to_have_count(0)
+                expect(page.locator('.perf-controls > [role=alert]')).to_have_count(0)
                 passed.append('failure stays visible; unknown state and per-GPU partial recovery remain inspectable')
                 page.goto(BASE+'/settings')
-                toggle=page.get_by_role('switch',name='界面动效',exact=True)
-                toggle.uncheck()
-                expect(page.locator('html')).to_have_attribute('data-ui-motion','off')
-                assert page.evaluate("localStorage.getItem('onecat_stream_animation')")!='off'
-                page.reload()
-                expect(toggle).not_to_be_checked()
-                toggle.check()
-                expect(page.locator('html')).to_have_attribute('data-ui-motion','on')
+                expect(page.get_by_role('switch', name='界面动效', exact=True)).to_have_count(0)
                 page.emulate_media(reduced_motion='reduce')
                 expect(page.locator('html')).to_have_attribute('data-ui-motion','off')
-                expect(toggle).to_be_checked()
                 page.emulate_media(reduced_motion='no-preference')
-                passed.append('independent motion switch, persistence and OS override')
+                expect(page.locator('html')).to_have_attribute('data-ui-motion','on')
+                passed.append('motion follows the system preference')
                 thread=context.request.post(BASE+'/api/chat/import',data={'title':'Motion preview','messages':[{'role':'user','content':'Make a preview'},{'role':'assistant','content':'```html\n<h1>Motion preview</h1><button onclick="this.textContent=Number(this.textContent)+1">0</button>\n```'}]}).json()['id']
                 page.goto(BASE+'/chat?thread='+thread)
                 preview=page.get_by_role('button',name='预览 / 运行').first
@@ -259,6 +304,11 @@ def main():
                 page.get_by_role('button',name='新建预设',exact=True).click()
                 details=page.locator('.oc-dialog details').last
                 summary=details.locator('summary').first
+                # Profiles without a bound GPU initially show advanced settings.
+                if details.evaluate('element => element.open'):
+                    summary.click()
+                    expect(details).not_to_have_attribute('open','')
+                    page.wait_for_function('element => !element.dataset.expanding',arg=details.element_handle())
                 summary.click()
                 expect(details).to_have_attribute('open','')
                 page.wait_for_function('element=>element.style.height===""',arg=details.element_handle(),timeout=1500)
@@ -275,7 +325,7 @@ def main():
                 page.wait_for_timeout(250)
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 expect(page.locator('.oc-power-device')).to_have_count(0)
-                for card in page.locator('.oc-power-mode').all():
+                for card in page.locator('.perf-switch button').all():
                     assert card.bounding_box()['height'] < 115
                 page.screenshot(path=str(OUT/'power-mobile.png'))
                 open_scope()
@@ -290,8 +340,8 @@ def main():
                 passed.append('mobile, light/dark and keyboard dismissal')
                 page.evaluate("localStorage.setItem('onecat_locale','en')")
                 page.reload()
-                expect(page.get_by_role('heading',name='GPU power settings',exact=True)).to_be_visible()
-                expect(page.locator('.oc-power-scope')).to_contain_text('All 8 authorized GPUs')
+                expect(page.get_by_role('heading',name='GPU power controls',exact=True)).to_be_visible()
+                expect(page.locator('.perf-model')).to_contain_text('All 8 authorized GPUs')
                 page.get_by_role('button',name='Change GPU control scope',exact=True).click()
                 expect(page.get_by_role('dialog')).to_contain_text('All authorized GPUs')
                 page.get_by_role('button',name='Choose GPUs',exact=True).click()

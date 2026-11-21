@@ -19,9 +19,16 @@ from starlette.responses import StreamingResponse
 from .. import auth, db
 from ..config import state_root
 from ..schemas import DEFAULT_MAX_NUM_SEQS, StrictModel
-from . import pi_runtime, projects, runtime, tasks
+from . import desktop, pi_runtime, projects, runtime, tasks
 
-router = APIRouter(prefix="/api/agent", dependencies=[Depends(auth.require_admin)])
+def agent_access(request: Request):
+    local = desktop.local_session(request)
+    for value in request.path_params.values():
+        desktop.authorize_id(value, local)
+    return local
+
+
+router = APIRouter(prefix="/api/agent", dependencies=[Depends(auth.require_admin), Depends(agent_access)])
 
 
 class NewProject(StrictModel):
@@ -69,8 +76,9 @@ class Decision(StrictModel):
 
 
 @router.get("/status")
-async def status():
+async def status(local: bool = Depends(agent_access)):
     result = await asyncio.to_thread(runtime.info)
+    result["desktop"] = local
     codex = result.copy()
     pi = await asyncio.to_thread(pi_runtime.info)
     from .. import engine
@@ -100,12 +108,12 @@ async def status():
 
 
 @router.get("/projects")
-def list_projects():
-    return {"items": db.all_records("agent_projects")}
+def list_projects(local: bool = Depends(agent_access)):
+    return {"items": [p for p in db.all_records("agent_projects") if local or not desktop.private_id(p["id"])]}
 
 
 @router.post("/projects")
-async def create_project(data: NewProject):
+async def create_project(data: NewProject, local: bool = Depends(agent_access)):
     name = data.name.strip()
     if not name:
         raise ValueError("Enter a project name")
@@ -114,7 +122,7 @@ async def create_project(data: NewProject):
     ):
         raise ValueError("Enter a public GitHub HTTPS repository URL")
     record = {
-        "id": db.uid(),
+        "id": ("desktop-" if local else "") + db.uid(),
         "name": name,
         "created_at": time.time(),
         "repository": data.repository,
@@ -242,12 +250,14 @@ def list_tasks(
     project_id: str | None = None,
     q: str = Query(default="", max_length=200),
     offset: int = Query(default=0, ge=0, le=100000),
+    local: bool = Depends(agent_access),
 ):
-    return {"items": tasks.summaries(project_id, q, offset)}
+    return {"items": tasks.summaries(project_id, q, offset, include_desktop=local)}
 
 
 @router.post("/tasks")
-async def new_task(data: NewTask):
+async def new_task(data: NewTask, local: bool = Depends(agent_access)):
+    desktop.authorize_id(data.project_id, local)
     if not data.prompt.strip():
         raise ValueError("Enter a task")
     return tasks.start(

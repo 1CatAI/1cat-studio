@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { type RequestHistory as History, type RequestMetrics } from "./api";
+import { type RequestHistory as History, type RequestMetrics, type RequestRecord } from "./api";
 import { format, useText } from "./common";
 import { modelLabel } from "./model-label";
 
@@ -23,11 +23,28 @@ export function timingSource(
       : t("无可靠计时", "Timing unavailable");
 }
 
+function missingMeasurement(
+  row: RequestRecord,
+  field: "prefill" | "power",
+  t: (zh: string, en: string) => string,
+) {
+  if (row.status == null) return t("生成中", "Running");
+  if (row.metrics?.pending) return t("统计中", "Measuring");
+  if (field === "power") {
+    return row.metrics?.gpu_uuids
+      ? t("功率采样不足", "Incomplete power samples")
+      : t("未采集功率", "Power not recorded");
+  }
+  if (row.status !== 200) return t("请求未完成", "Request incomplete");
+  if (row.prompt_tokens && row.prompt_tokens === row.metrics?.cached_tokens)
+    return t("全部命中缓存", "Fully cached");
+  if (row.metrics?.concurrent) return t("并发无法归因", "Concurrent requests");
+  return t("无独立计时", "No attributable timing");
+}
+
 export function RequestHistory({ data }: { data?: History }) {
   const t = useText();
-  const last = data?.items.find(
-    (r) => r.status === 200 && r.metrics?.decode_tokens_s != null,
-  );
+  const last = data?.items.find((r) => r.status === 200);
   const chart =
     data?.items
       .filter((r) => r.metrics?.average_gpu_w != null)
@@ -133,7 +150,7 @@ export function RequestHistory({ data }: { data?: History }) {
         <table className="oc-table oc-request-table">
           <thead>
             <tr>
-              <th>{t("时间 / 模型", "Time / model")}</th>
+              <th>{t("模型 / 时间", "Model / time")}</th>
               <th>{t("来源 / 状态", "Source / status")}</th>
               <th>Prefill</th>
               <th>Decode</th>
@@ -148,11 +165,11 @@ export function RequestHistory({ data }: { data?: History }) {
             {data?.items.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <time>{new Date(r.started * 1000).toLocaleString()}</time>
-                  <small>{modelLabel(r.metrics?.model_name || r.model)}</small>
+                  <strong className="oc-request-model">{modelLabel(r.metrics?.model_name || r.model)}</strong>
+                  <time dateTime={new Date(r.started * 1000).toISOString()}>{new Date(r.started * 1000).toLocaleString()}</time>
                 </td>
                 <td>
-                  {r.source === "studio" ? t("聊天", "Chat") : r.source === "agent" ? (r.metrics?.agent_engine === "pi" ? "PI" : r.metrics?.agent_engine === "codex" ? "Codex" : "Agent") : "API"}
+                  {r.source === "chat_title" ? t("对话标题", "Chat title") : r.source === "studio" ? t("聊天", "Chat") : r.source === "agent" ? (r.metrics?.agent_engine === "pi" ? "PI" : r.metrics?.agent_engine === "codex" ? "Codex" : "Agent") : "API"}
                   <small>
                     {r.status ?? t("生成中", "Running")}
                     {r.metrics?.pending ? " · " + t("统计中", "Measuring") : ""}
@@ -161,7 +178,7 @@ export function RequestHistory({ data }: { data?: History }) {
                 <td>
                   {format(r.metrics?.prefill_tokens_s, 1)}
                   <small>
-                    tok/s
+                    {r.metrics?.prefill_tokens_s == null ? missingMeasurement(r, "prefill", t) : "tok/s"}
                     {r.metrics?.cached_tokens
                       ? ` · ${t("缓存", "cached")} ${r.metrics.cached_tokens}`
                       : ""}
@@ -180,14 +197,14 @@ export function RequestHistory({ data }: { data?: History }) {
                   <small>tokens</small>
                 </td>
                 <td>
-                  {format(r.metrics?.average_gpu_w, 1)} W
+                  {r.metrics?.average_gpu_w == null ? <small>{missingMeasurement(r, "power", t)}</small> : `${format(r.metrics.average_gpu_w, 1)} W`}
                   {r.metrics?.concurrent && (
                     <small>
                       {t("并发期间总功率", "Shared during concurrency")}
                     </small>
                   )}
                 </td>
-                <td>{format(r.metrics?.energy_wh, 3)} Wh</td>
+                <td>{r.metrics?.energy_wh == null ? <small>{missingMeasurement(r, "power", t)}</small> : `${format(r.metrics.energy_wh, 3)} Wh`}</td>
                 <td>{format(r.elapsed, 2)} s</td>
               </tr>
             ))}

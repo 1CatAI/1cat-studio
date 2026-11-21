@@ -17,6 +17,16 @@ _PRIVATE = tuple(
 _VIRTUAL_PREFIXES = ("lo", "docker", "br-", "veth", "virbr", "cni", "podman")
 
 
+def permits_api_listener(peer: str, path: str) -> bool:
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return address.is_loopback or (
+        path.startswith("/v1/") and any(address in network for network in _PRIVATE)
+    )
+
+
 def lan_api_urls(port: int) -> list[str]:
     """Return active private-network addresses, with the default route first."""
     primary = None

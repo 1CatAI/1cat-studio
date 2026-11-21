@@ -12,14 +12,15 @@ import {
 export function useConversationNavigation() {
   const path = useRouterState({ select: s => s.location.pathname });
   const thread = useRouterState({ select: s => (s.location.search as { thread?: string }).thread });
+  const draft = useRouterState({ select: s => (s.location.search as { draft?: string }).draft });
   const task = useRouterState({ select: s => (s.location.search as { task?: string }).task });
   const source = useRouterState({ select: s => (s.location.search as { source?: string }).source });
   const [saved, setSaved] = useBrowserState<unknown>("onecat:conversation-location", null);
   useEffect(() => {
-    if (conversationMode(path)) setSaved((previous: unknown) => rememberConversation(previous, path, { thread, task, source }));
-  }, [path, thread, task, source, setSaved]);
+    if (conversationMode(path)) setSaved((previous: unknown) => rememberConversation(previous, path, { thread, draft, task, source }));
+  }, [path, thread, draft, task, source, setSaved]);
   // Deep links take effect in this render, without waiting for persistence.
-  const location = rememberConversation(saved, path, { thread, task, source });
+  const location = rememberConversation(saved, path, { thread, draft, task, source });
   return { mode: conversationMode(path), location, target: conversationTarget(location) };
 }
 

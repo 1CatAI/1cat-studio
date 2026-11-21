@@ -225,7 +225,6 @@ export function SetupPage() {
           {system?.gpu.driver || "—"}
         </p>
       </div>
-      <GPUControls showWhen="ready" />
       <div className="oc-panel oc-agent-component">
         <div><h2>{t("Agent 引擎", "Agent engine")} · Codex {agent?.version || ""}</h2>
           <p className="oc-muted">{agent?.installed && agent.sandbox_ready

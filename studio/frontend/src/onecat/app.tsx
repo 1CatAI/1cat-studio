@@ -34,8 +34,9 @@ const indexRoute = createRoute({
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { thread?: string; draft?: string } => ({
     thread: typeof search.thread === "string" ? search.thread : undefined,
+    draft: typeof search.draft === "string" ? search.draft : undefined,
   }),
   component: ChatPage,
 });

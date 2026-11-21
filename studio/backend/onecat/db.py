@@ -126,6 +126,7 @@ def settings() -> dict:
         "modelscope_endpoint": "https://modelscope.cn",
         "idle_unload_minutes": 0,
         "autostart_profile": None,
+        "restore_model_on_boot": bool(stored.get("autostart_profile")),
         "update_channel": None,
         "host": "127.0.0.1",
         "port": 8888,

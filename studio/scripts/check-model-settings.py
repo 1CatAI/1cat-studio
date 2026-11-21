@@ -63,7 +63,7 @@ db.patch("profiles","p",{"max_model_len":65536,"gpu_memory_utilization":0.88})
                     expect(dialog.get_by_text("启动选项", exact=True)).to_have_count(0)
                     dialog.get_by_role("button", name="调整", exact=True).click()
                     expect(page.get_by_label("最大上下文 tokens", exact=True)).to_have_value("65536")
-                    expect(page.locator(".oc-profile-advanced")).not_to_have_attribute("open", "")
+                    expect(page.get_by_role("button", name="高级设置", exact=True)).to_have_attribute("aria-expanded", "false")
                     page.get_by_text("高级设置", exact=True).click()
                     return page.get_by_role("dialog")
 

@@ -112,7 +112,7 @@ def begin(
     context = agent_context or {}
     bucket = context.get("engine") if source == "agent" else source
     if bucket not in {"pi", "codex"}:
-        bucket = "chat" if source == "studio" else "api"
+        bucket = "chat" if source in {"studio", "chat_title"} else "api"
     decode_aggregator.begin(
         id,
         source=source,
@@ -156,13 +156,28 @@ def finish(
         )
 
 
+async def measurement_baseline(id, client, base, headers):
+    with db.connect() as conn:
+        unflushed = conn.execute(
+            "SELECT 1 FROM requests WHERE id<>? AND json_extract(metrics,'$.pending')=1 LIMIT 1",
+            (id,),
+        ).fetchone()
+    return {} if unflushed else await engine_metrics(client, base, headers)
+
+
+def schedule_measurements(id, base, headers, before, usage, state, start, end, status, result):
+    task = asyncio.create_task(enrich(id, base, headers, before, usage, state, start, end, status, result))
+    pending.add(task)
+    task.add_done_callback(pending.discard)
+
+
 async def enrich(id, base, headers, before, usage, state, start, end, status, result):
     """Metrics flush asynchronously in vLLM. Never delay token delivery to wait for them."""
     result = {**result, **usage_cache(usage)}
     try:
         # Wait for a sample beyond the end so integration covers both boundaries.
         await asyncio.sleep(telemetry.INTERVAL * 1.2)
-        result.update(telemetry.request_energy(state["profile"]["gpu_uuids"], start, end))
+        result.update(telemetry.request_energy(state["profile"].get("gpu_uuids", []), start, end))
         with db.connect() as conn:
             overlap = conn.execute("SELECT overlapped FROM requests WHERE id=?", (id,)).fetchone()
         result["concurrent"] = bool(overlap and overlap[0])
@@ -216,7 +231,7 @@ async def enrich(id, base, headers, before, usage, state, start, end, status, re
 
 async def forward(request: Request, endpoint: str, source: str = "api"):
     context = getattr(request.state, "onecat_agent_context", None)
-    if source == "studio" and not context:
+    if source in {"studio", "chat_title"} and not context:
         # Studio chat runs intentionally survive browser disconnection.
         return await _forward(request, endpoint, source)
     # While waiting for a capacity slot or upstream response headers there is
@@ -264,6 +279,8 @@ async def _forward(request: Request, endpoint: str, source: str):
         from .attachments import prepare_messages
         from .chat_settings import normalize
 
+        for key in ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty", "repetition_penalty"):
+            body.pop(key, None)
         body["messages"] = prepare_messages(body.get("messages", []), state["profile"])
         limit = normalize({k: body[k] for k in ("max_tokens", "max_tokens_mode") if k in body})
         body["max_tokens"] = limit["max_tokens"]
@@ -321,7 +338,7 @@ async def _forward(request: Request, endpoint: str, source: str):
             "decode_reason": None
             if timing.summary(usage).get("decode_tokens_s")
             else "尚无完整 token 计数及有效时间区间 / Incomplete token counts or timing interval",
-            "gpu_uuids": state["profile"]["gpu_uuids"],
+            "gpu_uuids": state["profile"].get("gpu_uuids", []),
             "agent_engine": agent_context.get("engine") if agent_context else None,
             "agent_task_id": agent_context.get("task_id") if agent_context else None,
             "swarm_id": agent_context.get("swarm_id") if agent_context else None,
@@ -386,21 +403,12 @@ async def _forward(request: Request, endpoint: str, source: str):
                     task_metrics["decode_calls"] += 1
                 run.record["live_metrics"] = None
                 run.emit({"type": "usage", "usage": dict(totals), "model_calls": run.record["model_calls"], "metrics": task_metrics})
-        task = asyncio.create_task(
-            enrich(id, base, headers, before, usage, state, started, end, status, result)
-        )
-        pending.add(task)
-        task.add_done_callback(pending.discard)
+        schedule_measurements(id, base, headers, before, usage, state, started, end, status, result)
         return result
 
     try:
         await decode_aggregator.wait_for_capacity(id)
-        with db.connect() as conn:
-            unflushed = conn.execute(
-                "SELECT count(*) FROM requests WHERE id<>? AND json_extract(metrics,'$.pending')=1",
-                (id,),
-            ).fetchone()[0]
-        before = await engine_metrics(client, base, headers) if not unflushed else {}
+        before = await measurement_baseline(id, client, base, headers)
         upstream = await client.send(
             client.build_request("POST", base + endpoint, json=body, headers=headers), stream=True
         )

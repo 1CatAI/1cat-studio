@@ -10,6 +10,7 @@ import json
 import hashlib
 import os
 import re
+import secrets
 import signal
 import tempfile
 import time
@@ -21,7 +22,7 @@ from fastapi import HTTPException
 
 from .. import db, model_switch, proxy
 from ..request_metrics import TokenTiming, usage_cache
-from . import engines, pi_runtime, projects, runtime
+from . import desktop, engines, pi_runtime, projects, runtime
 from .protocol import ResponseStream, convert_input
 
 ACTIVE = {"starting", "running", "waiting", "stopping"}
@@ -58,15 +59,15 @@ def active_project(project_id):
     return json.loads(row[0]) if row else None
 
 
-def summaries(project_id=None, query="", offset=0):
+def summaries(project_id=None, query="", offset=0, *, include_desktop=True):
     # Sidebar polling never transfers full transcripts into the Python heap.
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT json_remove(data,'$.items','$.diff','$.request_ids','$.request_signatures','$.steering','$.plan') "
             "FROM records WHERE bucket='agent_tasks' AND (? IS NULL OR json_extract(data,'$.project_id')=?) "
-            "AND instr(lower(json_extract(data,'$.title')), lower(?)) > 0 "
+            "AND (? OR id NOT LIKE 'desktop-%') AND instr(lower(json_extract(data,'$.title')), lower(?)) > 0 "
             "ORDER BY updated DESC, id DESC LIMIT 100 OFFSET ?",
-            (project_id, project_id, query.strip(), max(0, offset)),
+            (project_id, project_id, include_desktop, query.strip(), max(0, offset)),
         ).fetchall()
     return [json.loads(row[0]) for row in rows]
 
@@ -202,7 +203,8 @@ def start(
         )
     selected = engines.adapter(engine)
     component = selected.info()
-    if not component["installed"] or not component.get("sandbox_ready", component.get("ready", False)):
+    native = desktop.private_id(project_id) and engine == "codex" and permission != "read-only" and mode != "plan" and operation == "turn"
+    if not component["installed"] or (not native and not component.get("sandbox_ready", component.get("ready", False))):
         label = "Codex" if engine == "codex" else "PI"
         raise HTTPException(409, f"{label} 组件或执行环境尚未就绪 / {label} runtime is unavailable")
     if operation == "skills":
@@ -222,7 +224,7 @@ def start(
             raise HTTPException(409, "Task belongs to another project")
     else:
         record = {
-            "id": db.uid(),
+            "id": ("desktop-" if desktop.private_id(project_id) else "") + db.uid(),
             "project_id": project_id,
             "title": prompt[:80],
             "created_at": now,
@@ -320,6 +322,7 @@ def start(
         if record["permission"] == "read-only"
         or record["mode"] == "plan"
         or operation in {"review", "compact", "skills"}
+        else "danger-full-access" if desktop.private_id(project_id) and engine == "codex"
         else "workspace-write"
     )
     record["request_ids"].append(request_id)
@@ -747,6 +750,8 @@ class Run:
                 if lines[0].split()[:2] != ["POST", "/v1/responses"]:
                     raise ValueError("Only the task's Responses endpoint is available")
                 headers = dict(line.lower().split(":", 1) for line in lines[1:] if ":" in line)
+                if getattr(self, "desktop_token", None) and not secrets.compare_digest(headers.get("x-studio-turn", "").strip(), self.desktop_token):
+                    raise ValueError("Invalid local model session")
                 length = int(headers.get("content-length", "0"))
                 if (
                     not 0 < length <= 8 * 1024 * 1024
@@ -847,6 +852,7 @@ class Run:
         )
         usage, first, error, status = {}, None, None, 499
         clock = time.monotonic()
+        before = {}
         timing = TokenTiming(clock)
         last_live = clock
         from ..model_controls import thinking_kwargs
@@ -863,68 +869,61 @@ class Run:
             from ..decode_metrics import aggregator as decode_aggregator
 
             await decode_aggregator.wait_for_capacity(request_id)
-            async with (
-                httpx.AsyncClient(
-                    timeout=httpx.Timeout(1800, connect=10), trust_env=False
-                ) as client,
-                client.stream(
-                    "POST", base + "/v1/chat/completions", headers=headers, json=payload
-                ) as response,
-            ):
-                status = response.status_code
-                if status != 200:
-                    data = (await response.aread()).decode(errors="replace")[:2000]
-                    raise ValueError(f"Local model returned HTTP {status}: {data}")
-                ended = False
-                async for line in response.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        ended = True
-                        break
-                    event = json.loads(data)
-                    if event.get("error"):
-                        raise ValueError(str(event["error"]))
-                    if event.get("usage"):
-                        usage = event["usage"]
-                    now = time.monotonic()
-                    timing.observe(event, now)
-                    from ..decode_metrics import aggregator as decode_aggregator
-
-                    decode_aggregator.observe(request_id, event, now)
-                    if now - last_live >= 0.25:
-                        self.record["decode_aggregate"] = decode_aggregator.snapshot(
-                            2, self.record["id"]
-                        )
-                        self.emit(
-                            {
-                                "type": "decode_aggregate",
-                                "decode_aggregate": self.record["decode_aggregate"],
-                            }
-                        )
-                    if now - last_live >= 0.25:
-                        last_live = now
-                        self.record["live_metrics"] = timing.live(now)
-                        self.emit(
-                            {
-                                "type": "live",
-                                "live_metrics": self.record["live_metrics"],
-                                "model_calls": self.record["model_calls"],
-                            }
-                        )
-                    if first is None and any(
-                        c.get("delta", {}).get("content")
-                        or c.get("delta", {}).get("tool_calls")
-                        or c.get("delta", {}).get("reasoning_content")
-                        or c.get("delta", {}).get("reasoning")
-                        for c in event.get("choices", [])
-                    ):
-                        first = time.monotonic() - clock
-                    yield event
-                if not ended:
-                    raise ValueError("Local inference stream ended unexpectedly")
-        except asyncio.CancelledError:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=10), trust_env=False) as client:
+                before = await proxy.measurement_baseline(request_id, client, base, headers)
+                async with client.stream("POST", base + "/v1/chat/completions", headers=headers, json=payload) as response:
+                    status = response.status_code
+                    if status != 200:
+                        data = (await response.aread()).decode(errors="replace")[:2000]
+                        raise ValueError(f"Local model returned HTTP {status}: {data}")
+                    ended = False
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            ended = True
+                            break
+                        event = json.loads(data)
+                        if event.get("error"):
+                            raise ValueError(str(event["error"]))
+                        if event.get("usage"):
+                            usage = event["usage"]
+                        now = time.monotonic()
+                        timing.observe(event, now)
+                        decode_aggregator.observe(request_id, event, now)
+                        if now - last_live >= 0.25:
+                            self.record["decode_aggregate"] = decode_aggregator.snapshot(
+                                2, self.record["id"]
+                            )
+                            self.emit(
+                                {
+                                    "type": "decode_aggregate",
+                                    "decode_aggregate": self.record["decode_aggregate"],
+                                }
+                            )
+                        if now - last_live >= 0.25:
+                            last_live = now
+                            self.record["live_metrics"] = timing.live(now)
+                            self.emit(
+                                {
+                                    "type": "live",
+                                    "live_metrics": self.record["live_metrics"],
+                                    "model_calls": self.record["model_calls"],
+                                }
+                            )
+                        if first is None and any(
+                            c.get("delta", {}).get("content")
+                            or c.get("delta", {}).get("tool_calls")
+                            or c.get("delta", {}).get("reasoning_content")
+                            or c.get("delta", {}).get("reasoning")
+                            for c in event.get("choices", [])
+                        ):
+                            first = time.monotonic() - clock
+                        yield event
+                    if not ended:
+                        raise ValueError("Local inference stream ended unexpectedly")
+        except (asyncio.CancelledError, GeneratorExit):
             status, error = 499, "Agent request cancelled"
             raise
         except Exception as exc:
@@ -933,7 +932,8 @@ class Run:
             error = str(exc)
             raise
         finally:
-            elapsed = time.monotonic() - clock
+            end = time.monotonic()
+            elapsed = end - clock
             measured = timing.summary(usage) if status == 200 and not error else {}
             metrics = self.record["metrics"]
             metrics["llm_s"] += elapsed
@@ -945,27 +945,21 @@ class Run:
                 metrics["decode_tokens"] += timing.tokens - timing.first_tokens
                 metrics["decode_calls"] += 1
             self.record["live_metrics"] = None
-            proxy.finish(
-                request_id,
-                started,
-                status,
-                usage,
-                first,
-                error,
-                elapsed=elapsed,
-                metrics={
-                    **measured,
-                    "agent_engine": "codex",
-                    "swarm_id": self.record.get("swarm_id"),
-                    "agent_task_id": self.record["id"],
-                    "agent_project_id": self.project["id"],
-                    "pending": False,
-                    "decode_reason": None
-                    if measured.get("decode_s")
-                    else "Agent provider did not supply complete token timing",
-                    "prefill_reason": "Agent provider did not supply attributable prefill timing",
-                },
-            )
+            result = {
+                **measured,
+                "agent_engine": "codex",
+                "swarm_id": self.record.get("swarm_id"),
+                "agent_task_id": self.record["id"],
+                "agent_project_id": self.project["id"],
+                "model_name": state["profile"].get("name") or self.record["model"],
+                "gpu_uuids": state["profile"].get("gpu_uuids", []),
+                "elapsed_s": elapsed,
+                "pending": True,
+                "single_sequence": payload.get("n", 1) == 1,
+                "decode_reason": None if measured.get("decode_s") else "Incomplete token counts or timing interval",
+            }
+            proxy.finish(request_id, started, status, usage, first, error, elapsed=elapsed, metrics=result)
+            proxy.schedule_measurements(request_id, base, headers, before, usage, state, clock, end, status, result)
             totals = self.record["usage"]
             if (
                 usage.get("prompt_tokens") is not None
@@ -998,9 +992,17 @@ class Run:
         socket_path = Path(temporary.name) / "model.sock"
         try:
             await asyncio.to_thread(self.snapshot_files)
-            server = await asyncio.start_unix_server(self.bridge, path=str(socket_path))
-            os.chmod(socket_path, 0o600)
-            args, env = runtime.prepare(self.project, self.record, socket_path)
+            native = self.record.get("execution_permission") == "danger-full-access"
+            cwd = str(projects.root(self.project["id"])) if native else "/workspace"
+            if native:
+                self.desktop_token = secrets.token_hex(32)
+                server = await asyncio.start_server(self.bridge, "127.0.0.1", 0)
+                port = server.sockets[0].getsockname()[1]
+                args, env = runtime.prepare(self.project, self.record, socket_path, native_port=port, token=self.desktop_token)
+            else:
+                server = await asyncio.start_unix_server(self.bridge, path=str(socket_path))
+                os.chmod(socket_path, 0o600)
+                args, env = runtime.prepare(self.project, self.record, socket_path)
             self.process = await asyncio.create_subprocess_exec(
                 *args,
                 env=env,
@@ -1030,7 +1032,7 @@ class Run:
             params = {
                 "model": self.record["model"],
                 "modelProvider": "onecat",
-                "cwd": "/workspace",
+                "cwd": cwd,
                 "approvalPolicy": "on-request",
                 "sandbox": "read-only" if readonly else "workspace-write",
                 "developerInstructions": "You are the project's coding agent in 1Cat Studio. Work in /workspace. "
@@ -1039,6 +1041,9 @@ class Run:
                 "Never claim commands succeeded without executing them. Do not modify .codex configuration. "
                 "Use the user's language. Keep progress concise.",
             }
+            if native:
+                params.update(approvalPolicy="never", sandbox="danger-full-access",
+                              developerInstructions="You are the personal assistant on the user's local computer. Use local tools to complete their requests and verify the results. Reply in the user's language.")
             if self.record.get("operation") != "skills":
                 if self.record.get("thread_id"):
                     params["threadId"] = self.record["thread_id"]
@@ -1050,7 +1055,7 @@ class Run:
             operation = self.record.get("operation", "turn")
             if operation == "skills":
                 result = await self.rpc(
-                    "skills/list", {"cwds": ["/workspace"], "forceReload": True}
+                    "skills/list", {"cwds": [cwd], "forceReload": True}
                 )
                 entries = result.get("data", [])
                 lines = [
@@ -1096,14 +1101,14 @@ class Run:
                 names = set(re.findall(r"(?<![\w$])\$([\w-]+)", self.prompt))
                 if names:
                     available = await self.rpc(
-                        "skills/list", {"cwds": ["/workspace"], "forceReload": True}
+                        "skills/list", {"cwds": [cwd], "forceReload": True}
                     )
                     for group in available.get("data", []):
                         for skill in group.get("skills", []):
                             if (
                                 skill["name"] in names
                                 and skill.get("enabled", True)
-                                and skill.get("path", "").startswith("/workspace/")
+                                and skill.get("path", "").startswith(cwd + "/")
                             ):
                                 inputs.append(
                                     {"type": "skill", "name": skill["name"], "path": skill["path"]}
@@ -1113,14 +1118,14 @@ class Run:
                     {
                         "threadId": self.record["thread_id"],
                         "input": inputs,
-                        "sandboxPolicy": {"type": "readOnly", "networkAccess": False}
+                        "sandboxPolicy": {"type": "dangerFullAccess"} if native else {"type": "readOnly", "networkAccess": False}
                         if readonly
                         else {
                             "type": "workspaceWrite",
                             "writableRoots": ["/workspace"],
                             "networkAccess": False,
                         },
-                        "approvalPolicy": "on-request",
+                        "approvalPolicy": "never" if native else "on-request",
                         "collaborationMode": {
                             "mode": self.record.get("mode", "default"),
                             "settings": {

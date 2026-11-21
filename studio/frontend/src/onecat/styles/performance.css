@@ -1,0 +1,134 @@
+/* SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0 */
+.oc-performance {
+  display: grid;
+  gap: 16px;
+  container-type: inline-size;
+  font-variant-numeric: tabular-nums;
+}
+.oc-performance h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.025em; }
+.perf-controls, .perf-rack { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 18px; }
+.perf-controls { padding: 18px 22px 10px; }
+.perf-controls-head, .perf-model, .perf-rack header, .perf-signal header, .perf-plot footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.perf-model { min-width: 0; justify-content: flex-start; }
+.perf-model h2 { overflow-wrap: anywhere; }
+.perf-chip { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--secondary); flex-shrink: 0; }
+.perf-link { display: inline-flex; gap: 3px; align-items: center; color: var(--muted-foreground); font-size: 12px; min-height: 24px; }
+.perf-controls .perf-switch { border-radius: 12px; background: var(--secondary); padding: 4px; display: inline-flex; flex: none; }
+.perf-controls .perf-switch button { background: transparent; border: 0; box-shadow: none; color: var(--foreground); height: 37px; padding: 0 14px; border-radius: 9px; font-size: 13px; }
+.perf-controls .perf-switch .oc-segment-label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.perf-controls .perf-switch .oc-segment-highlight { background: var(--primary); border-radius: 9px; }
+.perf-controls .perf-switch button[aria-pressed=true] { color: #211710; }
+.perf-controls .oc-power-status { display: block; margin: 12px 0 0; padding: 6px 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; min-height: 0; }
+.perf-status-base { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.perf-reveal { overflow: clip; }
+.perf-reveal-content { padding-block: 3px 8px; }
+.perf-controls .oc-power-notes { margin: 0; padding: 0; }
+.perf-readback, .perf-rack header small { color: var(--muted-foreground); font-size: 12px; }
+.perf-signal { position: relative; overflow: hidden; padding: 23px 26px 18px; background: radial-gradient(ellipse at 85% -25%, #365346, transparent 63%), #17241e; color: #eff8ec; border-radius: 19px; border: 1px solid #35463b; }
+.perf-signal header h2 svg { color: #ace6be; }
+.perf-fresh { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: #c5d4ca; }
+.perf-fresh i { width: 7px; height: 7px; border-radius: 50%; background: #ffbc91; }
+.perf-fresh.online i { background: #a6e9b8; box-shadow: 0 0 0 4px #ace6be12; }
+.perf-signal-body { display: grid; grid-template-columns: minmax(140px, .31fr) minmax(0, 1fr); gap: 24px; align-items: center; margin-top: 12px; }
+.perf-metrics > span, .perf-decode > span, .perf-limit { font-size: 12px; color: #bdcec3; }
+.perf-metrics > strong { display: block; font-family: 'Space Grotesk Variable',Inter,sans-serif; font-size: clamp(44px,6.2cqw,78px); line-height: 1.05; font-weight: 540; letter-spacing: -.065em; margin: 3px 0 5px; }
+.perf-metrics strong small { font-size: .31em; font-weight: 450; letter-spacing: 0; color: #c7ddcc; }
+.perf-decode { margin-top: 17px; border-top: 1px solid #ffffff20; padding-top: 12px; display: grid; gap: 2px; }
+.perf-decode b { font-size: 15px; font-weight: 520; }
+.perf-plot { min-width: 0; }
+.perf-plot footer { font-size: 11px; color: #b7c8be; margin: 0 8px 0 34px; }
+.perf-plot footer i { display: inline-block; width: 14px; height: 2px; margin: 0 6px 3px 0; background: #b0f3c1; }
+.perf-reset { font-size: 12px; color: #c4f7d5; text-decoration: underline; min-height: 27px; }
+.perf-rack { overflow: hidden; }
+.perf-rack header { padding: 18px 22px; }
+.perf-rack header svg { color: var(--oc-accent-text); }
+.perf-board { border-top: 1px solid var(--border); }
+.perf-board-toggle { width: 100%; text-align: left; display: grid; grid-template-columns: 66px minmax(100px,1fr) 65px 65px minmax(68px, .65fr) 16px; padding: 12px 22px; align-items: center; gap: clamp(8px,1.7cqw,22px); background: transparent; transition: background .18s; }
+.perf-board-toggle:hover, .perf-board.selected { background: var(--muted); }
+.perf-board.selected { box-shadow: inset 3px 0 var(--primary); }
+.perf-slot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.perf-slot svg, .perf-temp svg, .perf-disclose { color: var(--muted-foreground); }
+.perf-board-name { display: grid; min-width: 0; gap: 2px; }
+.perf-board-name b, .perf-row-w { font-size: 14px; font-weight: 600; }
+.perf-board-name small, .perf-board-toggle small, .perf-temp { color: var(--muted-foreground); font-size: 11px; }
+.perf-temp { display: flex; align-items: center; gap: 3px; }
+.perf-memory { display: grid; gap: 5px; }
+.perf-track { height: 4px; border-radius: 5px; background: var(--border); overflow: hidden; }
+.perf-track i { display: block; height: 100%; border-radius: inherit; background: var(--muted-foreground); transition: width .22s; }
+.selected .perf-track i { background: var(--oc-accent-text); }
+.perf-disclose { transition: transform .18s; }
+.selected .perf-disclose { transform: rotate(180deg); }
+.perf-board-detail { display: flex; gap: 8px 22px; flex-wrap: wrap; padding: 0 22px 14px; font-size: 11px; color: var(--muted-foreground); animation: perf-in .18s ease-out; }
+.perf-board-detail b { color: var(--foreground); font-weight: 550; }
+.perf-rack details { border-top: 1px solid var(--border); }
+.perf-rack summary, .perf-rack > p { padding: 12px 22px; font-size: 12px; color: var(--muted-foreground); }
+.perf-rack summary { cursor: pointer; }
+.perf-board-toggle:focus-visible, .perf-switch button:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
+@keyframes perf-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@container (max-width: 660px) {
+  .perf-controls { padding: 14px; }
+  .perf-controls-head { align-items: stretch; flex-direction: column; gap: 10px; }
+  .perf-controls .perf-switch button { flex: 1; padding: 0 6px; }
+  .perf-signal { padding: 18px; }
+  .perf-signal-body { grid-template-columns: 1fr; gap: 4px; }
+  .perf-metrics { display: grid; grid-template-columns: 1fr 1fr; align-items: end; }
+  .perf-metrics > span, .perf-metrics > strong, .perf-limit { grid-column: 1; }
+  .perf-decode { grid-area: 2 / 2 / 4; justify-self: end; border: 0; padding: 0; margin: 0; }
+  .perf-rack header { padding: 15px; }
+  .perf-board-toggle { padding: 12px; grid-template-columns: 48px minmax(70px,1fr) auto auto 14px; gap: 6px; }
+  .perf-slot svg { display: none; }
+  .perf-memory { grid-column: 2 / 5; grid-row: 2; grid-template-columns: auto 1fr; align-items: center; }
+  .perf-disclose { grid-column: 5; grid-row: 1; }
+  .perf-board-name b { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oc-performance *, .oc-performance *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Keep the activity signal separate from hardware-confirmed readback. */
+.perf-transition {
+  --tempo: 1.4s;
+  position: relative; isolation: isolate; overflow: hidden;
+  box-sizing: border-box; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 10px 14px; padding: 12px 16px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 12px; color: var(--foreground);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--primary) 9%, var(--card)), var(--card));
+}
+.perf-transition[data-mode=eco] { --tempo: 1.8s; }
+.perf-transition[data-mode=performance] { --tempo: 1.05s; }
+.perf-transition::after {
+  content: ""; position: absolute; bottom: 0; left: 0; width: 38%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+}
+.perf-transition-copy { display: grid; gap: 3px; flex: 1 1 160px; }
+.perf-transition-copy strong { font-size: 14px; font-weight: 620; }
+.perf-transition-copy small { color: var(--muted-foreground); font-size: 12px; }
+.perf-indicator { display: grid; place-items: center; }
+.perf-indicator > * { grid-area: 1 / 1; }
+.perf-confirm-icon { color: var(--oc-success); opacity: 0; transform: scale(.82); }
+.perf-transition[data-confirmed=true] .perf-confirm-icon { opacity: 1; transform: scale(1); }
+.perf-transition[data-confirmed=true] :is(.perf-wave, .perf-pending-actions),
+.perf-transition[data-confirmed=true]::after { opacity: 0; }
+.perf-wave { width: 36px; height: 32px; display: flex; justify-content: center; align-items: center; gap: 2px; color: var(--oc-accent-text); }
+.perf-wave i { height: 8px; width: 3px; border-radius: 3px; background: currentColor; }
+.perf-wave i:nth-child(2), .perf-wave i:nth-child(4) { height: 16px; }
+.perf-wave i:nth-child(3) { height: 25px; }
+.perf-transition-boards { display: flex; flex-wrap: wrap; gap: 5px; }
+.perf-transition-boards span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 5px; background: var(--secondary); color: var(--muted-foreground); font-size: 10px; font-weight: 550; }
+.perf-transition-boards i { margin-inline: 2px; width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; }
+.perf-transition-boards [data-verified=true] { color: var(--oc-success); }
+.perf-switch button[data-switching] { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .perf-indicator > *, .perf-pending-actions, .perf-transition::after { transition: opacity .2s ease, transform .26s cubic-bezier(.2,.7,.2,1); }
+  .perf-transition:not([data-cancelling=true])::after { animation: perf-sweep 2.4s ease-in-out infinite; }
+  .perf-transition[data-applying=true]::after { animation-duration: 1.4s; }
+  .perf-transition:not([data-cancelling=true]) .perf-wave i { animation-name: perf-wave; animation-duration: var(--tempo); animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate; }
+  .perf-wave i:nth-child(2) { animation-delay: -.35s; }
+  .perf-wave i:nth-child(3) { animation-delay: -.65s; }
+  .perf-wave i:nth-child(4) { animation-delay: -.95s; }
+  .perf-wave i:nth-child(5) { animation-delay: -.45s; }
+  .perf-transition-boards [data-verified=true] svg { animation: perf-in .2s ease-out; }
+}
+@keyframes perf-wave { from { transform: scaleY(.48); } to { transform: scaleY(1.16); } }
+@keyframes perf-sweep { from { transform: translateX(-100%); } to { transform: translateX(266%); } }

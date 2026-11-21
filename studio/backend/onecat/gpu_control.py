@@ -189,7 +189,17 @@ def status(requested=None):
     for device in devices:
         u = device["uuid"]
         device.update(actual=actual.get(u), policy=policies.get(u))
+        device["confirmed_mode"] = next(
+            (item["id"] for item in items if u in item["settings"] and item["available"]
+             and matches(actual.get(u), item["settings"][u])), None
+        )
     return {
+        "recent_changes": [
+            {"at": job["finished_at"], "mode": job["payload"].get("mode"),
+             "uuids": job["payload"]["uuids"]}
+            for job in jobs if job["state"] == "completed" and job.get("finished_at", 0) > time.time() - 120
+            and job.get("payload", {}).get("uuids")
+        ],
         "scope": "all" if requested is None else "custom",
         "active": active,
         "state": state,

@@ -2,13 +2,18 @@
 """Display-only ModelScope metadata, cached independently of launch validation."""
 from __future__ import annotations
 
+import base64
 import hashlib
+import io
 from html import unescape
 import json
 import re
 import time
 
+from urllib.parse import urlsplit
+
 import httpx
+from PIL import Image
 
 from . import catalog, db
 
@@ -54,6 +59,38 @@ def fetch_metadata(endpoint: str, repo: str) -> dict:
     return data
 
 
+def publisher_avatar(data: dict) -> str | None:
+    organization = data.get("Organization")
+    if isinstance(organization, dict) and organization.get("Name"):
+        url = organization.get("Avatar")
+    elif data.get("CreatedBy") == data.get("Path"):
+        url = data.get("Avatar")
+    else:
+        return None
+    if not isinstance(url, str):
+        return None
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.netloc not in {
+        "resources.modelscope.cn", "resouces.modelscope.cn", "img.alicdn.com"
+    }:
+        return None
+    with httpx.Client(timeout=httpx.Timeout(6, connect=3), trust_env=False) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes():
+                raw.extend(chunk)
+                if len(raw) > MAX_BYTES:
+                    raise ValueError("Avatar exceeds size limit")
+    with Image.open(io.BytesIO(raw)) as image:
+        if image.width * image.height > 16_000_000:
+            raise ValueError("Avatar dimensions exceed size limit")
+        image.thumbnail((96, 96), Image.Resampling.LANCZOS)
+        thumbnail = io.BytesIO()
+        image.convert("RGBA").save(thumbnail, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(thumbnail.getvalue()).decode("ascii")
+
+
 def read(repo: str, refresh: bool = False) -> dict:
     if not REPO.fullmatch(repo) or not catalog.entry(repo):
         raise ValueError("Model is not in the supported directory")
@@ -63,10 +100,10 @@ def read(repo: str, refresh: bool = False) -> dict:
     now = time.time()
     if not refresh and now < saved.get("retry_at", 0):
         return saved["card"]
-    if not refresh and now - saved.get("fetched_at", 0) < TTL:
+    if not refresh and "publisher_avatar" in saved.get("card", {}) and now - saved.get("fetched_at", 0) < TTL:
         return saved["card"]
     fallback = {
-        "repo_id": repo, "publisher": repo.split("/")[0],
+        "repo_id": repo, "publisher": repo.split("/")[0], "publisher_avatar": None,
         "source_url": f"{endpoint}/models/{repo}", "endpoint": endpoint,
         "description": "", "readme": "", "base_models": [],
         "tags": [], "license": None, "downloads": None, "likes": None,
@@ -81,8 +118,13 @@ def read(repo: str, refresh: bool = False) -> dict:
         if isinstance(base, str):
             base = [base]
         description = data.get("Description") or ""
+        try:
+            avatar = publisher_avatar(data)
+        except (httpx.HTTPError, OSError, ValueError, Image.DecompressionBombError):
+            avatar = saved.get("card", {}).get("publisher_avatar")
         card = {
             **fallback,
+            "publisher_avatar": avatar,
             "description": excerpt(description, minimum_length=1) or excerpt(readme),
             "readme": readme,
             "base_models": [item for item in base if isinstance(item, str) and REPO.fullmatch(item)],

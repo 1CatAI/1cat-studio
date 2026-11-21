@@ -371,9 +371,9 @@ def test_real_catalog_default_automatically_selects_qualified_draft(qualified_re
     assert not catalog.launch_defaults(profile["catalog_id"], "target")["recommendations"]
     args = _options(engine.build_argv(profile, runtime, 8000, None))
     assert json.loads(args["--speculative-config"])["revision"] == recipe["draft"]["revision"]
+    assert args["--max-num-batched-tokens"] == "4096"
     for key in (
         "kv_cache_dtype",
-        "max_num_batched_tokens",
         "max_num_seqs",
         "block_size",
         "mamba_block_size",

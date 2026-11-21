@@ -7,9 +7,15 @@ export function modelPublisher(repo?: string | null) {
   return publisher.toLowerCase() === "unsloth" ? "Unsloth" : publisher;
 }
 
+export function adaptiveMtp(config?: Record<string, unknown> | null) {
+  const policy = config?.sampling_policy as {adaptive_mtp?: string} | undefined;
+  return config?.method === "mtp" && ["on", "1", "true", "yes"].includes(String(policy?.adaptive_mtp).toLowerCase());
+}
+
 export function accelerationLabel(profile?: Pick<Profile, "speculative_config">) {
   const config = profile?.speculative_config;
   if (!config) return "";
+  if (adaptiveMtp(config)) return `EntMTP · ${config.num_speculative_tokens}`;
   if (config.method === "mtp") return `MTP · ${config.num_speculative_tokens || 4}`;
   if (config.method === "dflash") return "DFlash2";
   return String(config.method || "");

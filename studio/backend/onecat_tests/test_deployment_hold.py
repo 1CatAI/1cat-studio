@@ -53,3 +53,29 @@ def test_background_startup_and_idle_do_not_touch_gpus(monkeypatch, engine_state
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(app.lifecycle_monitor())
     assert calls == 3
+
+
+@pytest.mark.parametrize("prior,enabled,expected", [
+    ({"state": "ready"}, True, ["last"]),
+    ({"state": "failed", "ready_at": 100}, True, ["last"]),
+    ({"state": "stopped", "last_profile_id": "last"}, True, []),
+    ({"state": "failed"}, True, []),
+    ({"state": "loading"}, True, []),
+    ({"state": "ready"}, False, []),
+])
+def test_restore_once_per_boot(monkeypatch, prior, enabled, expected):
+    monkeypatch.setenv("ONECAT_AUTO_GPU_ACTIONS", "0")
+    monkeypatch.setenv("ONECAT_BOOT_MODEL_RESTORE", "1")
+    from pathlib import Path
+    original = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda p, *a, **kw:
+                        "test-boot" if p.name == "boot_id" else original(p, *a, **kw))
+    db.put("settings", "main", {"restore_model_on_boot": enabled})
+    db.put("profiles", "last", {"id": "last"})
+    db.put("engine", "active", {"profile_id": "last", **prior})
+    monkeypatch.setattr(app.engine, "status", lambda: {"state": "failed"})
+    queued = []
+    monkeypatch.setattr(app, "scheduled_job", lambda kind, payload: queued.append(payload["profile_id"]))
+    app.restore_model_on_boot()
+    app.restore_model_on_boot()
+    assert queued == expected

@@ -2,7 +2,7 @@ import { Segments } from "./motion";
 import { motion, useIsPresent } from "motion/react";
 import { MOTION, useInterfaceMotion } from "./motion";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Download,
   Maximize2,
@@ -16,6 +16,7 @@ import { Button } from "@/onecat/ui";
 import { useText } from "./common";
 import type { Artifact } from "./artifacts";
 import { useBrowserState } from "./browser-state";
+import { parse, type DefaultTreeAdapterTypes } from "parse5";
 
 let runtime: Promise<string> | undefined;
 function runtimeSource() {
@@ -44,11 +45,18 @@ const script = (value: string) => value.replace(/<\/script/gi, "<\\/script");
 const HTML_PRELUDE = `(()=>{const r=(type,message="")=>parent.postMessage({onecat_preview:true,type,message},"*");
 const store=()=>{const v=new Map();return{get length(){return v.size},key:i=>[...v.keys()][i]??null,getItem:k=>v.get(String(k))??null,setItem:(k,x)=>{v.set(String(k),String(x))},removeItem:k=>{v.delete(String(k))},clear:()=>v.clear()}};
 for(const n of["localStorage","sessionStorage"])Object.defineProperty(window,n,{value:store()});
-addEventListener("error",e=>{if(e.target&&e.target!==window&&(e.target.src||e.target.href))r("error","Failed to load "+(e.target.src||e.target.href));else r("error",e.message)},true);
+addEventListener("error",e=>{
+const el=e.target;if(el instanceof Element){
+const url=el.getAttribute("src")||el.getAttribute("href")||el.localName;
+r(el instanceof HTMLScriptElement?"error":"resource-warning","Failed to load "+url);return}
+r("error",e.message)},true);
 addEventListener("unhandledrejection",e=>r("error",String(e.reason)));
 document.addEventListener("click",e=>{const a=e.target?.closest?.("a");if(a&&!a.getAttribute("href")?.startsWith("#"))e.preventDefault()},true);
 document.addEventListener("submit",e=>e.preventDefault(),true);
-addEventListener("load",()=>requestAnimationFrame(()=>requestAnimationFrame(()=>r("ready"))));})();`;
+document.addEventListener("DOMContentLoaded",()=>{
+for(const link of document.querySelectorAll("link[data-onecat-deferred-font]")){
+link.href=link.getAttribute("data-onecat-deferred-font");link.removeAttribute("data-onecat-deferred-font")}
+requestAnimationFrame(()=>requestAnimationFrame(()=>r("ready")))},{once:true});})();`;
 const DEFAULT_IMPORT_MAP = JSON.stringify({
   imports: {
     three: "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
@@ -65,6 +73,22 @@ function incompleteMarkup(source: string) {
   );
 }
 function nativeHtml(source: string) {
+  // Keep the original HTML intact; only make unconditional font CSS non-blocking.
+  const offsets: number[] = [];
+  function visit(node: DefaultTreeAdapterTypes.Node) {
+    if ("tagName" in node && node.tagName === "link") {
+      const attr = (name: string) => node.attrs.find(a => a.name === name)?.value;
+      const href = node.sourceCodeLocation?.attrs?.href;
+      if (href && !node.attrs.some(a => a.name === "data-onecat-deferred-font") &&
+          (attr("rel") || "").toLowerCase().split(/\s+/).includes("stylesheet") &&
+          /^https:\/\/fonts\.googleapis\.com\//i.test(attr("href") || "")) offsets.push(href.startOffset);
+    }
+    if ("childNodes" in node) node.childNodes.forEach(visit);
+  }
+  visit(parse(source, { sourceCodeLocationInfo: true }));
+  for (const at of offsets.sort((a,b) => b-a)) {
+    source = source.slice(0, at) + "data-onecat-deferred-font" + source.slice(at + 4);
+  }
   const head =
     `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">` +
     `<script>${script(HTML_PRELUDE)}</script>` +
@@ -84,10 +108,12 @@ function nativeHtml(source: string) {
   return `<!doctype html><html><head>${head}</head><body>${source}</body></html>`;
 }
 export function PreviewPanel({
+  docked = false,
   artifact,
   onClose,
   streaming,
 }: {
+  docked?: boolean;
   artifact?: Artifact;
   onClose: () => void;
   streaming: boolean;
@@ -108,6 +134,7 @@ export function PreviewPanel({
     [full, setFull] = useState(false),
     [source, setSource] = useState(false),
     [error, setError] = useState(""),
+    [warning, setWarning] = useState(""),
     [codeError, setCodeError] = useState(false),
     [status, setStatus] = useState("loading");
   const [width, setWidth] = useBrowserState("onecat:preview-width", 50, true);
@@ -167,6 +194,7 @@ export function PreviewPanel({
       timeout: ReturnType<typeof setTimeout> | undefined;
     setStatus("loading");
     setError("");
+    setWarning("");
     setCodeError(false);
     function dispose() {
       active = false;
@@ -183,6 +211,10 @@ export function PreviewPanel({
         !event.data?.onecat_preview
       )
         return;
+      if (event.data.type === "resource-warning") {
+        setWarning(String(event.data.message).slice(0, 500));
+        return;
+      }
       if (event.data.type === "error") {
         failed = true;
         setCodeError(true);
@@ -196,6 +228,7 @@ export function PreviewPanel({
       if (event.data.type === "ready" && !failed) {
         if (successful.current?.frame === frame) return;
         clearTimeout(timeout);
+
         successful.current?.dispose();
         successful.current = { frame: frame!, dispose };
         frame!.classList.remove("oc-preview-candidate");
@@ -290,11 +323,11 @@ export function PreviewPanel({
     <motion.aside
       ref={panel}
       inert={!present || undefined}
-      initial={enabled ? { opacity: 0, x: 10 } : false}
-      animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
+      initial={enabled && !docked ? { opacity: 0, x: 10 } : false}
+      animate={{ opacity: 1, x: 0 }} exit={docked ? undefined : { opacity: 0, x: 10 }}
       transition={{ duration: enabled ? MOTION.panel : 0, ease: MOTION.ease }}
       className={`oc-preview-panel ${full ? "oc-preview-full" : ""}`}
-      style={{ width: `${width}%` }}
+      style={{ "--oc-preview-width": `${width}%`, width: "var(--oc-preview-width)" } as CSSProperties}
       aria-label={t("代码预览", "Code preview")}
     >
       <div
@@ -318,21 +351,10 @@ export function PreviewPanel({
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
-          if (e.currentTarget.hasPointerCapture(e.pointerId))
-            setWidth(
-              Math.max(
-                30,
-                Math.min(
-                  65,
-                  (((e.currentTarget.parentElement?.parentElement?.getBoundingClientRect()
-                    .right || window.innerWidth) -
-                    e.clientX) /
-                    (e.currentTarget.parentElement?.parentElement?.getBoundingClientRect()
-                      .width || window.innerWidth)) *
-                    100,
-                ),
-              ),
-            );
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          const workspace = e.currentTarget.closest(".oc-chat-workspace, .oc-agent-workspace");
+          const bounds = workspace?.getBoundingClientRect();
+          if (bounds?.width) setWidth(Math.max(30, Math.min(65, (bounds.right - e.clientX) / bounds.width * 100)));
         }}
       />
       <div className="oc-preview-toolbar">
@@ -391,12 +413,10 @@ export function PreviewPanel({
           </Button>
         </div>
       </div>
-      <p className="oc-preview-status" role="status">
+      {(paused || status === "error") && <p className="oc-preview-status" role="status">
         {paused
           ? t("自动更新已暂停", "Automatic updates paused")
-          : status === "loading"
-            ? t("更新预览…", "Updating preview…")
-            : waiting
+          : waiting
               ? t(
                   streaming
                     ? "代码生成中，保留上次成功画面"
@@ -405,21 +425,24 @@ export function PreviewPanel({
                     ? "Code is being generated; keeping the last successful preview"
                     : "Code is incomplete. Continue generating or regenerate the full reply.",
                 )
-              : status === "error"
-                ? t("运行错误", "Runtime error")
-                : t("运行中 · 本地沙箱", "Running · local sandbox")}
-      </p>
+              : t("运行错误", "Runtime error")}
+      </p>}
       {error && !waiting && (
         <pre className="oc-preview-error" role="alert">
           {error}
         </pre>
       )}
+      {warning && !error && <details className="oc-muted"><summary>{t("部分资源未载入，仍可预览", "Some assets did not load; preview is still available")}</summary>{warning}</details>}
       {source && <pre className="oc-preview-source">{artifact?.source}</pre>}
       <div
         className="oc-preview-viewport"
         ref={container}
         style={{ display: source ? "none" : undefined }}
-      />
+      >
+        {!paused && status === "loading" && (
+          <span className="oc-preview-loading" role="status">{t("更新预览…", "Updating preview…")}</span>
+        )}
+      </div>
     </motion.aside>
   );
 }

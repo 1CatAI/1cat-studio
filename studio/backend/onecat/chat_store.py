@@ -132,6 +132,11 @@ def upsert_chat_thread(thread: dict):
         return decode(conn.execute("SELECT * FROM chat_threads WHERE id=?", (thread["id"],)).fetchone(), THREAD_FIELDS)
 
 
+def set_title_if_empty(thread: str, title: str):
+    with connection() as conn:
+        conn.execute("UPDATE chat_threads SET title=? WHERE id=? AND title=''", (title, thread))
+
+
 def update_chat_thread(id: str, patch: dict):
     with connection() as conn:
         conn.execute("BEGIN IMMEDIATE")

@@ -8,7 +8,6 @@ import {
 	useEffect,
 	useId,
 	useLayoutEffect,
-	useState,
 	useSyncExternalStore,
 	type ReactNode,
 	type ComponentProps,
@@ -21,11 +20,7 @@ export const MOTION = {
 	panel: 0.22,
 	ease: [0.2, 0.7, 0.2, 1] as const,
 };
-const Context = createContext({
-	enabled: true,
-	preference: true,
-	setPreference: (_value: boolean) => {},
-});
+const Context = createContext({ enabled: true });
 export const useInterfaceMotion = () => useContext(Context);
 const reducedQuery = "(prefers-reduced-motion: reduce)";
 const subscribeReduced = (listener: () => void) => {
@@ -35,34 +30,11 @@ const subscribeReduced = (listener: () => void) => {
 };
 
 export function InterfaceMotion({ children }: { children: ReactNode }) {
-	const read = () => {
-		try {
-			return localStorage.getItem("onecat_ui_motion") !== "off";
-		} catch {
-			return true;
-		}
-	};
-	const [preference, setValue] = useState(read);
 	const reduced = useSyncExternalStore(
 		subscribeReduced,
 		() => matchMedia(reducedQuery).matches,
 	);
-	const enabled = preference && !reduced;
-	const setPreference = (value: boolean) => {
-		try {
-			localStorage.setItem("onecat_ui_motion", value ? "on" : "off");
-		} catch {
-			/* Optional browser preference. */
-		}
-		setValue(value);
-	};
-	useEffect(() => {
-		const changed = (event: StorageEvent) => {
-			if (event.key === "onecat_ui_motion") setValue(read());
-		};
-		window.addEventListener("storage", changed);
-		return () => window.removeEventListener("storage", changed);
-	}, []);
+	const enabled = !reduced;
 	useLayoutEffect(() => {
 		document.documentElement.dataset.uiMotion = enabled ? "on" : "off";
 	}, [enabled]);
@@ -135,7 +107,7 @@ export function InterfaceMotion({ children }: { children: ReactNode }) {
 		};
 	}, [enabled]);
 	return (
-		<Context.Provider value={{ enabled, preference, setPreference }}>
+		<Context.Provider value={{ enabled }}>
 			<MotionConfig
 				reducedMotion={enabled ? "user" : "always"}
 				transition={{ duration: enabled ? MOTION.state : 0, ease: MOTION.ease }}

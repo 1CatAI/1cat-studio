@@ -106,7 +106,9 @@ def run():
                 page.locator('a[href="/models"]').first.click()
                 expect(page.get_by_role("tab", name="启动预设", exact=True)).to_have_attribute("aria-selected", "true")
                 page.get_by_role("button", name="新建预设", exact=True).click()
-                page.locator(".oc-profile-advanced").evaluate("element => element.open = true")
+                advanced = page.get_by_role("button", name="高级设置", exact=True)
+                if advanced.get_attribute("aria-expanded") == "false":
+                    advanced.click()
                 page.get_by_label("方案名称", exact=True).fill("Saved profile draft")
                 expect(page.get_by_role("button", name="加载模型", exact=True)).to_be_in_viewport()
                 page.locator(".oc-dialog-body").evaluate("element=>element.scrollTop=element.scrollHeight")

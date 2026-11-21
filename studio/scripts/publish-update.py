@@ -106,7 +106,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--base-url", default="http://211.154.19.149:8089/onecat/studio")
     parser.add_argument("--signing-key", type=Path, required=True)
     parser.add_argument("--key-id", required=True)
     parser.add_argument("--channel", choices=["stable", "preview"], default="stable")

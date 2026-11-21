@@ -1,61 +1,138 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 
-// Animate each arriving line once. Syntax highlighting can replace its token
-// spans asynchronously; neither that nor appended text reanimates older lines.
-// No extra character spans or React state updates are needed.
-export function useCodeAnimation(
-  root: RefObject<HTMLDivElement | null>,
-  code: boolean,
-  enabled: boolean,
-) {
-  const seen = useRef(0);
-  useEffect(() => {
-    const node = root.current;
-    if (!node || !code) return;
-    const active = new Set<Animation>();
-    let frame: number | undefined;
-    function update() {
-      frame = undefined;
-      const lines = node!.querySelectorAll<HTMLElement>(
-        '[data-streamdown="code-block-body"] pre > code > span',
-      );
-      if (enabled) {
-        for (let index = seen.current; index < lines.length; index++) {
-          if (!lines[index].textContent?.trim()) continue;
-          const animation = lines[index].animate(
-            [
-              { opacity: 0.25, filter: "blur(2px)" },
-              { opacity: 1, filter: "blur(0px)" },
-            ],
-            { duration: 280, easing: "cubic-bezier(.2,.7,.2,1)" },
-          );
-          animation.id = "onecat-code-arrival";
-          active.add(animation);
-          animation.onfinish = () => {
-            active.delete(animation);
-            animation.cancel();
-          };
+const selector = '[data-streamdown="code-block-body"] pre > code';
+const highlightName = "onecat-pending-code";
+const graphemes = typeof Intl.Segmenter === "function"
+  ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+  : undefined;
+
+type Position = { row: number; offset: number };
+type Stop = Position & { node: Text; nodeOffset: number };
+
+// Shiki can split a grapheme across token spans. Map only the newly received
+// suffix to DOM boundaries; preceding lines never need parsing or highlighting again.
+function appendStops(row: Element, index: number, start: number, stops: Stop[]) {
+  const suffix = (row.textContent || "").slice(start);
+  if (!suffix || !graphemes) return;
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode() as Text | null;
+  let base = 0;
+  for (const { index: i, segment } of graphemes.segment(suffix)) {
+    const offset = start + i + segment.length;
+    while (node && offset > base + node.length) {
+      base += node.length;
+      node = walker.nextNode() as Text | null;
+    }
+    if (node) stops.push({ row: index, offset, node, nodeOffset: offset - base });
+  }
+}
+
+export function useCodeAnimation(root: RefObject<HTMLDivElement | null>, code: boolean, enabled: boolean) {
+  const cursor = useRef<Position>({ row: 0, offset: 0 });
+  useLayoutEffect(() => {
+    const block = root.current;
+    if (!code || !block) return;
+    const registry = globalThis.CSS?.highlights;
+    const animate = enabled && !!graphemes && !!registry && typeof Highlight !== "undefined";
+    const mask = animate ? registry.get(highlightName) || new Highlight() : null;
+    if (mask && !registry.has(highlightName)) registry.set(highlightName, mask);
+
+    const range = document.createRange();
+    const queued = new Set<HTMLElement>();
+    const fades = new Set<Animation>();
+    let frame = 0;
+    let lastArrival = 0, cadence = 96, deadline = 0;
+    let lastEnd: Position | undefined;
+
+    function reset() {
+      cancelAnimationFrame(frame);
+      mask?.delete(range);
+      for (const row of queued) row.style.removeProperty("display");
+      queued.clear();
+    }
+
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      const body = block.querySelector(selector);
+      const rows = body?.children;
+      if (!rows?.length) { reset(); return; }
+      const end = { row: rows.length - 1, offset: rows[rows.length - 1].textContent?.length || 0 };
+      const now = performance.now();
+      const grew = lastEnd?.row !== end.row || lastEnd.offset !== end.offset;
+      if (grew) {
+        const elapsed = now - lastArrival;
+        if (lastArrival && elapsed > 8) cadence = Math.min(150, Math.max(40, cadence * .55 + elapsed * .45));
+        lastArrival = now;
+        deadline = now + cadence;
+      }
+      lastEnd = end;
+      const start = cursor.current;
+      // Show history, replacement snapshots, and background-tab catch-up immediately.
+      const showAll = () => {
+        reset();
+        cursor.current = end;
+      };
+      if (!mask || document.hidden || now >= deadline || end.row < start.row || end.row - start.row > 48) {
+        showAll();
+        return;
+      }
+      let remaining = -start.offset;
+      for (let i = start.row; i <= end.row; i++) remaining += rows[i].textContent?.length || 0;
+      if (remaining <= 0 || remaining > 2048) {
+        showAll();
+        return;
+      }
+
+      const stops: Stop[] = [];
+      for (const row of queued) {
+        if (row.parentElement !== body) {
+          row.style.removeProperty("display");
+          queued.delete(row);
         }
       }
-      let visible = lines.length;
-      while (visible && !lines[visible - 1].textContent?.trim()) visible--;
-      seen.current = Math.max(seen.current, visible);
-    }
-    function schedule() {
-      if (frame === undefined) frame = requestAnimationFrame(update);
-    }
-    const observer = new MutationObserver(schedule);
-    observer.observe(node, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-    schedule();
+      for (let i = start.row; i <= end.row; i++) {
+        const row = rows[i] as HTMLElement;
+        if (i > start.row && !queued.has(row)) {
+          row.style.display = "none";
+          queued.add(row);
+        }
+        appendStops(row, i, i === start.row ? start.offset : 0, stops);
+      }
+      if (!stops.length) { showAll(); return; }
+
+      const paint = (t: number) => {
+        const progress = Math.min(1, Math.max(0, (t - now) / (deadline - now)));
+        const pos = stops[Math.max(0, Math.ceil(progress * stops.length) - 1)];
+        for (let i = cursor.current.row; i <= pos.row; i++) {
+          const row = rows[i] as HTMLElement;
+          if (queued.delete(row)) {
+            row.style.removeProperty("display");
+            const fade = row.animate([{ opacity: .82 }, { opacity: 1 }], { duration: 100, easing: "ease-out" });
+            fade.id = "onecat-code-arrival";
+            fades.add(fade);
+            fade.onfinish = () => fades.delete(fade);
+          }
+        }
+        cursor.current = { row: pos.row, offset: pos.offset };
+        if (pos === stops[stops.length - 1]) { showAll(); return; }
+        range.setStart(pos.node, pos.nodeOffset);
+        range.setEnd(rows[pos.row], rows[pos.row].childNodes.length);
+        mask.add(range);
+        frame = requestAnimationFrame(paint);
+      };
+      // Install the range before the browser paints the incoming token spans.
+      paint(now);
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(block, { childList: true, subtree: true, characterData: true });
+    document.addEventListener("visibilitychange", sync);
+    sync();
     return () => {
       observer.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      for (const animation of active) animation.cancel();
+      document.removeEventListener("visibilitychange", sync);
+      reset();
+      for (const fade of fades) fade.cancel();
     };
   }, [root, code, enabled]);
 }

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import {
 	Leaf,
 	Scale,
 	Zap,
 	Check,
-	LoaderCircle,
 	SlidersHorizontal,
 	ChevronDown,
 	Cpu,
@@ -16,8 +16,8 @@ import {
 	mutation,
 	refreshData,
 	useQuery,
-	type Engine,
 	type GPU,
+	type Engine,
 	type Hardware,
 	type Job,
 } from "./api";
@@ -30,21 +30,12 @@ import {
 	format,
 	jobLabel,
 } from "./common";
-import { Phase, Segments } from "./motion";
+import { Phase, Segments, useInterfaceMotion } from "./motion";
 import { useBrowserState } from "./browser-state";
 import { GPUControls } from "./gpu-controls";
 
-export type PowerCalibration = {
-	created_at: number;
-	workload: { prompt_tokens: number; output_tokens: number };
-	summary: {
-		setting: Hardware | string;
-		valid_repeats: number;
-		prefill_tokens_s: number;
-		decode_tokens_s: number;
-		request_energy_wh: number;
-	}[];
-};
+import { LiveGPUs, type ModeChange } from "./live-gpus";
+import { modelLabel } from "./model-label";
 
 type Actual = {
 	power_limit_w: number;
@@ -53,12 +44,14 @@ type Actual = {
 	recovery_pending?: boolean;
 };
 type Device = GPU & {
+	confirmed_mode?: string | null;
 	authorized: boolean;
 	external_processes: GPU["processes"];
 	actual?: Actual;
 	policy?: { setting: Hardware };
 };
 type ControlStatus = {
+	recent_changes?: ModeChange[];
     setup_required?: boolean;
 	scope: "all" | "custom";
 	active: string | null;
@@ -97,11 +90,44 @@ type ControlStatus = {
 	};
 };
 
-export function PowerModes({
-	engine,
-	calibration,
-}: { engine?: Engine; calibration?: PowerCalibration }) {
+type PowerTarget = {
+	mode: string | null;
+	gpu_uuids?: string[];
+	job?: string;
+};
+
+// Keep the measured content in flow through exit, including its outer spacing.
+function PowerReveal({ children }: { children: ReactNode }) {
+	const { enabled } = useInterfaceMotion();
+	const present = useIsPresent();
+	const content = useRef<HTMLDivElement>(null);
+	const [height, setHeight] = useState(0);
+	useLayoutEffect(() => {
+		const el = content.current!;
+		const measure = () => setHeight(el.getBoundingClientRect().height);
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+	const ease = [0.38, 0, 0.22, 1] as const;
+	return (
+		<motion.div className="perf-reveal" inert={!present || undefined} aria-hidden={!present || undefined}
+			initial={{ height: 0, opacity: 0 }}
+			animate={{ height, opacity: 1 }}
+			exit={{ height: 0, opacity: 0 }}
+			transition={{
+				height: { duration: enabled ? (present ? 0.46 : 0.38) : 0, ease },
+				opacity: { duration: enabled ? 0.28 : 0, ease },
+			}}>
+			<div ref={content} className="perf-reveal-content">{children}</div>
+		</motion.div>
+	);
+}
+
+export function PowerModes() {
 	const t = useText();
+	const { data: engine } = useQuery<Engine>("/api/inference/status", 2000);
 	const [scope, setScope] = useBrowserState("onecat:power-scope", "all", true);
 	const [selected, setSelected] = useBrowserState<string[]>(
 		"onecat:power-gpus",
@@ -119,23 +145,29 @@ export function PowerModes({
 		"/api/gpu/power-modes" + query,
 		2000,
 	);
-	const [localWaiting, setWaiting] = useState<{
-		mode: string | null;
-		job?: string;
-	} | null>(null);
-	const waiting = localWaiting || data?.pending;
+	const [localWaiting, setWaiting] = useState<PowerTarget | null>(null);
+	const [confirmed, setConfirmed] = useState<PowerTarget | null>(null);
+	const notified = useRef("");
+	const lastTarget = useRef<PowerTarget | null>(null);
+	const pending = data?.pending;
+	const waiting = localWaiting || (pending?.job !== notified.current ? pending : undefined);
+	const displayTarget = waiting || confirmed;
+	const showingConfirmation = !!confirmed && !waiting;
 	const { data: jobs } = useQuery<{ items: Job[] }>(
 		waiting?.job ? "/api/jobs" : null,
 		1000,
 	);
 	const job = jobs?.items.find((j) => j.id === waiting?.job);
-	const notified = useRef("");
 	const submitting = useRef(false);
 	const [scopeOpen, setScopeOpen] = useState(false);
 	const [taskOpen, setTaskOpen] = useState(false);
 	const scopeTrigger = useRef<HTMLButtonElement>(null);
 	const manualTrigger = useRef<HTMLButtonElement>(null);
 	const taskTrigger = useRef<HTMLButtonElement>(null);
+	function openTask(event: React.MouseEvent<HTMLButtonElement>) {
+		taskTrigger.current = event.currentTarget;
+		setTaskOpen(true);
+	}
 	const [manual, setManual] = useState(false),
 		[watts, setWatts] = useState(185),
 		[clock, setClock] = useState(0),
@@ -154,41 +186,45 @@ export function PowerModes({
 		uuids.length > 0 &&
 		!empty &&
 		!waiting;
-	const calibrationMatches =
-		calibration &&
-		engine?.profile?.gpu_uuids.length === uuids.length &&
-		uuids.every((u) => engine.profile!.gpu_uuids.includes(u));
 	useEffect(() => {
-		if (
-			!job ||
-			!["completed", "failed", "cancelled"].includes(job.state) ||
-			notified.current === job.id
-		)
-			return;
-		notified.current = job.id;
-		if (job.state === "completed")
-			toast.success(
-				t("GPU 设置已应用并确认", "GPU settings applied and confirmed"),
-			);
-		else if (job.state === "failed")
-			toast.error(
-				job.error || t("设置未完成", "Settings could not be applied"),
-			);
-		else toast.message(t("已取消等待", "Waiting cancelled"));
+		if (waiting?.job) lastTarget.current = waiting;
+	}, [waiting]);
+
+	// Either poll can deliver completion first, including jobs started in another tab.
+	const result = job && ["completed", "failed", "cancelled"].includes(job.state) ? job : data?.last_result;
+	useEffect(() => {
+		const target = lastTarget.current;
+		if (!result || !target || result.id !== target.job || notified.current === result.id ||
+			!["completed", "failed", "cancelled"].includes(result.state)) return;
+		notified.current = result.id;
+		if (result.state === "completed") {
+			setConfirmed(target);
+			toast.success(t("GPU 设置已应用并确认", "GPU settings applied and confirmed"));
+		} else if (result.state === "failed") {
+			toast.error(result.error || t("设置未完成", "Settings could not be applied"));
+		} else {
+			toast.message(t("已取消等待", "Waiting cancelled"));
+		}
 		setWaiting(null);
 		refreshData();
-	}, [job?.state, job?.id]);
+	}, [result?.id, result?.state, waiting?.job]);
+	useEffect(() => {
+		if (!confirmed) return;
+		const timer = window.setTimeout(() => setConfirmed(null), 580);
+		return () => window.clearTimeout(timer);
+	}, [confirmed]);
 	async function submit(mode: string | null, setting?: Hardware) {
 		if (submitting.current || !canSubmit) return;
 		submitting.current = true;
 		const target = [...uuids];
-		setWaiting({ mode });
+		setConfirmed(null);
+		setWaiting({ mode, gpu_uuids: target });
 		try {
 			const created = await mutation<Job>(
 				mode ? "/api/gpu/power-mode" : "/api/gpu/settings",
 				mode ? { id: mode, gpu_uuids: target } : { setting, gpu_uuids: target },
 			);
-			setWaiting({ mode, job: created.id });
+			setWaiting({ mode, job: created.id, gpu_uuids: target });
 			refresh();
 			setManual(false);
 		} catch (error) {
@@ -271,7 +307,7 @@ export function PowerModes({
 				: data?.error ? t("控制暂不可用", "Controls unavailable") : !uuids.length ? t("未选择设备", "No devices selected") : t("尚无确认读数", "No confirmed settings"));
 	const stage = job?.stage || data?.pending?.stage || "queued";
 	const targetLabel =
-		modes.find((m) => m.id === waiting?.mode)?.title ||
+		modes.find((m) => m.id === displayTarget?.mode)?.title ||
 		t("手动设置", "Manual settings");
 	const failure =
 		data?.last_result?.state === "failed" ? data.last_result : undefined;
@@ -321,8 +357,17 @@ export function PowerModes({
 		: scope === "all"
 			? t(`全部已授权 ${selectedCount} 张 GPU`, `All ${selectedCount} authorized GPUs`)
 			: t(`已选 ${selectedCount} 张 GPU`, `${selectedCount} GPUs selected`);
-	const pendingTargets = data?.pending?.gpu_uuids || [];
-	const targetDevices = devices.filter((d) => pendingTargets.includes(d.uuid));
+	const pendingTargets = localWaiting?.gpu_uuids || data?.pending?.gpu_uuids || [];
+    const cancelling = !!data?.pending?.cancel_requested;
+    const applying = stage === "applying_gpu_settings" && !cancelling;
+    const stageMessage = cancelling ? t("正在取消等待", "Cancelling queued change")
+        : applying ? t("正在应用设置并核对显卡读数", "Applying settings and verifying GPU readings")
+        : stage === "recovering_gpu_settings" ? t("正在恢复先前设置", "Restoring previous settings")
+        : stage === "waiting_for_engine" || stage === "waiting_for_requests"
+            ? data?.pending?.detail || jobLabel(stage, t)
+            : waiting?.job ? t("已提交，等待执行", "Queued for application") : t("正在提交设置", "Submitting settings");
+	const shownUuids = showingConfirmation ? confirmed.gpu_uuids || [] : pendingTargets;
+	const targetDevices = devices.filter((d) => shownUuids.includes(d.uuid));
 	const targetNames = [
 		...targetDevices.map((d) => `GPU ${d.index}`),
 		...pendingTargets.filter((u) => !devices.some((d) => d.uuid === u)),
@@ -334,162 +379,97 @@ export function PowerModes({
 			data?.pending?.stage || stage,
 		);
 	return (
-		<section className="oc-power-section">
-			<div className="oc-row">
-				<h2>{t("GPU 功耗设置", "GPU power settings")}</h2>
-				<Button
-					ref={manualTrigger}
-					variant="ghost"
-					disabled={!canSubmit}
-					onClick={() => {
-						setManualError("");
-						setManual(true);
-					}}
-				>
-					<SlidersHorizontal />
-					{t("手动调节", "Manual controls")}
-				</Button>
-			</div>
-            <p className="oc-muted oc-device-counts">{data ? t(`检测到 ${devices.length} 张 · 可控制 ${devices.filter(d => d.authorized).length} 张 · 功耗有读数 ${devices.filter(d => d.power_w != null).length} 张`, `${devices.length} detected · ${devices.filter(d => d.authorized).length} controllable · ${devices.filter(d => d.power_w != null).length} with power readings`) : t("正在核对设备与控制权限…", "Checking devices and control permissions…")}</p>
-			<div className="oc-power-scope">
-				<span>
-					<Cpu size={16} aria-hidden="true" />
-					{scopeLabel}
-				</span>
-				<Button
-					ref={scopeTrigger}
-					variant="ghost"
-					onClick={() => setScopeOpen(true)}
-					aria-label={t("更改 GPU 控制范围", "Change GPU control scope")}
-				>
-					{t("更改", "Change")}
-				</Button>
-			</div>
-			<div
-				className="oc-power-modes"
-				role="group"
-				aria-label={t("功耗模式", "Power mode")}
-			>
-				{modes.map((mode) => {
-					const available = data?.items.find((item) => item.id === mode.id);
-					const active = activeMode?.id === mode.id;
-					return (
-						<button
-							key={mode.id}
-							type="button"
-							aria-pressed={active}
-							className={`oc-power-mode ${active ? "is-active" : ""}`}
-							disabled={!canSubmit || !available?.available}
-							title={available?.reason}
-							onClick={() =>
-								void submit(mode.id).catch((e) =>
-									toast.error((e as Error).message),
-								)
-							}
-						>
-							<div className="oc-mode-heading">
-								<mode.icon size={18} aria-hidden="true" />
-								<h3>{mode.title}</h3>
-								<span className="oc-mode-check">
-									{active && (
-										<Check size={16} aria-label={t("已应用", "Applied")} />
-									)}
-								</span>
-							</div>
-							<div className="oc-mode-power">
-								<strong>{mode.watts}</strong>
-								<span className="oc-mode-unit">{mode.subtitle}</span>
-							</div>
-							<p>{mode.description}</p>
-						</button>
-					);
-				})}
-			</div>
+        <div className="oc-performance">
+          <section className="perf-controls">
+            <header className="perf-controls-head">
+              <div className="perf-model">
+                <span className="perf-chip"><Cpu size={20}/></span>
+                <div><h2>{engine?.state === "ready" ? modelLabel(engine.profile?.name || engine.profile?.served_model_name || "") : t("GPU 功耗控制", "GPU power controls")}</h2>
+                <button ref={scopeTrigger} type="button" className="perf-link" onClick={() => setScopeOpen(true)} aria-label={t("更改 GPU 控制范围", "Change GPU control scope")}>{scopeLabel} <ChevronDown size={13}/></button></div>
+              </div>
+              <Segments className="perf-switch" role="group" aria-label={t("功耗模式", "Power mode")}>
+                {modes.map(mode => {
+                  const option = data?.items.find(item => item.id === mode.id);
+                  const selectedMode = displayTarget?.mode || activeMode?.id;
+                  return <button key={mode.id} type="button" aria-label={mode.title}
+                    data-switching={waiting?.mode === mode.id || undefined}
+                    aria-pressed={selectedMode === mode.id} disabled={!canSubmit || !option?.available}
+                    title={option?.reason || `${mode.watts} W / GPU · ${mode.description}`}
+                    onClick={() => void submit(mode.id).catch(e => toast.error((e as Error).message))}>
+                    <mode.icon size={16}/>{mode.title}
+                  </button>;
+                })}
+              </Segments>
+            </header>
 			<div className="oc-power-status">
-				<div role="status" className="oc-power-status-text">
-					<span>
-						{t("当前：", "Current: ")}
-						<b>{currentLabel}</b>
-					</span>
-					{waiting && (
-						<Phase
-							phase={`${waiting.job || "submitting"}:${stage}`}
-							className="oc-power-target"
-						>
-							<LoaderCircle
-								size={14}
-								className="animate-spin"
-								aria-hidden="true"
-							/>
-							{data?.pending?.cancel_requested
-								? t("正在取消等待", "Cancelling queued change")
-								: stage === "waiting_for_engine" || stage === "waiting_for_requests"
-                                  ? data?.pending?.detail || jobLabel(stage, t)
-                                  : stage === "queued" || stage === "starting" || stage === "checking"
-                                    ? t(`已提交：${targetLabel}`, `Queued: ${targetLabel}`)
-                                    : t(`正在应用${targetLabel}并核对读数`, `Applying ${targetLabel} and verifying`)}
-						</Phase>
-					)}
-				</div>
-				<div className="oc-power-status-actions">
-					{data?.pending && (
-						<Action
-							variant="ghost"
-							disabled={cancelDisabled}
-							run={() => mutation(`/api/jobs/${data.pending!.job}/cancel`)}
-						>
-							{data.pending.cancel_requested
-								? t("取消中", "Cancelling")
-								: t("取消等待", "Cancel waiting")}
-						</Action>
-					)}
-					{hasTaskDetails && (
-						<Button
-							ref={taskTrigger}
-							variant="ghost"
-							onClick={() => setTaskOpen(true)}
-						>
-							{t("任务详情", "Task details")}
-						</Button>
-					)}
+				<AnimatePresence>
+					{displayTarget && <PowerReveal key="power-transition">
+						<div className="perf-transition oc-power-target" data-applying={applying}
+							data-confirmed={showingConfirmation} data-mode={displayTarget.mode} data-cancelling={cancelling}>
+							<span className="perf-indicator" aria-hidden="true">
+								<span className="perf-wave"><i/><i/><i/><i/><i/></span>
+								<Check size={24} className="perf-confirm-icon"/>
+							</span>
+							<div className="perf-transition-copy" role="status">
+								<strong>{showingConfirmation ? targetLabel : t(`切换至${targetLabel}`, `Switching to ${targetLabel}`)}</strong>
+								<small><Phase phase={showingConfirmation ? "confirmed" : stageMessage}>
+									{showingConfirmation ? t("设置已应用并确认", "Settings applied and confirmed") : stageMessage}
+								</Phase></small>
+							</div>
+							{targetDevices.length > 0 && <div className="perf-transition-boards">
+								{targetDevices.map(d => {
+									const verified = showingConfirmation || (applying && actualKnown && !!displayTarget.mode && d.confirmed_mode === displayTarget.mode);
+									const label = verified ? t("读数已确认", "Readback confirmed") : t("等待确认", "Awaiting confirmation");
+									return <span key={d.uuid} data-verified={verified} aria-label={`GPU ${d.index} · ${label}`} title={label}>
+										{verified ? <Check size={11} aria-hidden="true"/> : <i aria-hidden="true"/>}GPU {d.index}
+									</span>;
+								})}
+							</div>}
+							<div className="oc-power-status-actions perf-pending-actions" inert={showingConfirmation || undefined} aria-hidden={showingConfirmation || undefined}>
+								<Action variant="ghost" disabled={!pending || cancelDisabled || showingConfirmation}
+									run={() => mutation(`/api/jobs/${pending!.job}/cancel`)}>
+									{cancelling ? t("取消中", "Cancelling") : t("取消等待", "Cancel waiting")}
+								</Action>
+								<Button variant="ghost" onClick={openTask}>{t("任务详情", "Task details")}</Button>
+							</div>
+						</div>
+					</PowerReveal>}
+				</AnimatePresence>
+				<div className="perf-status-base">
+					<div role="status" className="oc-power-status-text">
+						<span>
+							{t("当前：", "Current: ")}
+							<b>{currentLabel}</b>
+                        {activeMode && <small className="perf-readback"> · {activeMode.watts} W / GPU · {t("已确认", "Verified")} {scopeDevices.filter(d => d.confirmed_mode === activeMode.id).length}/{uuids.length}</small>}
+						</span>
+					</div>
+					<div className="oc-power-status-actions">
+                    <Button ref={manualTrigger} variant="ghost" disabled={!canSubmit}
+                      onClick={() => { setManualError(""); setManual(true); }}><SlidersHorizontal size={15}/>{t("手动调节", "Manual controls")}</Button>
+						{!waiting && hasTaskDetails &&
+							<Button variant="ghost" onClick={openTask}>{t("任务详情", "Task details")}</Button>}
+					</div>
 				</div>
 			</div>
 			{data?.setup_required ? <GPUControls compact /> : <ErrorNotice error={notice} />}
 			<details className="oc-power-notes">
 				<summary>
 					<ChevronDown size={14} />
-					{t("档位说明与实测", "Mode details & measurements")}
+					{t("档位说明", "Mode details")}
 				</summary>
 				<div className="oc-power-notes-body">
 					<p>
 						{t(
-							"每张卡显示已设功率上限。实际功率随负载变化。",
-							"Each GPU shows its configured power limit. Actual draw varies with workload.",
+							"显示的是每卡功率上限，实际功率随负载变化。模型启动与切换会保留你的选择。",
+							"Values are per-GPU power limits; actual draw varies with workload. Model launches and changes preserve your choice.",
 						)}
 					</p>
 					{modes.map((mode) => {
 						const item = data?.items.find((i) => i.id === mode.id);
-						const point =
-							calibrationMatches &&
-							calibration?.summary.find(
-								(p) =>
-									typeof p.setting !== "string" &&
-									p.valid_repeats >= 2 &&
-									item &&
-									p.setting.power_limit_w === item.setting.power_limit_w &&
-									(p.setting.graphics_clock_mhz || null) ===
-										(item.setting.graphics_clock_mhz || null),
-							);
 						return (
 							<div key={mode.id} className="oc-power-note">
 								<strong>{mode.title}</strong>
 								<span>{mode.detail}</span>
-								{point && (
-									<span>
-										Prefill {format(point.prefill_tokens_s, 0)} tok/s · Decode{" "}
-										{format(point.decode_tokens_s, 1)} tok/s
-									</span>
-								)}
 								{item?.reason && (
 									<span className="oc-status-warn">{item.reason}</span>
 								)}
@@ -498,8 +478,8 @@ export function PowerModes({
 					})}
 					<p>
 						{t(
-							"功耗设置会作用于所选 GPU，包括运行其他程序的卡。Studio 会等相关请求、模型启停或校准结束后再应用。首次调节以动态频率为基线。",
-							"Power settings apply to the selected GPUs, including those running other applications. Studio waits for affected requests, model changes or calibration to finish. The first adjustment sets a dynamic clock baseline.",
+							"外部程序占用的已授权 GPU 也会调节，程序不会被停止。涉及 Studio 请求时等待请求结束；启动、停止或校准期间排队。首次调节会建立动态频率基线。",
+							"Authorized GPUs running external workloads are included without stopping their processes. Overlapping Studio requests drain first; launch, stop and calibration operations finish before queued changes. First use establishes a dynamic clock baseline.",
 						)}
 					</p>
 				</div>
@@ -510,8 +490,8 @@ export function PowerModes({
 				onOpenChange={setScopeOpen}
 				title={t("GPU 控制范围", "GPU control scope")}
 				description={t(
-					"选择显卡，再选择档位或手动应用设置。",
-					"Select the GPUs, then choose a power mode or apply manual settings.",
+					"选择调节哪些显卡；关闭窗口后点击档位才会应用设置。",
+					"Choose which GPUs to control. Settings apply only when you select a power mode or apply manual controls.",
 				)}
 				footer={
 					<>
@@ -615,8 +595,8 @@ export function PowerModes({
 						</summary>
 						<p className="oc-muted">
 							{t(
-								"功耗设置也会影响所选 GPU 上的其他任务。",
-								"Power settings also affect other tasks running on these GPUs.",
+								"所选卡上的外部程序也受功耗设置影响，程序不会被停止。",
+								"Power settings also affect external workloads on selected GPUs without stopping them.",
 							)}
 						</p>
 						{externalDevices.map((device) => (
@@ -636,8 +616,8 @@ export function PowerModes({
 				onOpenChange={setTaskOpen}
 				title={t("任务详情", "Task details")}
 				description={t(
-					"查看本次任务涉及的显卡和逐卡结果。",
-					"See which GPUs this task covers and the result for each card.",
+					"显示固定的任务范围与逐卡结果。更改选卡不会改变已提交的任务。",
+					"Shows the submitted scope and per-GPU results. Changing your selection does not change a submitted task.",
 				)}
 				footer={
 					<Button onClick={() => setTaskOpen(false)}>
@@ -673,8 +653,8 @@ export function PowerModes({
 									{result.state === "restored"
 										? result.restored_exact === false
 											? t(
-													"已恢复原功率上限，频率设为动态。原锁频未知。",
-													"The original power limit is restored. Dynamic clocks are active because the previous lock was unknown.",
+													"已恢复原功率上限与动态频率；原锁频未知",
+													"Original power restored with dynamic clocks; previous lock was unknown",
 												)
 											: t("已恢复原设置", "Original settings restored")
 										: result.state === "unchanged"
@@ -691,7 +671,8 @@ export function PowerModes({
 								const created = await mutation<Job>(
 									`/api/jobs/${failure.id}/retry`,
 								);
-								setWaiting({ mode: null, job: created.id });
+								setConfirmed(null);
+								setWaiting({ mode: null, job: created.id, gpu_uuids: failure.result?.devices ? Object.keys(failure.result.devices) : undefined });
 							}}
 						>
 							{t("重试", "Retry")}
@@ -742,6 +723,8 @@ export function PowerModes({
 					{t("应用设置", "Apply settings")}
 				</Action>
 			</Modal>
-		</section>
+          </section>
+          <LiveGPUs changes={data?.recent_changes || []} devices={devices} pending={waiting ? {mode: waiting.mode, uuids: pendingTargets} : undefined}/>
+        </div>
 	);
 }

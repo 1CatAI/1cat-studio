@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import fcntl
 import json
+import logging
 import os
 import platform
 import re
@@ -23,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import __version__, auth, db, engine, gpu, log_diagnostics, models, proxy, runtimes, telemetry, updates
 from .config import automatic_gpu_actions, frontend_dist, initialize_paths, state_root
 from .jobs import TERMINAL, create_job, list_jobs, request_cancel
-from .network import lan_api_urls
+from .network import lan_api_urls, permits_api_listener
 from .schemas import (
     BenchmarkRequest,
     HardwareSetting,
@@ -89,6 +90,34 @@ def scheduled_job(kind: str, payload: dict) -> dict:
     return {k: v for k, v in result.items() if k != "payload"}
 
 
+def boot_restore_allowed():
+    return os.environ.get("ONECAT_BOOT_MODEL_RESTORE", "1" if automatic_gpu_actions() else "0") == "1"
+
+
+def restore_model_on_boot():
+    if not boot_restore_allowed():
+        return
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return
+    if db.get("engine", "boot_restore", {}).get("boot_id") == boot:
+        return
+    previous = engine.private_state()
+    profile = previous.get("profile_id")
+    was_loaded = previous.get("state") == "ready" or (
+        previous.get("state") in {"failed", "unavailable"} and previous.get("ready_at")
+    )
+    if (db.settings()["restore_model_on_boot"] and was_loaded and profile
+            and db.get("profiles", profile) and not db.get("engine", "hardware_recovery")
+            and engine.status().get("state") in {"stopped", "failed"}):
+        try:
+            scheduled_job("start_model", {"profile_id": profile})
+        except (HTTPException, ValueError):
+            logging.getLogger(__name__).exception("Could not queue model restore at boot")
+    db.put("engine", "boot_restore", {"boot_id": boot})
+
+
 async def lifecycle_monitor():
     await asyncio.sleep(2)
     while updates.activating():
@@ -96,6 +125,9 @@ async def lifecycle_monitor():
     await asyncio.to_thread(runtimes.refresh_incomplete_metadata)
     from .catalog import backfill_default_profiles
 
+    from .portable_gpu import rebind
+
+    await asyncio.to_thread(rebind)
     await asyncio.to_thread(backfill_default_profiles)
     from .adopt import reconcile
 
@@ -106,13 +138,7 @@ async def lifecycle_monitor():
         from .gpu_control import reconcile_saved
 
         await asyncio.to_thread(reconcile_saved)
-        automatic = db.settings().get("autostart_profile")
-        if (
-            automatic
-            and engine.status().get("state") in ("stopped", "failed")
-            and not db.get("engine", "hardware_recovery")
-        ):
-            scheduled_job("start_model", {"profile_id": automatic})
+    await asyncio.to_thread(restore_model_on_boot)
     while True:
         await asyncio.sleep(2)
         if updates.activating():
@@ -193,10 +219,13 @@ def create_app() -> FastAPI:
         title="1Cat Studio", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None
     )
     listener = db.settings()
+    app.state.lan_api_only = False
     app.state.listen_host = listener["host"]
     app.state.listen_port = listener["port"]
     from .agent.api import router as agent_router
 
+    from .agent.desktop import router as desktop_router
+    app.include_router(desktop_router)
     app.include_router(agent_router)
     from .creative.api import router as creative_router
 
@@ -205,6 +234,10 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def serialize_management(request, call_next):
+        if app.state.lan_api_only and not permits_api_listener(
+            request.client.host if request.client else "", request.url.path
+        ):
+            return JSONResponse({"detail": "This endpoint is available locally only"}, status_code=403)
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             with (updates.updates_root() / "admission.lock").open("a") as lock:
                 try:
@@ -438,6 +471,7 @@ def create_app() -> FastAPI:
             "modelscope_endpoint",
             "idle_unload_minutes",
             "autostart_profile",
+            "restore_model_on_boot",
             "host",
             "port",
             "locale",
@@ -449,6 +483,12 @@ def create_app() -> FastAPI:
         values = StudioSettings.model_validate({**before, **payload}).model_dump()
         if values["autostart_profile"] and not db.get("profiles", values["autostart_profile"]):
             raise ValueError("Autostart profile does not exist")
+        if "restore_model_on_boot" in payload:
+            values["autostart_profile"] = None
+        elif "autostart_profile" in payload:
+            values["restore_model_on_boot"] = bool(values["autostart_profile"])
+        if values["restore_model_on_boot"] and not before["restore_model_on_boot"] and not boot_restore_allowed():
+            raise ValueError("此安装已禁用开机模型加载 / Boot model restore is disabled for this installation")
         directory = Path(values["model_directory"]).expanduser().resolve()
         try:
             directory.mkdir(parents=True, exist_ok=True)
@@ -663,9 +703,17 @@ def create_app() -> FastAPI:
         data["id"] = data["id"] or db.uid()
         if not db.get("runtimes", data["runtime_id"]):
             raise ValueError("Runtime not found")
-        from .catalog import validate_features
+        from .catalog import capabilities, validate_features
 
-        validate_features(data)
+        omitted = {"kv_cache_dtype", "speculative_config"} - payload.model_fields_set
+        if omitted:
+            previous = db.get("profiles", data["id"], {})
+            same = previous.get("runtime_id") == data["runtime_id"] and previous.get("model_path") == data["model_path"]
+            defaults = {} if same and omitted <= previous.keys() else capabilities(data["model_path"], data["runtime_id"])
+            for field in omitted:
+                data[field] = previous[field] if same and field in previous else defaults.get("default_" + field)
+
+        validate_features(data, default_fields=Profile.model_fields.keys() - payload.model_fields_set)
         db.put("profiles", data["id"], data)
         return data
 
@@ -1045,6 +1093,11 @@ def create_app() -> FastAPI:
             "messages": [hydrate(m) for m in studio_db.list_chat_messages(id)],
             "generation": db.get("chat_runs", id),
         }
+
+    @admin.get("/chat/threads/{id}/title")
+    async def chat_title(id: str):
+        from .chat_titles import read
+        return await read(id)
 
     @admin.get("/chat/threads/{id}/export")
     def export_thread(id: str):

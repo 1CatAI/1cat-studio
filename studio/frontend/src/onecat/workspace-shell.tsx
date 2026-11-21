@@ -11,7 +11,7 @@ import {
   Gauge,
   Server,
   Settings,
-  Plus,
+  SquarePen,
   LogOut,
   LoaderCircle,
   PanelTop,
@@ -41,6 +41,7 @@ import {
 } from "./api";
 import { Field, format, useText, Modal, jobLabel, ErrorNotice } from "./common";
 import { LaunchProgress } from "./launch-progress";
+import { ChatToolsTarget } from "./chat-toolbar";
 import { DecodeStatus } from "./decode-status";
 import { modelLabel, accelerationLabel } from "./model-label";
 import { ModelPicker } from "./model-controls";
@@ -76,6 +77,7 @@ function Hint({ label, children }: { label: string; children: ReactNode }) {
 
 export function Shell() {
   const t = useText();
+  const [chatToolsTarget, setChatToolsTarget] = useState<HTMLDivElement | null>(null);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const conversation = useConversationNavigation();
   const currentThread = useRouterState({
@@ -230,12 +232,11 @@ export function Shell() {
               <span>{t("最近对话", "Recent chats")}</span>
               <Button
                 asChild
-                size="icon-sm"
+                size="sm"
                 variant="ghost"
-                aria-label={t("新对话", "New chat")}
               >
                 <Link to="/chat" search={{ thread: undefined }}>
-                  <Plus />
+                  <SquarePen aria-hidden="true" />{t("新对话", "New chat")}
                 </Link>
               </Button>
             </div>
@@ -275,7 +276,7 @@ export function Shell() {
                           aria-label={t("生成中", "Generating")}
                         />
                       )}
-                      <span className="oc-history-copy">{thread.title}<small>{new Date(thread.updatedAt || thread.createdAt).toLocaleString(t("zh-CN", "en-US"), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></span>
+                      <span className="oc-history-copy">{thread.title || t("未命名对话", "Untitled chat")}<small>{new Date(thread.updatedAt || thread.createdAt).toLocaleString(t("zh-CN", "en-US"), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></span>
                     </Link>
                     <Button
                       size="icon-sm"
@@ -500,12 +501,6 @@ export function Shell() {
               </span>
             ) : (
               <>
-                <span
-                  className={
-                    "oc-status-dot " +
-                    (!engineError && engine?.state === "ready" ? "ready" : "")
-                  }
-                />
                 <ModelPicker agent={conversation.mode === "agent"} />
                 {engine?.profile && (
                   <span className="oc-header-tag">
@@ -524,6 +519,7 @@ export function Shell() {
             />
           )}
           <div className="oc-header-stats">
+            {path === "/chat" && <div className="oc-chat-tools-target" ref={setChatToolsTarget} />}
             <span className="oc-header-engine-state">
               {(path === "/canvas" || path === "/creative")
                 ? t("整机 GPU", "All GPUs")
@@ -553,8 +549,8 @@ export function Shell() {
               )}
             </span>
           </div>
+          {path !== "/canvas" && path !== "/creative" && path !== "/service" && <LaunchProgress compact />}
         </header>
-        {path !== "/canvas" && path !== "/creative" && path !== "/service" && <LaunchProgress compact />}
         <main
           className="oc-main"
           id={conversation.mode ? "oc-conversation-panel" : undefined}
@@ -564,7 +560,7 @@ export function Shell() {
           }
           tabIndex={conversation.mode ? 0 : undefined}
         >
-          <Outlet />
+          <ChatToolsTarget.Provider value={chatToolsTarget}><Outlet /></ChatToolsTarget.Provider>
         </main>
       </section>
       <Dialog.Root open={historyOpen && !pinned} onOpenChange={setHistoryOpen}>

@@ -156,6 +156,7 @@ export type Job = {
   asset_name?: string;
   asset_index?: number;
   asset_count?: number;
+  verification?: { bytes_read: number; total_bytes: number; files_done: number; total_files: number; current_file: string | null };
   expected_bytes?: number;
   downloaded_bytes?: number;
   bytes_per_second?: number;
@@ -184,6 +185,7 @@ export type GPU = {
 };
 
 export type RequestMetrics = {
+  gpu_uuids?: string[];
   model_name?: string;
   pending?: boolean;
   decode_reason?: string | null;
@@ -354,6 +356,7 @@ export type Settings = {
   modelscope_endpoint: string;
   idle_unload_minutes: number;
   autostart_profile: string | null;
+  restore_model_on_boot: boolean;
   host: string;
   port: number;
   locale: "zh-CN" | "en";

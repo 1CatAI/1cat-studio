@@ -166,3 +166,71 @@ async def test_queued_disconnect_and_parent_cancel_release_capacity(parent, monk
     with db.connect() as conn:
         assert [row[0] for row in conn.execute("SELECT status FROM requests")] == [499, 499]
     await asyncio.gather(*list(proxy.pending))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent", ["codex", "pi"])
+async def test_agent_history_records_prefill_and_power(agent, monkeypatch):
+    import time
+    from collections import deque
+
+    from onecat import telemetry
+    from onecat.app import create_app
+
+    state = {"state": "ready", "port": 1234, "profile_id": "p", "launch_id": "one",
+             "profile": {"name": "Local", "served_model_name": "local", "gpu_uuids": ["gpu"]}}
+    db.put("engine", "active", state)
+    record = {"id": "task", "project_id": "project", "engine_port": 1234, "profile_id": "p",
+              "engine_instance": "one", "model": "local", "model_calls": 0, "usage": {
+                  "input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "missing_calls": 0,
+                  "cache_missing_calls": 0}}
+    run = (tasks.Run if agent == "codex" else tasks.PiRun)(record, {"id": "project"}, "test")
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        if request.url.path == "/metrics":
+            stats = {"request_prompt_tokens": 10, "request_generation_tokens": 3,
+                     "request_prefill_time_seconds": .2, "request_decode_time_seconds": .1}
+            return httpx.Response(200, text="\n".join(
+                f'vllm:{name}_{suffix}{{model_name="local"}} {calls * value}'
+                for name, total in stats.items() for suffix, value in [("count", 1), ("sum", total)]
+            ))
+        assert request.url.path == "/v1/chat/completions"
+        calls += 1
+        return httpx.Response(200, text=(
+            'data: {"choices":[{"delta":{"content":"abc"},"token_ids":[1,2,3]}]}\n\n'
+            'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":3,'
+            '"prompt_tokens_details":{"cached_tokens":2}}}\n\ndata: [DONE]\n\n'
+        ))
+
+    # Bracket the request with constant 80 W samples on its assigned board.
+    now = time.monotonic()
+    monkeypatch.setattr(telemetry, "samples", deque(
+        {"monotonic": now + i / 10, "gpus": [{"uuid": "gpu", "power_w": 80}]}
+        for i in range(-5, 21)
+    ))
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+    body = {"model": "local", "messages": [], "stream": True, "stream_options": {"include_usage": True}}
+    if agent == "codex":
+        events = [event async for event in run.infer(body)]
+        assert events[-1]["usage"]["prompt_tokens"] == 10
+    else:
+        monkeypatch.setitem(tasks.runs, "task", run)
+        token = pi_runtime.issue_model_token("task", "project", None, engine_identity=proxy.instance_identity(state))
+        try:
+            async with original(transport=httpx.ASGITransport(app=create_app()), base_url="http://local") as client:
+                response = await client.post("/internal/agent/v1/chat/completions", json=body,
+                                             headers={"Authorization": "Bearer " + token})
+                assert response.is_success and "[DONE]" in response.text
+        finally:
+            pi_runtime.revoke_model_token(token)
+    await asyncio.gather(*list(proxy.pending))
+    with db.connect() as conn:
+        row = conn.execute("SELECT source,status,elapsed,metrics FROM requests").fetchone()
+    metrics = json.loads(row["metrics"])
+    assert (row["source"], row["status"], metrics["agent_engine"]) == ("agent", 200, agent)
+    assert metrics["pending"] is False and metrics["prefill_tokens_s"] == 40
+    assert metrics["average_gpu_w"] == pytest.approx(80)
+    assert metrics["energy_wh"] == pytest.approx(80 * row["elapsed"] / 3600)

@@ -47,6 +47,7 @@ def live(model_uuids: list[str], since: float = 0) -> dict:
         history.append(
             {
                 "timestamp": sample["timestamp"],
+                "board_w": {d["uuid"]: d.get("power_w") for d in devices},
                 "power_w": sum(d["power_w"] for d in measured)
                 if devices and len(measured) == len(devices)
                 else None,
@@ -84,7 +85,7 @@ def request_energy(uuids: list[str], start: float, end: float) -> dict:
             else None
         )
         points.append((sample["monotonic"], watts))
-    total, coverage = 0.0, 0.0
+    total = 0.0
     for (a, wa), (b, wb) in zip(points, points[1:]):
         low, high = max(a, start), min(b, end)
         if high <= low:
@@ -94,8 +95,7 @@ def request_energy(uuids: list[str], start: float, end: float) -> dict:
         left = wa + (wb - wa) * (low - a) / (b - a)
         right = wa + (wb - wa) * (high - a) / (b - a)
         total += (left + right) * (high - low) / 2
-        coverage += high - low
-    if abs(coverage - (end - start)) > 0.001:
+    if not points or points[0][0] > start or points[-1][0] < end:
         return {}
     return {
         "average_gpu_w": total / (end - start),

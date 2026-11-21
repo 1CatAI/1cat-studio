@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useState, type RefObject } from "react";
-import { BookOpen, Copy, Download, ExternalLink, LoaderCircle, RefreshCw, Star } from "lucide-react";
+import { useEffect, useState, type RefObject } from "react";
+import { BookOpen, Copy, Download, ExternalLink, LoaderCircle, RefreshCw, UsersRound, Star } from "lucide-react";
 import { Button } from "./ui";
 import { api, copyText, useQuery } from "./api";
 import { Action, bytes, ErrorNotice, Modal, useText } from "./common";
 import { Markdown } from "./markdown";
 import { safeMarkdownUrl } from "./markdown-url";
+import { useModelDialogTransition } from "./model-card-transition";
 import "./styles/model-card.css";
 
 type Card = {
   repo_id: string;
   publisher: string;
+  publisher_avatar?: string | null;
   endpoint: string;
   source_url: string;
   description: string;
@@ -25,13 +27,37 @@ type Card = {
 };
 const cardPath = (repo: string) => `/api/models/card?catalog_id=${encodeURIComponent(repo)}`;
 
+// Reuse the preview already displayed in the library while the detail request refreshes.
+const previews = new Map<string, Card>();
+function useModelCard(repo?: string | null) {
+  const query = useQuery<Card>(repo ? cardPath(repo) : null);
+  useEffect(() => {
+    if (repo && query.data) previews.set(repo, query.data);
+  }, [repo, query.data]);
+  return { ...query, data: query.data ?? (repo ? previews.get(repo) : undefined) };
+}
+
+function PublisherMark({ avatar }: { avatar?: string | null }) {
+  const [failed, setFailed] = useState<string>();
+  return <span className="oc-publisher-mark" aria-hidden="true">
+    {avatar && failed !== avatar
+      ? <img src={avatar} alt="" width={36} height={36} onError={() => setFailed(avatar)} />
+      : <UsersRound size={18} />}
+  </span>;
+}
+
+export function ModelPublisherAvatar({ repo }: { repo?: string | null }) {
+  const { data } = useModelCard(repo);
+  return <PublisherMark avatar={data?.publisher_avatar} />;
+}
+
 export function ModelIdentity({ repo, onOpen }: { repo: string; onOpen: (button: HTMLButtonElement) => void }) {
-  const { data } = useQuery<Card>(cardPath(repo));
+  const { data } = useModelCard(repo);
   const t = useText();
   const publisher = repo.split("/")[0];
   return <div className="oc-model-identity">
     <button className="oc-model-publisher" onClick={event => onOpen(event.currentTarget)} aria-label={`${t("查看模型介绍", "About this model")} · ${repo}`}>
-      <span className="oc-publisher-mark" aria-hidden="true">{publisher.slice(0, 2).toUpperCase()}</span>
+      <PublisherMark avatar={data?.publisher_avatar} />
       <span><strong>{publisher}</strong><small title={repo}>{repo}</small></span>
       <BookOpen size={16} />
     </button>
@@ -44,7 +70,8 @@ export function ModelCard({ repo, name, quantization, size, onClose, returnFocus
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const t = useText();
-  const { data, error, refresh } = useQuery<Card>(cardPath(repo));
+  const { data, error, refresh } = useModelCard(repo);
+  const { setDetail, dismiss } = useModelDialogTransition(returnFocusRef, onClose);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
   const publisher = repo.split("/")[0];
@@ -59,7 +86,7 @@ export function ModelCard({ repo, name, quantization, size, onClose, returnFocus
       return `${endpoint}/api/v1/models/${repo}/repo?Revision=master&FilePath=${encodeURIComponent(decodeURIComponent(path))}`;
     } catch { return undefined; }
   }
-  return <Modal open onOpenChange={open => { if (!open) onClose(); }} title={name} returnFocusRef={returnFocusRef}
+  return <Modal open onOpenChange={open => { if (!open) dismiss(); }} title={name} returnFocusRef={returnFocusRef}
     footer={<><Button variant="ghost" disabled={reloading} onClick={async () => {
       setReloading(true); setReloadError("");
       try { await api(cardPath(repo) + "&refresh=true"); refresh(); }
@@ -67,10 +94,10 @@ export function ModelCard({ repo, name, quantization, size, onClose, returnFocus
       finally { setReloading(false); }
     }}><RefreshCw size={14} className={reloading ? "animate-spin" : ""} />{t("刷新介绍", "Refresh details")}</Button>
       <Button variant="outline" asChild><a href={source} target="_blank" rel="noopener noreferrer">ModelScope <ExternalLink size={14} /></a></Button></>}>
-    <div className="oc-model-card-detail">
+    <div ref={setDetail} className="oc-model-card-detail">
       <ErrorNotice error={error || reloadError} />
       <div className="oc-model-source-heading">
-        <span className="oc-publisher-mark" aria-hidden="true">{publisher.slice(0, 2).toUpperCase()}</span>
+        <PublisherMark avatar={data?.publisher_avatar} />
         <div><strong><a href={source} target="_blank" rel="noopener noreferrer">{publisher}</a></strong><div className="oc-model-repo"><span>{repo}</span><Action variant="ghost" run={() => copyText(repo)} success={t("已复制", "Copied")}><Copy size={14} /><span className="sr-only">{t("复制仓库名", "Copy repository ID")}</span></Action></div></div>
       </div>
       <dl className="oc-model-facts">

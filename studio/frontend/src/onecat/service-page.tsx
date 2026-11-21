@@ -5,7 +5,6 @@ import { modelLabel } from "./model-label";
 import { useBrowserState } from "./browser-state";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import {
   Copy,
   KeyRound,
@@ -30,9 +29,7 @@ import {
   api,
   type Engine,
   type Job,
-  type GPU,
   type RequestHistory as History,
-  type Settings,
 } from "./api";
 import {
   Page,
@@ -41,10 +38,11 @@ import {
   Empty,
   ErrorNotice,
   Modal,
-  format,
   useText,
   jobLabel,
 } from "./common";
+
+const routineJobs = new Set(["start_model", "apply_gpu_settings"]);
 
 export function ServicePage() {
   const t = useText();
@@ -53,7 +51,18 @@ export function ServicePage() {
     2000,
   );
   const { data: jobs } = useQuery<{ items: Job[] }>("/api/jobs", 2000);
-  const { data: studioSettings } = useQuery<Settings>("/api/settings");
+  const [showPastFailures, setShowPastFailures] = useState(false);
+  const latestSuccess = new Map<string, number>();
+  for (const job of jobs?.items || []) {
+    if (routineJobs.has(job.kind) && job.state === "completed" && job.updated_at) {
+      latestSuccess.set(job.kind, Math.max(latestSuccess.get(job.kind) || 0, job.updated_at));
+    }
+  }
+  const pastFailures = (jobs?.items || []).filter(job =>
+    job.state === "failed" && job.updated_at != null && job.updated_at < (latestSuccess.get(job.kind) || 0));
+  const visibleJobs = (jobs?.items || []).filter(job =>
+    !(routineJobs.has(job.kind) && job.state === "completed") &&
+    (showPastFailures || !pastFailures.includes(job)));
   const { data: keys } = useQuery<{
     items: { id: string; name: string; prefix: string; created: number }[];
   }>("/api/keys");
@@ -62,7 +71,6 @@ export function ServicePage() {
   const [source, setSource] = useBrowserState("onecat:service-source", "");
   const [tab, setTab] = useBrowserState("onecat:service-tab", "requests");
   const { data: requests } = useQuery<History>(`/api/requests?days=${days}&model=${encodeURIComponent(model)}&source=${source}`, 2000);
-  const { data: devices } = useQuery<{ gpus: GPU[] }>("/api/gpu", 3000);
   const [newKey, setNewKey] = useState(false),
     [keyName, setKeyName] = useState(""),
     [secret, setSecret] = useState(""),
@@ -153,7 +161,7 @@ export function ServicePage() {
         {engine?.state === "loading" && <LaunchProgress />}
         {engine?.state === "ready" && <details className="oc-launch-history"><summary>{t("本次启动记录 · 已就绪", "Startup history · Ready")}</summary><LaunchProgress /></details>}
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab === "devices" ? "requests" : tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="requests">
             {t("请求统计", "Requests")}
@@ -165,7 +173,6 @@ export function ServicePage() {
               (j) => !["completed", "failed", "cancelled"].includes(j.state),
             ).length || ""}
           </TabsTrigger>
-          <TabsTrigger value="devices">{t("设备", "Devices")}</TabsTrigger>
         </TabsList>
         <TabsContent value="requests">
           <TokenUsage days={days} onDaysChange={setDays} model={model} onModelChange={setModel} source={source} onSourceChange={setSource} />
@@ -182,15 +189,11 @@ export function ServicePage() {
               </Button>
             </div>
             <code className="oc-endpoint">{endpoint}</code>
-            {!lanEndpoints.length && studioSettings && (
+            {!lanEndpoints.length && engine && (
               <p className="oc-muted oc-spaced">
-                {studioSettings.host === "127.0.0.1" ? (
-                  <>{t("目前仅本机可访问。", "Local access only.")} <Link to="/settings">{t("在设置中开启局域网访问", "Enable LAN access in Settings")}</Link></>
-                ) : engine?.listen_host !== "0.0.0.0" ? (
-                  t("重启 Studio 后应用局域网访问设置。", "Restart Studio to apply the LAN access settings.")
-                ) : (
-                  t("没有检测到活动的局域网 IPv4 地址。", "No active LAN IPv4 address was found.")
-                )}
+                {engine.listen_host === "127.0.0.1" || engine.listen_host === "::1"
+                  ? t("当前启动参数仅允许本机访问。", "The service is bound to loopback.")
+                  : t("当前监听地址没有可列出的局域网 IPv4 地址。", "No LAN IPv4 endpoint is available for this listener.")}
               </p>
             )}
             {lanEndpoints.slice(1).map((url) => (
@@ -256,10 +259,15 @@ export function ServicePage() {
           </div>
         </TabsContent>
         <TabsContent value="tasks">
-          {!jobs?.items.length ? (
-            <Empty title={t("没有后台任务", "No background tasks")} />
+          {pastFailures.length > 0 && (
+            <Button variant="ghost" aria-expanded={showPastFailures} onClick={() => setShowPastFailures(!showPastFailures)}>
+              {showPastFailures ? t("收起历史失败记录", "Hide past failures") : t("查看历史失败记录", "Show past failures")} ({pastFailures.length})
+            </Button>
+          )}
+          {!visibleJobs.length ? (
+            <Empty title={t("当前没有待处理的后台任务", "No pending background tasks")} />
           ) : (
-            jobs.items.map((j) => {
+            visibleJobs.map((j) => {
               const finished = ["completed", "failed", "cancelled"].includes(
                 j.state,
               );
@@ -270,6 +278,9 @@ export function ServicePage() {
                       <h2>{jobLabel(j.stage, t)}</h2>
                       <p className="oc-muted">
                         {jobLabel(j.kind, t)} · {jobLabel(j.state, t)}
+                        {finished && j.updated_at && (
+                          <> · <time dateTime={new Date(j.updated_at * 1000).toISOString()}>{new Date(j.updated_at * 1000).toLocaleString()}</time></>
+                        )}
                         {j.cancel_requested && !finished
                           ? " · " + t("正在取消", "Cancelling")
                           : ""}
@@ -311,23 +322,12 @@ export function ServicePage() {
                   </div>
                   <div className="oc-spaced">
                     {j.expected_bytes ? (
-                      <DownloadProgressBar
-                        progress={{
-                          expectedBytes: j.expected_bytes,
-                          downloadedBytes: j.downloaded_bytes || 0,
-                          fraction:
-                            j.state === "completed"
-                              ? 1
-                              : (j.downloaded_bytes || 0) / j.expected_bytes,
-                        }}
-                        bytesPerSec={j.bytes_per_second || 0}
-                        cancelling={!!j.cancel_requested && !finished}
-                      />
-                    ) : j.kind === "start_model" ? (
+                      <DownloadProgressBar job={j} />
+                    ) : j.kind === "start_model" ? (!finished && (
                       <span className="oc-muted">
                         {t("查看上方启动阶段", "See startup stages above")}
                       </span>
-                    ) : (
+                    )) : (
                       <Progress value={j.progress} />
                     )}
                   </div>
@@ -335,67 +335,6 @@ export function ServicePage() {
                 </div>
               );
             })
-          )}
-        </TabsContent>
-        <TabsContent value="devices">
-          <div className="oc-model-grid">
-            {devices?.gpus.map((d) => (
-              <article className="oc-panel" key={d.uuid}>
-                <div className="oc-row">
-                  <h2>GPU {d.index}</h2>
-                  <span className="oc-muted">
-                    {format(d.temperature_c, 0)} °C
-                  </span>
-                </div>
-                <p>{d.name}</p>
-                <div className="oc-metric-pair">
-                  <div>
-                    <span>{t("实际功率", "Board power")}</span>
-                    <strong>
-                      {format(d.power_w, 0)} <small>W</small>
-                    </strong>
-                  </div>
-                  <div>
-                    <span>{t("功率上限", "Power limit")}</span>
-                    <strong>
-                      {format(d.power_limit_w, 0)} <small>W</small>
-                    </strong>
-                  </div>
-                </div>
-                <p className="oc-muted">
-                  {t("显存", "VRAM")}{" "}
-                  {format(
-                    d.memory_used_mib == null ? null : d.memory_used_mib / 1024,
-                  )}{" "}
-                  /{" "}
-                  {format(
-                    d.memory_total_mib == null
-                      ? null
-                      : d.memory_total_mib / 1024,
-                  )}{" "}
-                  GB
-                </p>
-                <Progress
-                  value={
-                    d.memory_used_mib != null && d.memory_total_mib
-                      ? (100 * d.memory_used_mib) / d.memory_total_mib
-                      : 0
-                  }
-                />
-                <p className="oc-muted oc-spaced">
-                  {t("核心", "Core")} {d.graphics_clock_mhz ?? "—"} MHz · HBM{" "}
-                  {d.memory_clock_mhz ?? "—"} MHz
-                </p>
-                {d.processes.map((p) => (
-                  <p className="oc-muted" key={p.pid}>
-                    PID {p.pid} · {p.name}
-                  </p>
-                ))}
-              </article>
-            ))}
-          </div>
-          {!devices?.gpus.length && (
-            <Empty title={t("未检测到 NVIDIA GPU", "No NVIDIA GPU detected")} />
           )}
         </TabsContent>
       </Tabs>

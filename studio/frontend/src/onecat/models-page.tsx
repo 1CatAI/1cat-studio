@@ -1,14 +1,16 @@
-import { Segments } from "./motion";
+import { Segments, useInterfaceMotion } from "./motion";
 import { useBrowserState } from "./browser-state";
-import { modelLabel, accelerationLabel } from "./model-label";
+import { modelLabel, accelerationLabel, adaptiveMtp } from "./model-label";
 import { SupportedModels, modelDefaults } from "./supported-models";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Popover } from "radix-ui";
 import { Link } from "@tanstack/react-router";
 import {
   Download,
   FolderInput,
+  Check,
+  ChevronRight,
   Play,
   Plus,
   Settings2,
@@ -22,7 +24,7 @@ import {
 import { Button } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
 import { Textarea } from "@/onecat/ui";
-import { Switch } from "@/onecat/ui";
+import { DownloadProgressBar } from "./download-progress";
 import { Checkbox } from "@/onecat/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/onecat/ui";
 import {
@@ -68,7 +70,7 @@ export function newProfile(model: Model, runtimeId: string): Profile {
     tensor_parallel_size: 1,
     dtype: "half",
     quantization: null,
-    kv_cache_dtype: "auto",
+    kv_cache_dtype: "",
     max_model_len: model.max_context || 32768,
     max_num_batched_tokens: 4096,
     max_num_seqs: 4,
@@ -89,11 +91,55 @@ export function newProfile(model: Model, runtimeId: string): Profile {
   };
 }
 
+function AdvancedSettings({ needsGpu, children }: { needsGpu: boolean; children: ReactNode }) {
+  const t = useText();
+  const id = useId();
+  const [expanded, setExpanded] = useState(needsGpu);
+  useEffect(() => { if (needsGpu) setExpanded(true); }, [needsGpu]);
+
+  const { enabled } = useInterfaceMotion();
+  const reveal = useRef<HTMLDivElement>(null);
+  const resize = useRef<Animation | null>(null);
+  useEffect(() => () => { resize.current?.cancel(); }, [enabled]);
+
+  function toggle() {
+    const content = reveal.current;
+    const panel = content?.closest<HTMLElement>(".oc-dialog-fixed");
+    if (enabled && content && panel?.animate) {
+      // Animate the visible dialog distance, even when the fields are several
+      // screens tall and the scroller reaches its max-height early.
+      const from = panel.offsetHeight;
+      resize.current?.cancel();
+      content.style.height = expanded ? "0px" : `${content.firstElementChild?.scrollHeight || 0}px`;
+      const to = panel.offsetHeight;
+      content.style.removeProperty("height");
+      if (from !== to) {
+        resize.current = panel.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+          duration: 320, easing: "cubic-bezier(.35,0,.2,1)",
+        });
+      }
+    }
+    setExpanded(!expanded);
+  }
+
+  return <div className="oc-profile-advanced" data-expanded={expanded}>
+    <button type="button" className="oc-advanced-toggle" aria-expanded={expanded}
+      aria-controls={id} onClick={toggle}>
+      <ChevronRight size={15} aria-hidden="true" />{t("高级设置", "Advanced settings")}
+    </button>
+    <div ref={reveal} id={id} className="oc-advanced-reveal" inert={!expanded}>
+      <div className="oc-advanced-fields">{children}</div>
+    </div>
+  </div>;
+}
+
 export function ProfileEditor({
   initial,
   onClose,
   modelId,
   savedProfiles,
+  returnFocusRef,
+  transitionRef,
   onChooseProfile,
   onLaunch,
   agent = false,
@@ -102,6 +148,8 @@ export function ProfileEditor({
   onClose: () => void;
   modelId?: string;
   savedProfiles?: Profile[];
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  transitionRef?: (element: HTMLDivElement | null) => void;
   onChooseProfile?: (profile: Profile) => void;
   onLaunch?: (job: import("./api").Job) => void;
   agent?: boolean;
@@ -110,9 +158,8 @@ export function ProfileEditor({
   const draftKey = (modelId ? "onecat:model-settings:" : "onecat:profile-draft:") + (initial.id || initial.model_path || "new");
   const [p, setP] = useBrowserState<Profile>(draftKey + ":profile", initial),
     [extras, setExtras] = useBrowserState(draftKey + ":extras", JSON.stringify(initial.extra_args, null, 2)),
-    [sampling, setSampling] = useBrowserState(draftKey + ":sampling", JSON.stringify(initial.default_sampling, null, 2)),
     [hardware, setHardware] = useBrowserState(draftKey + ":hardware", initial.hardware_profile ? JSON.stringify(initial.hardware_profile, null, 2) : ""),
-    [spec, setSpec] = useBrowserState(draftKey + ":spec", initial.speculative_config ? JSON.stringify(initial.speculative_config, null, 2) : "");
+    [specOverride, setSpec] = useBrowserState<string | null>(draftKey + ":spec", initial.speculative_config ? JSON.stringify(initial.speculative_config, null, 2) : initial.id ? "" : null);
   const [saving, setSaving] = useState(false);
   const [remember, setRemember] = useState(true);
   const { data: gpus } = useQuery<{ gpus: GPU[] }>("/api/gpu");
@@ -121,10 +168,6 @@ export function ProfileEditor({
   const { data: localModels } = useQuery<{ items: Model[] }>(
     "/api/models/list", 5000,
   );
-  const [draftJobId, setDraftJobId] = useBrowserState<string | null>(draftKey + ":download", null);
-  const { data: draftJobs } = useQuery<{ items: import("./api").Job[] }>(draftJobId ? "/api/jobs" : null, 1000);
-  const draftJob = draftJobs?.items.find(job => job.id === draftJobId);
-  const downloadingDraft = !!draftJobId && (!draftJobs || (!!draftJob && !["completed", "failed", "cancelled"].includes(draftJob.state)));
   const [caps, setCaps] = useState<{
     verified: boolean;
     tool_parser?: string;
@@ -132,7 +175,12 @@ export function ProfileEditor({
     max_images: number;
     accelerators: string[];
     mtp_token_options?: number[];
+    default_speculative_config?: Record<string, unknown>;
+    default_kv_cache_dtype: string;
+    int8_kv_available: boolean;
     draft_repo_id?: string;
+    draft_download_revision?: string;
+    draft_local_path?: string | null;
     draft_speculative_config?: Record<string, unknown>;
     reason?: string;
     tool_reason?: string;
@@ -166,53 +214,92 @@ export function ProfileEditor({
       active = false;
     };
   }, [p.model_path, p.runtime_id, capRevision]);
-  const bf16 =
-    p.gpu_uuids.length > 0 &&
-    p.gpu_uuids.every(
-      (id) =>
-        (gpus?.gpus.find((g) => g.uuid === id)?.compute_capability?.[0] || 0) >=
-        8,
-    );
+  const defaultMtp = caps?.default_speculative_config;
+  const spec = specOverride ?? (defaultMtp ? JSON.stringify(defaultMtp, null, 2) : "");
   let specValue: Record<string, unknown> | null = null;
-  let defaults: Record<string, unknown> = {};
   try {
     specValue = spec.trim() ? JSON.parse(spec) : null;
-    defaults = JSON.parse(sampling);
   } catch {
     /* Raw JSON remains editable and is validated on save. */
   }
-  function samplingField(key: string, value: unknown) {
-    setSampling(JSON.stringify({ ...defaults, [key]: value }, null, 2));
+  const offersEntMtp = adaptiveMtp(defaultMtp);
+  const dynamic = adaptiveMtp(specValue);
+  const depthOptions = (caps?.mtp_token_options || [1, 2, 3, 4]).filter(count => !dynamic || count >= 3);
+  function chooseDepth(count: number) {
+    const next = { ...specValue, num_speculative_tokens: count };
+    // A legacy MTP4 profile may omit the policy. Increasing its fixed depth
+    // to five must not silently activate the engine's adaptive default.
+    const policy = specValue?.sampling_policy as Record<string, unknown> | undefined;
+    setSpec(JSON.stringify(offersEntMtp && !dynamic
+      ? { ...next, sampling_policy: { ...policy, adaptive_mtp: "off" } } : next, null, 2));
   }
-  const drafts =
-    localModels?.items.filter((m) =>
-      caps?.draft_repo_id
-        ? m.repo_id === caps.draft_repo_id
-        : m.name.toLowerCase().includes("dflash"),
-    ) || [];
+  function chooseAcceleration(method: string) {
+    if (method === "off") { setSpec(""); return; }
+    if (method === "dflash") {
+      retryDraft();
+      setSpec(JSON.stringify({ method, kv_cache_dtype: "auto", draft_sample_method: "probabilistic",
+        ...caps?.draft_speculative_config, model: caps?.draft_local_path || "" }, null, 2));
+      return;
+    }
+    const mtp = defaultMtp || { method: "mtp", num_speculative_tokens: depthOptions.includes(4) ? 4 : depthOptions[0] || 4 };
+    // "auto" enables adaptive depth for MTP5 on V100, so fixed mode must opt out explicitly.
+    const chosen = offersEntMtp && method === "mtp"
+      ? { ...mtp, sampling_policy: { adaptive_mtp: "off" } } : mtp;
+    setSpec(JSON.stringify(chosen, null, 2));
+  }
+  const draftRepo = caps?.draft_repo_id;
+  const revision = caps?.draft_download_revision;
+  const draftPath = caps && "draft_local_path" in caps ? caps.draft_local_path : specValue?.model;
+  const wantsDraft = specValue?.method === "dflash";
+  const needsDraft = wantsDraft && !!caps && !draftPath;
+  const [draftId, setDraftId] = useBrowserState<string | null>(
+    "onecat:dflash-job:" + p.runtime_id + ":" + p.model_path, null);
+  const [draftError, setDraftError] = useState("");
+  const { data: jobs, error: pollError } = useQuery<{ items: import("./api").Job[] }>(
+    needsDraft && draftId ? "/api/jobs" : null, 1000);
+  const job = jobs?.items.find(item => item.id === draftId);
+  const checked = useRef("");
   useEffect(() => {
-    if (caps?.draft_repo_id && specValue?.method === "dflash" && !specValue.model && drafts[0]?.repo_id === caps.draft_repo_id)
-      setSpec(JSON.stringify({ ...specValue, model: drafts[0].path }, null, 2));
-  }, [caps?.draft_repo_id, drafts[0]?.path, spec]);
+    if (!needsDraft || !draftRepo || !revision || draftId || draftError) return;
+    let active = true;
+    mutation<import("./api").Job>("/api/hub/download", {
+      repo_id: draftRepo, revision, runtime_id: p.runtime_id,
+    }).then(result => { if (active) setDraftId(result.id); })
+      .catch(error => { if (active) setDraftError(String(error.message || error)); });
+    return () => { active = false; };
+  }, [needsDraft, draftRepo, revision, draftId, draftError, p.runtime_id, setDraftId]);
+  useEffect(() => {
+    if (job?.state === "completed" && checked.current !== job.id) {
+      checked.current = job.id;
+      setCapRevision(value => value + 1);
+    }
+  }, [job?.id, job?.state]);
+  const draftFailed = !!draftError || job?.state === "failed" || job?.state === "cancelled"
+    || (!!jobs && !!draftId && !job) || (job?.state === "completed" && needsDraft);
+  function retryDraft() {
+    checked.current = "";
+    setDraftError("");
+    setDraftId(null);
+  }
   function set<K extends keyof Profile>(key: K, value: Profile[K]) {
     setP((prev) => ({ ...prev, [key]: value }));
   }
-  const canSave = !saving && !!p.name && !!p.model_path && !!p.runtime_id && !!p.gpu_uuids.length
-    && !(p.dtype === "bfloat16" && !bf16);
+  const canSave = !saving && !!caps && !needsDraft && !!p.name && !!p.model_path && !!p.runtime_id && !!p.gpu_uuids.length;
   const activeProfile = activeEngine?.profile_id === p.id ? activeEngine?.profile : undefined;
   const changed = activeProfile ? [
     [t("上下文", "Context"), `${activeProfile.max_model_len / 1024}K`, `${p.max_model_len / 1024}K`],
     [t("加速", "Acceleration"), accelerationLabel(activeProfile) || t("关闭", "Off"),
-      specValue?.method === "mtp" ? `MTP · ${specValue.num_speculative_tokens || 4}` : specValue?.method === "dflash" ? "DFlash2" : t("关闭", "Off")],
-    [t("工具调用", "Tools"), activeProfile.tool_calling ? t("开启", "On") : t("关闭", "Off"), p.tool_calling ? t("开启", "On") : t("关闭", "Off")],
-    [t("图片理解", "Vision"), activeProfile.vision_enabled ? t("开启", "On") : t("关闭", "Off"), p.vision_enabled ? t("开启", "On") : t("关闭", "Off")],
+      accelerationLabel({ speculative_config: specValue }) || t("关闭", "Off")],
   ].filter(([, before, after]) => before !== after) : [];
   async function saveProfile(launch: boolean) {
     setSaving(true);
     try {
       const profile = await mutation<Profile>("/api/profiles", {
-        ...p, speculative_config: spec.trim() ? JSON.parse(spec) : null,
-        extra_args: JSON.parse(extras), default_sampling: JSON.parse(sampling),
+        ...p, dtype: undefined, kv_cache_dtype: p.kv_cache_dtype || undefined, speculative_config: specOverride === null ? undefined : wantsDraft ? { ...specValue, model: draftPath } : spec.trim() ? JSON.parse(spec) : null,
+        extra_args: JSON.parse(extras), default_sampling: { ...p.default_sampling, max_tokens: null },
+        max_num_batched_tokens: undefined, attention_backend: undefined, quantization: undefined,
+        tool_calling: undefined, tool_parser: undefined, vision_enabled: undefined,
+        enable_prefix_caching: undefined, enforce_eager: undefined,
         hardware_profile: hardware.trim() ? JSON.parse(hardware) : null,
       });
       if (modelId && remember) await mutation(`/api/models/${modelId}/default-profile`, { profile_id: profile.id }, "PUT");
@@ -228,6 +315,7 @@ export function ProfileEditor({
   }
   return (
     <Modal
+      returnFocusRef={returnFocusRef}
       footer={<>
         {modelId && <label className="oc-default-profile"><Checkbox checked={remember} onCheckedChange={v => setRemember(v === true)} />{t("设为默认", "Set as default")}</label>}
         <div className="oc-actions">
@@ -246,16 +334,87 @@ export function ProfileEditor({
       title={modelId ? modelLabel(initial) : t("模型运行设置", "Model settings")}
     >
       {!!changed.length && <p className="oc-profile-change" role="status">{t("重启后应用", "Apply on restart")}: {changed.map(([label, before, after]) => `${label} ${before} → ${after}`).join(" · ")}</p>}
-      <div className="oc-form-grid">
+      <div ref={transitionRef} className="oc-form-grid">
         <NumberField
           label={t("最大上下文 tokens", "Context limit (tokens)")}
           value={p.max_model_len}
           onChange={(v) => set("max_model_len", v)}
           min={512}
         />
+        <div className="oc-field oc-concurrency-presets">
+          <span className="oc-field-label">{t("服务并发", "Concurrent requests")}</span>
+          <div className="oc-actions" role="group" aria-label={t("服务并发", "Concurrent requests")}>
+            {Array.from(new Set([1, 2, 4, 8, p.max_num_seqs])).sort((a, b) => a - b).map((value) => (
+              <Button key={value} type="button" size="sm" aria-pressed={p.max_num_seqs === value} variant={p.max_num_seqs === value ? "secondary" : "outline"} onClick={() => set("max_num_seqs", value)}>
+                <Check size={14} aria-hidden="true" />{value}
+              </Button>
+            ))}
+          </div>
+          <small className="oc-muted">{t("模型同时处理的请求数，重新加载后生效。", "Number of requests served at once. Takes effect on reload.")}</small>
+        </div>
+
+          <Field label={t("推理加速", "Acceleration")}>
+            <select
+              value={dynamic ? "entmtp" : String(specValue?.method || "off")}
+              onChange={e => chooseAcceleration(e.target.value)}
+            >
+              <option value="off">{t("关闭", "Off")}</option>
+              <option
+                value="mtp"
+                disabled={!caps?.accelerators.includes("mtp")}
+              >
+                {offersEntMtp ? `MTP${!dynamic && specValue?.method === "mtp" ? specValue.num_speculative_tokens : 5} · ${t("固定长度", "Fixed depth")}` : "MTP"}
+              </option>
+              {(offersEntMtp || dynamic) && <option value="entmtp" disabled={!offersEntMtp}>EntMTP · {t("动态长度", "Adaptive depth")}</option>}
+              <option
+                value="dflash"
+                disabled={!caps?.accelerators.includes("dflash")}
+              >
+                DFlash2
+              </option>
+            </select>
+          </Field>
+          {needsDraft && <div role="status">
+            <span>{draftRepo || "DFlash2"} · {job ? jobLabel(job.stage, t) : t("准备配套草稿", "Preparing draft")}</span>
+            {job && <DownloadProgressBar job={job} />}
+            <ErrorNotice error={draftError || pollError || job?.error || (!revision
+              ? t("此运行包没有匹配的草稿下载版本。", "No matching draft release is available.")
+              : job?.state === "completed" ? t("正在核对已下载的草稿版本。", "Checking the downloaded draft revision.") : "")} />
+            {draftFailed && revision && <Button type="button" variant="outline" onClick={retryDraft}>{t("重新下载草稿", "Retry draft download")}</Button>}
+          </div>}
+          {specValue?.method === "mtp" && (
+            <Field
+              label={t("MTP 预测 token 数", "MTP speculative tokens")}
+              hint={t(
+                dynamic ? "动态预测已开启，此处设置每轮最多预测的 token 数。" : "每轮预测的 token 数。",
+                dynamic ? "Adaptive depth is on. This is the maximum tokens drafted per round." : "Number of tokens drafted per round.",
+              )}
+            >
+              <Segments className="oc-segments" role="radiogroup" aria-label={t("MTP 预测 token 数", "MTP speculative tokens")}
+                onKeyDown={event => {
+                  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+                  event.preventDefault();
+                  const options = depthOptions;
+                  const current = options.indexOf(Number(specValue.num_speculative_tokens || 4));
+                  const next = (current + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + options.length) % options.length;
+                  chooseDepth(options[next]);
+                  event.currentTarget.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+                }}>
+                {depthOptions.map(count => (
+                  <button key={count} type="button" role="radio"
+                    aria-checked={Number(specValue.num_speculative_tokens || 4) === count}
+                    tabIndex={Number(specValue.num_speculative_tokens || 4) === count ? 0 : -1}
+                    onClick={() => chooseDepth(count)}>
+                    {count}
+                  </button>
+                ))}
+              </Segments>
+            </Field>
+          )}
       </div>
-      <details className="oc-profile-advanced" open={p.gpu_uuids.length === 0 ? true : undefined}>
-        <summary>{t("高级设置", "Advanced settings")}</summary>
+      <ErrorNotice error={capError} />
+      {capError && <Button variant="outline" onClick={() => setCapRevision(value => value + 1)}>{t("重新检查模型能力", "Retry capability check")}</Button>}
+      <AdvancedSettings needsGpu={p.gpu_uuids.length === 0}>
       <div className="oc-form-grid">
         {!modelId && <Field label={t("方案名称", "Configuration name")}>
           <Input value={p.name} onChange={(e) => set("name", e.target.value)} />
@@ -263,7 +422,12 @@ export function ProfileEditor({
         <Field label={t("运行环境", "Runtime")}>
           <select
             value={p.runtime_id}
-            onChange={(e) => set("runtime_id", e.target.value)}
+            onChange={(e) => {
+              const runtime_id = e.target.value;
+              setP(prev => ({ ...prev, runtime_id, kv_cache_dtype: "" }));
+              setSpec(null);
+              setCaps(undefined);
+            }}
           >
             <option value="">
               {t("选择匹配的运行环境", "Choose a compatible runtime")}
@@ -279,12 +443,15 @@ export function ProfileEditor({
           <select
             value={p.model_path}
             onChange={(e) => {
+              setSpec(null);
+              setCaps(undefined);
               const model = localModels?.items.find(
                 (m) => m.path === e.target.value,
               );
               setP((prev) => ({
                 ...prev,
-                model_path: e.target.value,
+                model_path: model?.path || "",
+                kv_cache_dtype: "",
                 catalog_id: model?.catalog_id || null,
               }));
             }}
@@ -351,182 +518,6 @@ export function ProfileEditor({
           </div>
         </Field>
       </div>
-      <ErrorNotice error={capError} />
-      {capError && <Button variant="outline" onClick={() => setCapRevision(value => value + 1)}>{t("重新检查模型能力", "Retry capability check")}</Button>}
-      <div className="oc-panel">
-        <h3>{t("生成与能力", "Generation and capabilities")}</h3>
-        <div className="oc-form-grid">
-          <Field
-            label={t("最大生成长度", "Maximum generated tokens")}
-            hint={t(
-              "留空时使用模型默认值，生成长度受剩余上下文限制。",
-              "Leave blank to use the model default within the remaining context.",
-            )}
-          >
-            <Input
-              type="number"
-              min={1}
-              value={
-                defaults.max_tokens == null ? "" : Number(defaults.max_tokens)
-              }
-              placeholder={t("自动", "Auto")}
-              onChange={(e) =>
-                samplingField(
-                  "max_tokens",
-                  e.target.value ? Number(e.target.value) : null,
-                )
-              }
-            />
-          </Field>
-          <Field label={t("推理加速", "Acceleration")}>
-            <select
-              value={String(specValue?.method || "off")}
-              onChange={(e) =>
-                setSpec(
-                  e.target.value === "off"
-                    ? ""
-                    : JSON.stringify(
-                        e.target.value === "dflash"
-                          ? {
-                              method: "dflash",
-                              kv_cache_dtype: "auto",
-                              draft_sample_method: "probabilistic",
-                              ...caps?.draft_speculative_config,
-                              model: drafts[0]?.path || "",
-                            }
-                          : { method: "mtp", num_speculative_tokens: 4 },
-                        null,
-                        2,
-                      ),
-                )
-              }
-            >
-              <option value="off">{t("关闭", "Off")}</option>
-              <option
-                value="mtp"
-                disabled={!caps?.accelerators.includes("mtp")}
-              >
-                MTP
-              </option>
-              <option
-                value="dflash"
-                disabled={!caps?.accelerators.includes("dflash")}
-              >
-                DFlash2
-              </option>
-            </select>
-          </Field>
-          {specValue?.method === "dflash" && (
-            <Field label={t("配套草稿模型", "Matched draft model")}>
-              <select
-                value={String(specValue.model || "")}
-                onChange={(e) =>
-                  setSpec(
-                    JSON.stringify(
-                      { ...specValue, model: e.target.value },
-                      null,
-                      2,
-                    ),
-                  )
-                }
-              >
-                <option value="">
-                  {t("先下载草稿模型", "Download the draft first")}
-                </option>
-                {specValue.model &&
-                !drafts.some((d) => d.path === specValue?.model) ? (
-                  <option value={String(specValue.model)}>
-                    {String(specValue.model)}
-                  </option>
-                ) : null}
-                {drafts.map((d) => (
-                  <option key={d.id} value={d.path}>
-                    {modelLabel(d.name)}
-                  </option>
-                ))}
-              </select>
-              {caps?.draft_repo_id && !drafts.length && (
-                <Action
-                  disabled={downloadingDraft}
-                  run={async () => {
-                    const job = await mutation<import("./api").Job>("/api/hub/download", {
-                      repo_id: caps.draft_repo_id,
-                      runtime_id: p.runtime_id,
-                    });
-                    setDraftJobId(job.id);
-                  }}
-                >
-                  {downloadingDraft ? t("草稿模型下载中…", "Downloading draft…") : t(
-                    "从 ModelScope 下载配套草稿",
-                    "Download matching draft from ModelScope",
-                  )}
-                </Action>
-              )}
-              {draftJob && <p className="oc-muted">{jobLabel(draftJob.stage, t)}{draftJob.progress ? ` · ${Math.floor(draftJob.progress)}%` : ""}</p>}
-              <ErrorNotice error={draftJob?.error} />
-            </Field>
-          )}
-          {specValue?.method === "mtp" && (
-            <Field
-              label={t("MTP 预测 token 数", "MTP speculative tokens")}
-              hint={t(
-                "默认 4。可按工作负载和草稿接受率调整。",
-                "The default is 4. Tune it for your workload and draft acceptance rate.",
-              )}
-            >
-              <Segments className="oc-segments" role="radiogroup" aria-label={t("MTP 预测 token 数", "MTP speculative tokens")}
-                onKeyDown={event => {
-                  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-                  event.preventDefault();
-                  const options = caps?.mtp_token_options || [1, 2, 3, 4];
-                  const current = options.indexOf(Number(specValue.num_speculative_tokens || 4));
-                  const next = (current + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + options.length) % options.length;
-                  setSpec(JSON.stringify({ ...specValue, num_speculative_tokens: options[next] }, null, 2));
-                  event.currentTarget.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
-                }}>
-                {(caps?.mtp_token_options || [1, 2, 3, 4]).map(count => (
-                  <button key={count} type="button" role="radio"
-                    aria-checked={Number(specValue.num_speculative_tokens || 4) === count}
-                    tabIndex={Number(specValue.num_speculative_tokens || 4) === count ? 0 : -1}
-                    onClick={() => setSpec(JSON.stringify({ ...specValue, num_speculative_tokens: count }, null, 2))}>
-                    {count}
-                  </button>
-                ))}
-              </Segments>
-            </Field>
-          )}
-        </div>
-        <div className="oc-toggle-row">
-          <label title={!caps?.tool_parser ? caps?.tool_reason : undefined}>
-            <Switch
-              checked={!!p.tool_calling}
-              disabled={!caps?.tool_parser && !p.tool_calling}
-              onCheckedChange={(v) =>
-                setP((prev) => ({
-                  ...prev,
-                  tool_calling: v,
-                  tool_parser: caps?.tool_parser || null,
-                }))
-              }
-            />
-            {t("工具调用（API）", "Tool calling (API)")}
-          </label>
-          <label title={!caps?.vision ? caps?.vision_reason : undefined}>
-            <Switch
-              checked={!!p.vision_enabled}
-              disabled={!caps?.vision && !p.vision_enabled}
-              onCheckedChange={(v) =>
-                setP((prev) => ({
-                  ...prev,
-                  vision_enabled: v,
-                }))
-              }
-            />
-            {t("图片理解", "Image understanding")}
-          </label>
-        </div>
-      </div>
-
         <div className="oc-form-grid">
         <Field label={t("API 模型名称", "API model name")}>
           <Input
@@ -534,90 +525,19 @@ export function ProfileEditor({
             onChange={(e) => set("served_model_name", e.target.value)}
           />
         </Field>
-        <NumberField
-          label={t("每批 token 上限", "Batch token limit")}
-          value={p.max_num_batched_tokens}
-          onChange={(v) => set("max_num_batched_tokens", v)}
-          min={256}
-        />
-        <NumberField
-          label={t("最大并发序列", "Maximum concurrent sequences")}
-          value={p.max_num_seqs}
-          onChange={(v) => set("max_num_seqs", v)}
-          min={1}
-        />
-        <div className="oc-field oc-concurrency-presets">
-          <span className="oc-field-label">{t("服务并发预设", "Service concurrency presets")}</span>
-          <div className="oc-actions">
-            {[1, 2, 4, 8].map((value) => (
-              <Button key={value} type="button" size="sm" variant={p.max_num_seqs === value ? "secondary" : "outline"} onClick={() => set("max_num_seqs", value)}>
-                {value}
-              </Button>
-            ))}
-          </div>
-          <small className="oc-muted">{t("限制 vLLM 服务同时处理的序列数。PI 任务并发由 task.maxConcurrency 设置。保存后重新加载模型。", "Limits concurrent sequences for the vLLM service. PI task concurrency uses task.maxConcurrency. Save the profile and reload the model.")}</small>
-        </div>
-
-        <Field label={t("计算精度", "Compute precision")}>
-          <select
-            value={p.dtype}
-            onChange={(e) => set("dtype", e.target.value)}
-          >
-            <option value="half">FP16</option>
-            <option value="bfloat16" disabled={!bf16}>
-              BF16
-              {!bf16
-                ? t(" · 硬件不支持", " · unavailable on selected GPUs")
-                : ""}
-            </option>
-            <option value="auto">Auto</option>
-          </select>
-        </Field>
         <Field label="KV Cache">
           <select
-            value={p.kv_cache_dtype}
+            value={p.kv_cache_dtype || caps?.default_kv_cache_dtype || "auto"}
             onChange={(e) => set("kv_cache_dtype", e.target.value)}
           >
             <option value="auto">Auto</option>
+            {(caps?.int8_kv_available || p.kv_cache_dtype === "int8_per_token_head") && <option value="int8_per_token_head">INT8 · Per Token/Head</option>}
+            <option value="float16">FP16</option>
             <option value="fp8_e5m2">FP8 E5M2</option>
             <option value="fp8_e4m3">FP8 E4M3</option>
           </select>
         </Field>
-          <Field label={t("Attention 后端", "Attention backend")}>
-            <Input
-              value={p.attention_backend || ""}
-              onChange={(e) => set("attention_backend", e.target.value || null)}
-              placeholder="Auto / FLASH_ATTN_V100"
-            />
-          </Field>
-          <Field
-            label={t(
-              "量化后端",
-              "Quantization backend",
-            )}
-          >
-            <Input
-              value={p.quantization || ""}
-              onChange={(e) => set("quantization", e.target.value || null)}
-            />
-          </Field>
         </div>
-      <div className="oc-toggle-row">
-        <label>
-          <Switch
-            checked={p.enable_prefix_caching}
-            onCheckedChange={(v) => set("enable_prefix_caching", v)}
-          />
-          {t("前缀缓存", "Prefix cache")}
-        </label>
-        <label>
-          <Switch
-            checked={!p.enforce_eager}
-            onCheckedChange={(v) => set("enforce_eager", !v)}
-          />
-          {t("CUDA Graph / 编译", "CUDA Graph / compilation")}
-        </label>
-      </div>
         <Field
           label={t(
             "推测解码配置（JSON）",
@@ -649,15 +569,6 @@ export function ProfileEditor({
           />
         </Field>
         <Field
-          label={t("默认对话参数（JSON）", "Default chat sampling (JSON)")}
-        >
-          <Textarea
-            value={sampling}
-            onChange={(e) => setSampling(e.target.value)}
-            rows={4}
-          />
-        </Field>
-        <Field
           label={t(
             "启动硬件设置（JSON）",
             "Launch hardware settings (JSON)",
@@ -679,7 +590,7 @@ export function ProfileEditor({
             if (selected) onChooseProfile(selected);
           }}>{savedProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>
         </Field>}
-      </details>
+      </AdvancedSettings>
     </Modal>
   );
 }

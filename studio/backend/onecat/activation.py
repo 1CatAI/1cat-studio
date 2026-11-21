@@ -22,7 +22,7 @@ V100 = [7, 0]
 
 def detected_gpus() -> list[dict]:
     """Every GPU the driver reports, in PCI order, with the facts a binding needs."""
-    fields = "uuid,compute_cap,name"
+    fields = "uuid,compute_cap,name,memory.total,index"
     result = subprocess.run(
         [SMI, "--query-gpu=" + fields, "--format=csv,noheader,nounits"],
         capture_output=True,
@@ -41,7 +41,9 @@ def detected_gpus() -> list[dict]:
             capability = [int(part) for part in values[1].split(".")]
         except ValueError:
             capability = None
-        devices.append({"uuid": values[0], "compute_capability": capability, "name": values[2]})
+        devices.append({"uuid": values[0], "compute_capability": capability, "name": values[2],
+                        "memory_total_mib": int(values[3]) if len(values) > 3 and values[3].isdigit() else None,
+                        "index": int(values[4]) if len(values) > 4 and values[4].isdigit() else len(devices)})
     return devices
 
 
@@ -81,11 +83,16 @@ def rebind_profiles(*, apply: bool = True) -> dict:
     """Re-bind presets whose GPUs are gone. Idempotent; returns a report."""
     from . import db
 
+    from . import gpu_setup
+    from .portable_gpu import remember_devices, replacement, apply_binding
+
     devices = detected_gpus()
+    if apply:
+        remember_devices(devices)
     present = {d["uuid"]: d for d in devices}
     allowed, binding = authorized_uuids()
     if allowed is None:
-        pool = list(devices)
+        pool = list(devices) if gpu_setup.stored_binding() is None else []
         authorized = False
     else:
         pool = [present[uuid] for uuid in allowed if uuid in present]
@@ -121,7 +128,17 @@ def rebind_profiles(*, apply: bool = True) -> dict:
             continue
         wanted = int(profile.get("tensor_parallel_size") or 0) or len(pool)
         wanted = max(1, wanted)
-        chosen, notes = choose(pool, profile, wanted)
+        if missing:
+            uuids = replacement(profile, devices, pool)
+            chosen = [present[u] for u in uuids or []]
+            notes = []
+        else:
+            chosen, notes = choose(pool, profile, wanted)
+        if len(chosen) != wanted:
+            entry["action"] = "blocked"
+            report["warnings"].append("%s: no compatible %d-GPU binding" % (profile.get("name"), wanted))
+            report["profiles"].append(entry)
+            continue
         entry.update(
             {
                 "action": "rebound",
@@ -136,9 +153,7 @@ def rebind_profiles(*, apply: bool = True) -> dict:
             report["warnings"].extend("%s: %s" % (profile.get("name"), note) for note in notes)
         rebound += 1
         if apply:
-            profile["gpu_uuids"] = [d["uuid"] for d in chosen]
-            profile["tensor_parallel_size"] = len(chosen)
-            db.put("profiles", profile["id"], profile)
+            apply_binding(profile, [d["uuid"] for d in chosen])
         report["profiles"].append(entry)
 
     stale = [

@@ -107,7 +107,7 @@ python3.12 -m venv .venv
 npm ci --prefix studio/frontend
 npm run build:onecat --prefix studio/frontend
 
-PYTHONPATH=studio/backend .venv/bin/python -m onecat --host 127.0.0.1 --port 8888
+PYTHONPATH=studio/backend .venv/bin/python -m onecat --port 8888
 ```
 
 源码依赖包含一键安装推理环境所需的 `uv`，可以直接用 `.venv/bin/python` 启动。已有源码部署可重跑上面的 `pip install` 命令并重启 Studio，再重试安装。

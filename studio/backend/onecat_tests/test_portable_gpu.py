@@ -11,6 +11,10 @@ NEW = [f"GPU-{i:08x}-1111-1111-1111-111111111111" for i in range(4)]
 
 @pytest.fixture
 def devices(monkeypatch):
+    from onecat import activation, gpu_setup
+
+    monkeypatch.setattr(activation, "authorized_uuids", lambda: (None, None))
+    monkeypatch.setattr(gpu_setup, "stored_binding", lambda: None)
     value = [
         {
             "uuid": uuid,
@@ -164,3 +168,52 @@ def test_default_model_load_recovers_even_when_prestart_missed(
     assert response.status_code == 200, response.text
     assert response.json()["profile_id"] == profile["id"]
     assert db.get("profiles", "portable")["gpu_uuids"] == NEW
+
+@pytest.mark.parametrize("entry", ["boot", "load", "install"])
+def test_clone_of_unmarked_two_gpu_profile(devices, profile, monkeypatch, entry):
+    from onecat import activation
+
+    source = [{**d, "uuid": old} for d, old in zip(devices, OLD)]
+    portable_gpu.remember_devices(source)
+    profile.update(portable_gpu_binding=False, gpu_uuids=OLD[1::-1], tensor_parallel_size=2)
+    db.put("profiles", profile["id"], profile)
+    if entry == "boot":
+        portable_gpu.rebind()
+    elif entry == "install":
+        monkeypatch.setattr(activation, "detected_gpus", lambda: devices)
+        activation.rebind_profiles()
+    else:
+        catalog.validate_features(profile)
+    saved = db.get("profiles", profile["id"])
+    assert saved["gpu_uuids"] == NEW[1::-1]
+    assert saved["tensor_parallel_size"] == 2
+
+
+def test_partial_clone_reserves_present_cards_and_respects_scope(devices, profile, monkeypatch):
+    from onecat import activation
+
+    portable_gpu.remember_devices([{**d, "uuid": u} for d, u in zip(devices, OLD)])
+    profile.update(portable_gpu_binding=False, gpu_uuids=[OLD[0], NEW[0]], tensor_parallel_size=2)
+    monkeypatch.setattr(activation, "authorized_uuids", lambda: ([NEW[0], NEW[2]], None))
+    assert portable_gpu.rebind_profile(profile)
+    assert profile["gpu_uuids"] == [NEW[2], NEW[0]]
+
+
+@pytest.mark.parametrize("problem", ["small", "wrong_arch", "too_few", "old_admin_scope"])
+def test_clone_cannot_replace_with_incompatible_cards(devices, profile, monkeypatch, problem):
+    from onecat import activation
+    portable_gpu.remember_devices([{**d, "uuid": old, "memory_total_mib": 32768}
+                                   for d, old in zip(devices, OLD)])
+    target = [{**d, "memory_total_mib": 32768} for d in devices]
+    if problem == "small":
+        target[0]["memory_total_mib"] = 16384
+    elif problem == "wrong_arch":
+        target[0]["compute_capability"] = [6, 1]
+    elif problem == "too_few":
+        target.pop()
+    else:
+        monkeypatch.setattr(activation, "authorized_uuids", lambda: (OLD, None))
+    monkeypatch.setattr(gpu, "snapshot", lambda: {"gpus": target})
+    portable_gpu.rebind()
+    assert not portable_gpu.rebind_profile(profile)
+    assert db.get("profiles", profile["id"])["gpu_uuids"] == OLD

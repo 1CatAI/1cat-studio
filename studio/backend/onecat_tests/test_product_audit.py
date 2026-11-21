@@ -44,7 +44,8 @@ def test_lan_address_waits_for_listener_restart(client, monkeypatch):
     ]
 
 
-def test_autostart_profile_can_be_selected_and_cleared(client):
+def test_autostart_profile_can_be_selected_and_cleared(client, monkeypatch):
+    monkeypatch.setenv("ONECAT_BOOT_MODEL_RESTORE", "1")
     db.put('profiles', 'boot-profile', {'id': 'boot-profile'})
     saved = client.put('/api/settings', json={'autostart_profile': 'boot-profile'}).json()
     assert saved['autostart_profile'] == 'boot-profile'
@@ -154,3 +155,22 @@ def test_legacy_power_modes_require_authorization_and_recorded_clock_policy(clie
     assert power_modes.options(['gpu'])['active'] == 'performance'
     db.put('hardware', 'gpu', {'graphics_clock_mhz': 1530, 'reset_clocks': False})
     assert power_modes.options(['gpu'])['active'] is None
+
+
+@pytest.mark.asyncio
+async def test_default_lan_listener_exposes_authenticated_inference_only():
+    import httpx
+    from onecat import auth
+    from onecat.app import create_app
+
+    app = create_app()
+    app.state.lan_api_only = True
+    key = auth.issue('lan-test', 'inference')
+    for address, expected in [('192.168.1.2', 200), ('203.0.113.1', 403)]:
+        transport = httpx.ASGITransport(app=app, client=(address, 4321))
+        async with httpx.AsyncClient(transport=transport, base_url='http://studio') as remote:
+            assert (await remote.get('/v1/models')).status_code == (401 if expected == 200 else 403)
+            remote.headers.update({'Authorization': 'Bearer ' + key, 'X-Forwarded-For': '127.0.0.1'})
+            assert (await remote.get('/v1/models')).status_code == expected
+            for path in ('/', '/api/health', '/internal/agent/v1/models'):
+                assert (await remote.get(path)).status_code == 403

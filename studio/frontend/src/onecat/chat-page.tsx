@@ -1,10 +1,12 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, usePresence } from "motion/react";
 import { Phase, MOTION, useInterfaceMotion } from "./motion";
 import { CopyButton } from "./common";
 import { timingSource } from "./request-history";
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import {
   useEffect,
+  useLayoutEffect,
+  type ReactNode,
   useRef,
   useState,
   useCallback,
@@ -18,19 +20,14 @@ import {
   Square,
   RotateCcw,
   Pencil,
-  FileDown,
-  SlidersHorizontal,
   ChevronDown,
   LoaderCircle,
   ArrowDown,
-  MoreHorizontal,
   Trash2,
-  Bot,
 } from "lucide-react";
 import { Button } from "@/onecat/ui";
 import { Textarea } from "@/onecat/ui";
 import { Input } from "@/onecat/ui";
-import { Switch } from "@/onecat/ui";
 import { TooltipIconButton } from "@/onecat/ui";
 import { latestRun, observeRun, type ChatRun } from "./chat-run";
 import { ThinkingToggle, ModelPicker, thinkingEffort, type ThinkingSupport, type ThinkingEffort } from "./model-controls";
@@ -50,20 +47,54 @@ import {
 } from "./api";
 import {
   Field,
-  NumberField,
   Modal,
   ErrorNotice,
   useText,
   format,
-  saveFile,
 } from "./common";
 import { Markdown } from "./markdown";
 import { PreviewBoundary } from "./preview-boundary";
 import { streamPaint } from "./stream-paint";
+import { ChatToolbar } from "./chat-toolbar";
+import { ChatPreviewSplit, previewSlide } from "./chat-preview-split";
+import { ChatComposerForm } from "./chat-composer-form";
 import { MessageBoundary } from "./message-boundary";
 import { artifacts, previewArtifact } from "./artifacts";
 // The panel shell is small; its compiler/runtime is still fetched only on demand.
 import { PreviewPanel } from "./preview-panel";
+
+// Keep the live frame mounted until it has travelled off screen, including on Escape.
+function PreviewDock({ children, enabled }: { children: ReactNode; enabled: boolean }) {
+  const [present, remove] = usePresence();
+  const dock = useRef<HTMLDivElement>(null);
+  const flight = useRef<Animation | null>(null);
+  const onExit = useRef(remove);
+  useLayoutEffect(() => { onExit.current = remove; }, [remove]);
+  useLayoutEffect(() => {
+    const pane = dock.current?.querySelector<HTMLElement>(".oc-preview-panel");
+    if (!pane || !enabled) {
+      if (!present) onExit.current?.();
+      return;
+    }
+    const stacked = getComputedStyle(dock.current!.parentElement!).flexDirection === "column";
+    const outside = stacked ? "0 100%" : "100% 0";
+    const from = flight.current ? getComputedStyle(pane).translate : present ? outside : "0 0";
+    flight.current?.cancel();
+    const animation = pane.animate(
+      [{ translate: from }, { translate: present ? "0 0" : outside }],
+      { ...previewSlide, fill: "both" },
+    );
+    flight.current = animation;
+    animation.onfinish = () => {
+      if (!present) onExit.current?.();
+      else animation.cancel();
+      flight.current = null;
+    };
+    return () => { animation.onfinish = null; };
+  }, [present, enabled]);
+  useLayoutEffect(() => () => flight.current?.cancel(), []);
+  return <div ref={dock} className="oc-chat-preview-dock">{children}</div>;
+}
 
 function textOf(message: Message) {
   return message.content
@@ -83,8 +114,10 @@ export function ChatPage() {
   const navigate = useNavigate();
   const { enabled: uiMotion } = useInterfaceMotion();
   const arrived = useRef(new Set<string>());
-  const search = useSearch({ strict: false }) as { thread?: string };
+  const search = useSearch({ strict: false }) as { thread?: string; draft?: string };
   const threadId = search.thread;
+  const scope = threadId || (search.draft ? "draft:" + search.draft : undefined);
+  const composerInput = useRef<HTMLTextAreaElement>(null);
   const { data: loaded, error: loadError } = useQuery<{
     thread: Thread;
     messages: Message[];
@@ -94,52 +127,48 @@ export function ChatPage() {
   const [activeRun, setActiveRun] = useState<ChatRun>();
   const [reconnecting, setReconnecting] = useState(false);
   const { data: engine, error: engineError } = useQuery<Engine>("/api/inference/status", 3000);
-  type Sampling = { temperature: number; top_p: number; top_k: number; min_p: number; presence_penalty: number; repetition_penalty: number };
-  const { data: options } = useQuery<{ thinking: ThinkingSupport; sampling?: { thinking: Sampling; instruct: Sampling } | null }>("/api/inference/options?profile=" + (engine?.profile_id || ""));
+  const { data: options } = useQuery<{ thinking: ThinkingSupport }>("/api/inference/options?profile=" + (engine?.profile_id || ""));
   const [hydratedThread, setHydratedThread] = useState<string>();
-  const [input, setInput] = useBrowserState("onecat:chat-draft:" + (threadId || "new"), "");
+  const [input, setInput] = useBrowserState("onecat:chat-draft:" + (scope || "new"), "");
   const [messages, setMessages] = useState<Message[]>([]),
     [busy, setBusy] = useState(false),
     [stopping, setStopping] = useState(false),
     [error, setError] = useState(""),
     [config, setConfig] = useState(false);
-  type Settings = { system_prompt: string; temperature: number; top_p: number; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort; sampling_mode?: "auto" | "custom" };
-  const [settingsDraft, setSettingsDraft] = useBrowserState<Settings | null>("onecat:chat-settings:" + (threadId || "new"), null);
-  const settings = settingsDraft || { system_prompt: "", temperature: 0.7, top_p: 0.9, max_tokens: null, thinking: false,
+  // Show the pending turn without committing history or discarding its recoverable draft.
+  const [outgoing, setOutgoing] = useState<{
+    scope?: string; messages: Message[]; fromComposer: boolean;
+  }>();
+  const sending = outgoing?.scope === scope ? outgoing : undefined;
+  const visibleMessages = sending?.messages ?? messages;
+  const awaitingCommit = !!sending;
+  type Settings = { system_prompt: string; max_tokens: number | null; thinking: boolean; thinking_effort?: ThinkingEffort };
+  const [settingsDraft, setSettingsDraft] = useBrowserState<Settings | null>("onecat:chat-settings:" + (scope || "new"), null);
+  const settings = settingsDraft || { system_prompt: "", max_tokens: null, thinking: false,
     ...(threadId && loaded?.thread.id === threadId ? loaded.thread.settings : engine?.profile?.default_sampling) } as Settings;
   const { system_prompt: systemPrompt, max_tokens: maxTokens, thinking } = settings;
-  // Unless the user set their own values, use the model card's sampling for the selected mode.
-  const recommended = options?.sampling ? options.sampling[options?.thinking.supported && thinking ? "thinking" : "instruct"] : null;
-  const customSampling = settings.sampling_mode === "custom" || !recommended;
-  const temperature = customSampling ? settings.temperature : recommended.temperature;
-  const topP = customSampling ? settings.top_p : recommended.top_p;
-  const extraSampling = customSampling || !recommended ? {} : { top_k: recommended.top_k, min_p: recommended.min_p,
-    presence_penalty: recommended.presence_penalty, repetition_penalty: recommended.repetition_penalty };
   const setSystemPrompt = (value: string) => setSettingsDraft({ ...settings, system_prompt: value });
-  const setTemperature = (value: number) => setSettingsDraft({ ...settings, temperature: value, top_p: topP, sampling_mode: "custom" });
-  const setTopP = (value: number) => setSettingsDraft({ ...settings, temperature, top_p: value, sampling_mode: "custom" });
-  const resetSampling = () => setSettingsDraft({ ...settings, sampling_mode: "auto" });
   const setMaxTokens = (value: number | null) => setSettingsDraft({ ...settings, max_tokens: value });
   const effort = thinkingEffort(options?.thinking, settings.thinking_effort);
   const setThinking = (value: boolean, level?: ThinkingEffort) => setSettingsDraft({ ...settings, thinking: value, thinking_effort: level });
-  const [submission, setSubmission] = useBrowserState<{ identity: string; thread: string; assistant: string; user: string; createdAt: number } | null>("onecat:chat-submission:" + (threadId || "new"), null);
-  const scopeRef = useRef(threadId); scopeRef.current = threadId;
+  const [submission, setSubmission] = useBrowserState<{ identity: string; thread: string; assistant: string; user: string; createdAt: number } | null>("onecat:chat-submission:" + (scope || "new"), null);
+  const scopeRef = useRef(scope); scopeRef.current = scope;
   const [preview, setPreview] = useState<{
     messageId: string;
     index: number;
   } | null>(null);
   useEffect(() => {
     setPreview(null);
-  }, [threadId]);
+  }, [scope]);
   const [attachments, setAttachments] = useBrowserState<
     { id: string; name: string }[]
-  >("onecat:chat-images:" + (threadId || "new"), []);
+  >("onecat:chat-images:" + (scope || "new"), []);
   const [uploading, setUploading] = useState(false);
   const uploadController = useRef<AbortController | null>(null);
   useEffect(() => {
     setUploading(false);
     return () => { uploadController.current?.abort(); uploadController.current = null; };
-  }, [threadId]);
+  }, [scope]);
   const fileInput = useRef<HTMLInputElement>(null);
   const imagesEnabled = !!engine?.profile?.vision_enabled;
   async function uploadImages(files: File[]) {
@@ -197,7 +226,7 @@ export function ChatPage() {
     follow = useRef(true),
     lastScrollTop = useRef(0),
     touchY = useRef<number | undefined>(undefined),
-    lastThread = useRef<string | undefined>(threadId);
+    lastScope = useRef(scope);
   const [showBottom, setShowBottom] = useState(false),
     [edit, setEdit] = useState<{ index: number; text: string } | null>(null);
   const pauseFollowing = useCallback(() => {
@@ -213,7 +242,7 @@ export function ChatPage() {
     }
   }, []);
   useEffect(() => {
-    if (lastThread.current !== threadId) {
+    if (lastScope.current !== scope) {
       controller.current?.abort();
       controller.current = null;
       pendingGeneration.current = null;
@@ -222,15 +251,17 @@ export function ChatPage() {
       running.current = false;
       setBusy(false);
       setMessages([]);
+      setOutgoing(undefined);
+      arrived.current.clear();
       setHydratedThread(undefined);
       setError("");
       setActiveRun(undefined);
       setEdit(null);
       follow.current = true;
       setShowBottom(false);
-      lastThread.current = threadId;
+      lastScope.current = scope;
     }
-  }, [threadId]);
+  }, [scope]);
   useEffect(() => {
     if (loaded && loaded.thread.id === threadId) {
       setHydratedThread(threadId);
@@ -248,7 +279,7 @@ export function ChatPage() {
     activeRun, runs?.items.find(run => run.thread_id === threadId),
     loaded?.thread.id === threadId ? loaded?.generation : undefined);
   useEffect(() => {
-    if (!threadId || !trackedRun) return;
+    if (!threadId || !trackedRun || awaitingCommit) return;
     const observer = new AbortController();
     runObserver.current = observer;
     running.current = trackedRun.state === "running";
@@ -287,29 +318,21 @@ export function ChatPage() {
       observer.abort(); painter.flush();
       if (runObserver.current === observer) runObserver.current = null;
     };
-  }, [threadId, trackedRun?.id]);
+  }, [threadId, trackedRun?.id, awaitingCommit]);
   useEffect(() => {
     const viewport = view.current,
       content = contentView.current;
     if (!viewport || !content) return;
-    let frame: number | undefined;
-    function schedule() {
-      if (!follow.current || frame !== undefined) return;
-      frame = requestAnimationFrame(() => {
-        frame = undefined;
-        if (follow.current) viewport!.scrollTop = viewport!.scrollHeight;
-      });
-    }
-    // Streamdown and the highlighter commit after the message state update.
-    // Follow the final layout, including images, preview resizing and font loads.
-    const observer = new ResizeObserver(schedule);
+    const followOutput = () => {
+      if (follow.current) viewport.scrollTop = viewport.scrollHeight;
+    };
+    // ResizeObserver sees the final Markdown/highlighter layout before paint.
+    // Deferring the scroll to another frame exposes one frame of the growing box.
+    const observer = new ResizeObserver(followOutput);
     observer.observe(content);
     observer.observe(viewport);
-    schedule();
-    return () => {
-      observer.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
-    };
+    followOutput();
+    return () => observer.disconnect();
   }, []);
   const [manageOpen, setManageOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -343,31 +366,41 @@ export function ChatPage() {
     runObserver.current?.abort();
     running.current = true; setBusy(true); setError(""); follow.current = true; setShowBottom(false);
     const abort = new AbortController(); controller.current = abort;
-    const originalScope = threadId;
+    const originalScope = scope;
     let accepted = false;
     try {
-      const requestSettings = { system_prompt: systemPrompt, temperature, top_p: topP, sampling_mode: customSampling ? "custom" : "auto",
+      const requestSettings = { system_prompt: systemPrompt,
         max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual", thinking: !!options?.thinking.supported && thinking, thinking_effort: effort };
       const identity = JSON.stringify({ base, userText, images, settings: requestSettings, model: engine?.profile_id });
-      let pending = submission?.identity === identity ? submission : null;
-      if (!pending) {
-        const id = threadId || (await mutation<Thread>("/api/chat/threads", {
-          title: (userText || t("新对话", "New chat")).slice(0, 60), modelId: engine!.profile!.served_model_name,
-        })).id;
-        pending = { identity, thread: id, assistant: newMessageId(), user: newMessageId(), createdAt: Date.now() };
-        setSubmission(pending);
-      }
+      const retry = submission?.identity === identity ? submission : null;
+      const user = retry?.user ?? newMessageId();
+      const assistant = retry?.assistant ?? newMessageId();
+      const createdAt = retry?.createdAt ?? Date.now();
+      const userMessage: Message = {
+        id: user, threadId: retry?.thread ?? threadId ?? "", parentId: base.at(-1)?.id ?? null, role: "user",
+        content: [{ type: "text", text: userText ?? "" }, ...images.map(image => ({ type: "image", attachment_id: image.id, name: image.name }))], createdAt,
+      };
+      const fromComposer = userText !== undefined && base === messages;
+      const submitted = userText === undefined ? base : [...base, userMessage];
+      const placeholder: Message = {
+        id: assistant, threadId: userMessage.threadId, parentId: submitted.at(-1)?.id ?? null,
+        role: "assistant", content: [], createdAt,
+      };
+      if (userText !== undefined) arrived.current.add(user);
+      arrived.current.add(assistant);
+      setOutgoing({ scope, messages: [...submitted, placeholder], fromComposer });
+
+      const id = retry?.thread ?? threadId ?? (await mutation<Thread>("/api/chat/threads", {
+        title: "", modelId: engine!.profile!.served_model_name,
+      })).id;
       if (abort.signal.aborted || scopeRef.current !== originalScope) return;
-      const id = pending.thread;
-      const current = userText === undefined ? base : [...base, {
-        id: pending.user, threadId: id, parentId: base.at(-1)?.id || null, role: "user" as const,
-        content: [{ type: "text" as const, text: userText }, ...images.map(image => ({ type: "image" as const, attachment_id: image.id, name: image.name }))], createdAt: pending.createdAt,
-      }];
+      if (!retry) setSubmission({ identity, thread: id, assistant, user, createdAt });
+      const current = userText === undefined ? base : [...base, { ...userMessage, threadId: id }];
       const requestMessages = current.map(m => ({ role: m.role, content: m.content.filter(part => part.type !== "reasoning") }));
       if (systemPrompt) requestMessages.unshift({ role: "system", content: [{ type: "text", text: systemPrompt }] });
       const result = mutation<ChatRun>(`/api/chat/threads/${id}/generate`, {
-        message_id: pending.assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
-        request: { model: engine!.profile!.served_model_name, messages: requestMessages, temperature, top_p: topP, ...extraSampling,
+        message_id: assistant, messages: current, expected_message_ids: messages.map(m => m.id), settings: requestSettings,
+        request: { model: engine!.profile!.served_model_name, messages: requestMessages,
           max_tokens: outputLimit, max_tokens_mode: outputLimit == null ? "auto" : "manual",
           chat_template_kwargs: options?.thinking.supported ? { enable_thinking: thinking, ...(thinking && effort ? { reasoning_effort: effort } : {}) } : {} },
       });
@@ -379,28 +412,35 @@ export function ChatPage() {
       // regeneration leaves the original history untouched on the server.
       const wait = new AbortController();
       const aborted = () => wait.abort(); abort.signal.addEventListener("abort", aborted, { once: true });
+      let confirmed: Message | undefined;
+      let confirmedRun = run;
       try {
-        await observeRun(id, run.id, wait.signal, (_message, update) => {
-          if (update.pending_commit === false) wait.abort("accepted");
-          else if (update.state !== "running") wait.abort(update.state === "cancelled" ? "cancelled" : update.error || "Generation was not accepted");
+        await observeRun(id, run.id, wait.signal, (message, update) => {
+          if (update.pending_commit === false) {
+            confirmed = message;
+            confirmedRun = update;
+            wait.abort("accepted");
+          } else if (update.state !== "running") wait.abort(update.state === "cancelled" ? "cancelled" : update.error || "Generation was not accepted");
         }, () => {});
       } finally { abort.signal.removeEventListener("abort", aborted); }
       if (abort.signal.aborted || scopeRef.current !== originalScope) return;
       if (wait.signal.reason === "cancelled") { setSubmission(null); return; }
       if (wait.signal.reason !== "accepted") { setSubmission(null); throw new Error(String(wait.signal.reason || "Generation was not accepted")); }
       accepted = true;
-      if (userText !== undefined) { setInput(value => value.trim() === userText ? "" : value); setAttachments([]); }
+      if (fromComposer) { setInput(value => value.trim() === userText ? "" : value); setAttachments([]); }
       setSubmission(null);
-      arrived.current.add(pending.user);
-      lastThread.current = id; setHydratedThread(id); setMessages(current);
-      setActiveRun(run);
+      lastScope.current = id; setHydratedThread(id);
+      setMessages(confirmed ? [...current, confirmed] : current);
+      setActiveRun(confirmedRun);
+      setOutgoing(undefined);
       if (!threadId) await navigate({ to: "/chat", search: { thread: id } });
-      setPreview(selected => selected && !base.some(m => m.id === selected.messageId) ? { ...selected, messageId: pending!.assistant } : selected);
+      setPreview(selected => selected && !base.some(m => m.id === selected.messageId) ? { ...selected, messageId: assistant } : selected);
       refreshData();
     } catch (error) {
       if (!abort.signal.aborted && scopeRef.current === originalScope) setError((error as Error).message);
     } finally {
       if (controller.current === abort) {
+        setOutgoing(undefined);
         controller.current = null;
         pendingGeneration.current = null;
         if (!accepted && stopAttempt.current?.controller !== abort) { running.current = false; setBusy(false); }
@@ -443,61 +483,38 @@ export function ChatPage() {
       if (stopAttempt.current === attempt) { stopAttempt.current = null; setStopping(false); }
     }
   }
+  async function startChat() {
+    if (threadId || sending || input || attachments.length) {
+      await navigate({ to: "/chat", search: { draft: newMessageId() } });
+    }
+    composerInput.current?.focus({ preventScroll: true });
+  }
   async function submit() {
     if (!uploading && (input.trim() || attachments.length))
       await generate(messages, input.trim());
   }
   const title =
-    threadId && loaded?.thread.id === threadId
-      ? loaded.thread.title
-      : t("新对话", "New chat");
+    threadId && loaded?.thread.id === threadId ? loaded.thread.title : "";
+  const waitingForTitle = threadId && loaded?.thread.id === threadId && !title &&
+    messages.some(message => message.threadId === threadId && message.metadata?.generation_state === "completed");
+  useEffect(() => {
+    if (!waitingForTitle || !threadId) return;
+    const abort = new AbortController();
+    void api<{ title: string }>(`/api/chat/threads/${threadId}/title`, { signal: abort.signal })
+      .then(result => { if (!abort.signal.aborted && result.title) refreshData(); })
+      .catch(() => {});
+    return () => abort.abort();
+  }, [waitingForTitle, threadId]);
   const streamingMessage =
-    messages.at(-1)?.role === "assistant" ? messages.at(-1) : undefined;
+    !sending && messages.at(-1)?.role === "assistant" ? messages.at(-1) : undefined;
   return (
-    <div className="oc-chat-workspace">
-      <div className={"oc-chat-page" + (!messages.length ? " oc-chat-empty" : "")}>
-        <div className="oc-chat-toolbar">
-          <span>{title}</span>
-          {reconnecting && <span role="status" className="oc-muted">{t("正在重新连接，后台继续生成", "Reconnecting. Generation continues in the background.")}</span>}
-          <div>
-            {threadId && <TooltipIconButton tooltip={t("以此创建 Agent 任务", "Create an Agent task from this chat")}
-              onClick={() => navigate({ to: "/agent", search: { source: threadId } })}><Bot /></TooltipIconButton>}
-            <TooltipIconButton
-              tooltip={t("导出对话", "Export conversation")}
-              onClick={async () => {
-                try {
-                  if (threadId)
-                    saveFile(
-                      title + ".json",
-                      await api(`/api/chat/threads/${threadId}/export`),
-                    );
-                } catch (error) {
-                  toast.error((error as Error).message);
-                }
-              }}
-            >
-              <FileDown />
-            </TooltipIconButton>
-            <TooltipIconButton
-              tooltip={t("对话参数", "Chat settings")}
-              onClick={() => setConfig(true)}
-            >
-              <SlidersHorizontal />
-            </TooltipIconButton>
-            {threadId && (
-              <TooltipIconButton
-                tooltip={t("管理对话", "Manage conversation")}
-                disabled={busy}
-                onClick={() => {
-                  setNewTitle(title);
-                  setManageOpen(true);
-                }}
-              >
-                <MoreHorizontal />
-              </TooltipIconButton>
-            )}
-          </div>
-        </div>
+    <ChatPreviewSplit open={!!preview} enabled={uiMotion} following={follow}>
+      <div className={"oc-chat-page" + (!visibleMessages.length ? " oc-chat-empty" : "")}>
+        <ChatToolbar title={title} threadId={threadId} busy={busy} reconnecting={reconnecting}
+          newChatDisabled={!!sending && !threadId && !submission} onNew={startChat}
+          onSettings={() => setConfig(true)}
+          onManage={() => { setNewTitle(title); setManageOpen(true); }}
+        />
         <div className="oc-conversation-shell">
           <div
             className="oc-conversation"
@@ -577,8 +594,8 @@ export function ChatPage() {
             }
           }}
           >
-            <div ref={contentView} className="oc-conversation-content">
-            {!messages.length ? (
+            <div ref={contentView} className="oc-conversation-content" data-follow-output={visibleMessages.length > 0 && !showBottom || undefined}>
+            {!visibleMessages.length ? (
               <div className="oc-chat-welcome">
                 <h1>{t("开始对话", "Start a chat")}</h1>
                 {!ready && (
@@ -600,7 +617,7 @@ export function ChatPage() {
               </div>
             ) : (
               <div className="oc-message-list">
-                {messages.map((m, index) => (
+                {visibleMessages.map((m, index) => (
                   <MessageBoundary
                     key={m.id}
                     fallback={
@@ -620,8 +637,8 @@ export function ChatPage() {
                       index={index}
                       busy={busy}
                       ready={!!ready}
-                      streaming={busy && index === messages.length - 1}
-                      docked={index === messages.length - 1 && m.role === "assistant"}
+                      streaming={(busy || awaitingCommit) && index === visibleMessages.length - 1 && m.role === "assistant"}
+                      docked={index === visibleMessages.length - 1 && m.role === "assistant"}
                       onPreview={openPreview}
                       onEdit={editMessage}
                       onRegenerate={regenerateMessage}
@@ -630,41 +647,48 @@ export function ChatPage() {
                 ))}
               </div>
             )}
+            {!!visibleMessages.length && <div className="oc-output-anchor" aria-hidden="true" />}
             </div>
           </div>
-          {streamingMessage && (
-            <StreamingFooter message={streamingMessage} streaming={busy} ready={!!ready}
-              index={messages.length - 1} onRegenerate={regenerateMessage} />
+          {(showBottom || streamingMessage) && (
+            <div className="oc-stream-footer-layer">
+              {showBottom && (
+                <Button
+                  variant="outline"
+                  className="oc-scroll-bottom"
+                  onClick={() => {
+                    follow.current = true;
+                    setShowBottom(false);
+                    view.current?.scrollTo({
+                      top: view.current.scrollHeight,
+                      behavior: uiMotion ? "smooth" : "instant",
+                    });
+                  }}
+                >
+                  <ArrowDown />
+                  {t("回到最新", "Jump to latest")}
+                </Button>
+              )}
+              {streamingMessage && (
+                <StreamingFooter message={streamingMessage} streaming={busy} ready={!!ready}
+                  index={messages.length - 1} onRegenerate={regenerateMessage} />
+              )}
+            </div>
           )}
         </div>
         <div className="oc-composer-area">
-          {showBottom && (
-            <Button
-              variant="outline"
-              className="oc-scroll-bottom"
-              onClick={() => {
-                follow.current = true;
-                setShowBottom(false);
-                view.current?.scrollTo({
-                  top: view.current.scrollHeight,
-                  behavior: uiMotion ? "smooth" : "instant",
-                });
-              }}
-            >
-              <ArrowDown />
-              {t("回到最新", "Jump to latest")}
-            </Button>
-          )}
           <ErrorNotice error={error || loadError} />
-          <form
-            className="oc-chat-composer"
+          <ChatComposerForm
+            placement={!visibleMessages.length ? "welcome" : !messages.length && sending?.fromComposer ? "first-send" : "conversation"}
+            threadId={threadId}
+            motionEnabled={uiMotion}
             onSubmit={(e) => {
               e.preventDefault();
               void submit();
             }}
           >
             <div className="oc-image-list">
-              <AnimatePresence initial={false}>
+              {!sending?.fromComposer && <AnimatePresence initial={false}>
               {attachments.map((image) => (
                 <motion.div className="oc-image-thumb" key={image.id} layout={uiMotion ? "position" : false} initial={{ opacity: 0, scale: .92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .9 }} transition={{ duration: uiMotion ? MOTION.compact : 0 }}>
                   <img
@@ -686,23 +710,24 @@ export function ChatPage() {
                   </Button>
                 </motion.div>
               ))}
-              </AnimatePresence>
+              </AnimatePresence>}
             </div>
             {!ready && <div className="oc-readiness" role="status">
               <span>{engineError ? t("连接中断，正在重新确认模型状态。草稿已保留。", "Reconnecting to the model service. Your draft is saved.") : engine?.state === "loading" ? t("模型正在准备，草稿会保留。", "Model preparing. Your draft is saved.") : engine?.state === "failed" ? t("模型启动未完成，草稿已保留。", "Model startup failed. Your draft is saved.") : t("模型尚未就绪，可以先写草稿。", "No model is ready. You can still draft a message.")}</span>
               <Link to={engineError || engine?.state === "loading" || engine?.state === "failed" ? "/service" : "/models"}>{engineError || engine?.state === "loading" || engine?.state === "failed" ? t("查看状态", "View status") : t("准备模型", "Prepare a model")}</Link>
             </div>}
             <Textarea
+              ref={composerInput}
               onPaste={(event) => {
                 const files = [...event.clipboardData.files].filter((f) =>
                   f.type.startsWith("image/"),
                 );
                 if (files.length) {
                   event.preventDefault();
-                  if (!uploading) void uploadImages(files);
+                  if (!uploading && !busy) void uploadImages(files);
                 }
               }}
-              value={input}
+              value={sending?.fromComposer ? "" : input}
               readOnly={!!controller.current}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
@@ -759,7 +784,7 @@ export function ChatPage() {
                 <Phase phase={busy ? "stop" : "send"} className="oc-action-icon">{busy ? <Square /> : <ArrowUp />}</Phase>
               </Button>
             </div>
-          </form>
+          </ChatComposerForm>
         </div>
         <Modal
           open={manageOpen}
@@ -823,21 +848,6 @@ export function ChatPage() {
             "These settings apply to your next request.",
           )}
         >
-          <label className="oc-toggle-row">
-            <Switch
-              defaultChecked={
-                localStorage.getItem("onecat_stream_animation") !== "off"
-              }
-              onCheckedChange={(v) => {
-                localStorage.setItem(
-                  "onecat_stream_animation",
-                  v ? "on" : "off",
-                );
-                window.dispatchEvent(new Event("onecat:animation"));
-              }}
-            />
-            {t("柔和流式动画", "Soft streaming animation")}
-          </label>
           <Field label={t("系统提示词", "System prompt")}>
             <Textarea
               value={systemPrompt}
@@ -846,32 +856,7 @@ export function ChatPage() {
             />
           </Field>
           <div className="oc-form-grid">
-            <NumberField
-              label="Temperature"
-              value={temperature}
-              onChange={setTemperature}
-              min={0}
-              max={2}
-              step={0.05}
-            />
-            <NumberField
-              label="Top P"
-              value={topP}
-              onChange={setTopP}
-              min={0}
-              max={1}
-              step={0.05}
-            />
-            {recommended && (
-              <div className="oc-muted" style={{ gridColumn: "1 / -1", fontSize: 12 }}>
-                {customSampling
-                  ? <>{t("已使用自定义采样参数。", "Using custom sampling.")} <Button type="button" variant="outline" size="sm" onClick={resetSampling}>{t("恢复模型推荐", "Use model recommendation")}</Button></>
-                  : t(
-                      `按模型推荐（${thinking ? "思考" : "非思考"}模式）：top_k ${recommended.top_k}，presence_penalty ${recommended.presence_penalty}`,
-                      `Model recommendation (${thinking ? "thinking" : "non-thinking"}): top_k ${recommended.top_k}, presence_penalty ${recommended.presence_penalty}`,
-                    )}
-              </div>
-            )}
+            <p className="oc-muted">{t("采样参数由推理引擎决定。", "Sampling is managed by the inference engine.")}</p>
             <Field
               label={t("最大生成长度", "Maximum generated tokens")}
               hint={t(
@@ -934,25 +919,28 @@ export function ChatPage() {
         </Modal>
       </div>
       <AnimatePresence initial={false}>
-      {preview && (
-        <PreviewBoundary key={`${preview.messageId}:${preview.index}`} onClose={() => setPreview(null)}>
-            <PreviewPanel
-              artifact={previewArtifact(
-                artifacts(
-                  textOf(
-                    messages.find((m) => m.id === preview.messageId) ||
-                      ({ content: [] } as unknown as Message),
-                  ),
-                ),
-                preview.index,
-              )}
-              streaming={busy}
-              onClose={() => setPreview(null)}
-            />
-        </PreviewBoundary>
-      )}
+        {preview && (
+          <PreviewDock key="preview-dock" enabled={uiMotion}>
+            <PreviewBoundary key={`${preview.messageId}:${preview.index}`} onClose={() => setPreview(null)}>
+                <PreviewPanel
+                  docked
+                  artifact={previewArtifact(
+                    artifacts(
+                      textOf(
+                        messages.find((m) => m.id === preview.messageId) ||
+                          ({ content: [] } as unknown as Message),
+                      ),
+                    ),
+                    preview.index,
+                  )}
+                  streaming={busy}
+                  onClose={() => setPreview(null)}
+                />
+            </PreviewBoundary>
+          </PreviewDock>
+        )}
       </AnimatePresence>
-    </div>
+    </ChatPreviewSplit>
   );
 }
 const MessageRow = memo(function MessageRow({
@@ -1006,8 +994,10 @@ const MessageRow = memo(function MessageRow({
         {m.role === "user" ? t("你", "You") : "1Cat"}
         {streaming && (
           <span className="oc-generation-status" role="status">
-            <LoaderCircle className="animate-spin" size={14} />
-            {thought && !answer
+            <span className="oc-reply-pulse" aria-hidden="true"><i /><i /><i /></span>
+            {!thought && !answer
+              ? t("等待模型回复…", "Waiting for a reply…")
+              : thought && !answer
               ? t("思考中…", "Thinking…")
               : t("正在生成…", "Generating…")}
           </span>
@@ -1146,15 +1136,13 @@ const StreamingFooter = memo(function StreamingFooter({
       }
     | undefined;
   return (
-    <div className="oc-stream-footer-layer">
-      <div className="oc-stream-footer-align">
-        <div className="oc-message-actions oc-stream-actions">
-          <CopyButton value={textOf(message)} />
-          <TooltipIconButton tooltip={t("重新生成", "Regenerate")} disabled={streaming || !ready} onClick={() => onRegenerate(index)}>
-            <RotateCcw />
-          </TooltipIconButton>
-          <div className="oc-response-metrics"><Phase phase={streaming ? "live" : "final"}><Timing metadata={message.metadata} live={live} streaming={streaming} /></Phase></div>
-        </div>
+    <div className="oc-stream-footer-align">
+      <div className="oc-message-actions oc-stream-actions">
+        <CopyButton value={textOf(message)} />
+        <TooltipIconButton tooltip={t("重新生成", "Regenerate")} disabled={streaming || !ready} onClick={() => onRegenerate(index)}>
+          <RotateCcw />
+        </TooltipIconButton>
+        <div className="oc-response-metrics"><Phase phase={streaming ? "live" : "final"}><Timing metadata={message.metadata} live={live} streaming={streaming} /></Phase></div>
       </div>
     </div>
   );

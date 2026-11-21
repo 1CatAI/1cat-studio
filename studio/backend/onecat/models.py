@@ -99,6 +99,45 @@ def retained_bytes(folder: Path, manifest: list[dict]) -> int:
     return total
 
 
+def verify_snapshot(job: Job, folder: Path, manifest: list[dict]) -> None:
+    """Hash pinned files once, reporting bytes consumed even within a single shard."""
+    total = sum(item["bytes"] for item in manifest)
+    read = 0
+    last_report = time.monotonic()
+
+    def report(files_done: int, current_file: str | None):
+        job.update(
+            "checking_model", 98 + min(1, read / max(1, total)),
+            verification={
+                "bytes_read": read, "total_bytes": total,
+                "files_done": files_done, "total_files": len(manifest),
+                "current_file": current_file,
+            },
+            downloaded_bytes=total, bytes_per_second=0,
+        )
+
+    report(0, manifest[0]["path"] if manifest else None)
+    for index, item in enumerate(manifest):
+        job.check_cancelled()
+        path = (folder / item["path"]).resolve()
+        if not path.is_relative_to(folder.resolve()) or not path.is_file():
+            raise ValueError("Invalid or missing file in ModelScope snapshot")
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            if path.stat().st_size != item["bytes"]:
+                raise ValueError(f"ModelScope file size or checksum failed: {item['path']}")
+            while chunk := stream.read(4 * 1024 * 1024):
+                digest.update(chunk)
+                read += len(chunk)
+                now = time.monotonic()
+                if now - last_report >= 0.5:
+                    report(index, item["path"])
+                    last_report = now
+        if digest.hexdigest() != item["sha256"]:
+            raise ValueError(f"ModelScope revision changed or file checksum failed: {item['path']}")
+    report(len(manifest), None)
+
+
 def download(job: Job):
     repo_id = job.payload["repo_id"]
     revision = job.payload.get("revision") or "master"
@@ -176,22 +215,8 @@ def download(job: Job):
         max_workers=2,
         progress_callbacks=[Progress],
     )
-    job.update(
-        "checking_model", 98, downloaded_bytes=retained_bytes(folder, manifest), bytes_per_second=0
-    )
-    # A branch can move during a resumed download. Freeze its entire initial file
-    # manifest and verify every file, rejecting a mixed-version snapshot.
-    for item in manifest:
-        job.check_cancelled()
-        path = (folder / item["path"]).resolve()
-        if not path.is_relative_to(folder.resolve()) or not path.is_file():
-            raise ValueError("Invalid or missing file in ModelScope snapshot")
-        with path.open("rb") as stream:
-            actual = hashlib.file_digest(stream, "sha256").hexdigest()
-        if actual != item["sha256"]:
-            raise ValueError(
-                "ModelScope revision changed or file checksum failed; retry with a stable revision"
-            )
+    # Verify the original pinned manifest before rechecking the remote revision.
+    verify_snapshot(job, folder, manifest)
     fresh = api.list_repo_files(repo_id, "model", revision=revision)
     fresh_manifest = [
         {"path": f.path, "bytes": f.size, "sha256": f.sha256}

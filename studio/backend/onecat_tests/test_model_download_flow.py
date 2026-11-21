@@ -252,7 +252,8 @@ def test_resume_callback_offsets_are_not_counted_as_new_bytes(checkpoint, monkey
     partial.write_bytes(b"CPU-only")
     original = models.hub()
     observations = []
-    ticks = iter([0, 1, 2, 3])
+    from itertools import count
+    ticks = count()
     monkeypatch.setattr(
         models, "time", SimpleNamespace(monotonic=lambda: next(ticks), time=time.time)
     )

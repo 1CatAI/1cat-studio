@@ -40,3 +40,11 @@ test("explicit chat handoff survives switching modes without copying it to ordin
   assert.deepEqual(conversationTarget(saved).search, { task: "created", source: undefined });
   assert.deepEqual(rememberConversation(saved, "/agent", { task: "created" }), saved);
 });
+
+test("an unsent chat can be resumed after switching modes until a thread is selected", () => {
+  let saved = rememberConversation(null, "/chat", { draft: "fresh" });
+  saved = rememberConversation(saved, "/agent", {});
+  assert.deepEqual(conversationTarget(saved, "chat").search, { draft: "fresh" });
+  saved = rememberConversation(saved, "/chat", { draft: "fresh", thread: "created" });
+  assert.deepEqual(conversationTarget(saved).search, { thread: "created" });
+});

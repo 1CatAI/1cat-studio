@@ -17,7 +17,7 @@ type Release = {
 };
 const terminal = new Set(["installed", "failed", "rolled_back"]);
 
-export function StudioUpdates({ dirty }: { dirty: boolean }) {
+export function StudioUpdates({ saving }: { saving: boolean }) {
   const t = useText();
   const query = useQuery<Release>("/api/updates");
   const progress = useQuery<{ current: string; status: Status; blocked_reason: string | null }>("/api/updates/progress", 2000);
@@ -39,7 +39,7 @@ export function StudioUpdates({ dirty }: { dirty: boolean }) {
     rolled_back: t("更新失败，已恢复原版本", "Update failed. The previous version was restored."),
     failed: t("更新失败，可以重试", "Update failed. Try again."),
   };
-  const blocked = dirty ? t("请先保存或撤销设置更改。", "Save or discard your settings changes first.") : progress.data?.blocked_reason;
+  const blocked = saving ? t("正在保存设置…", "Saving settings…") : progress.data?.blocked_reason;
   const total = status?.total_bytes || 0;
   const done = status?.downloaded_bytes || 0;
   return <div className="oc-panel" id="settings-updates">

@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from . import db, gpu
+from .mtp_profiles import family_mtp
 
 def runtime_family(value) -> str:
     """A runtime's major.minor, used only to prefer a close replacement runtime."""
@@ -224,6 +225,7 @@ def supported():
                         "error",
                         "expected_bytes",
                         "downloaded_bytes",
+                        "verification",
                         "bytes_per_second",
                         "result",
                         "cancel_requested",
@@ -256,6 +258,25 @@ def require_download(repo, revision=None, runtime_id=None):
     ):
         raise ValueError("Verified checkpoint has no supported download manifest")
     return item
+
+
+def managed_settings(recipe, tool_parser, vision, devices, model):
+    """Defaults for controls managed by Studio when a profile is created or edited."""
+    backend = recipe.get("attention_backend")
+    if devices and all(d.get("compute_capability") == [7, 0] for d in devices):
+        backend = backend or "FLASH_ATTN_V100"
+    elif backend == "FLASH_ATTN_V100":
+        backend = None
+    batch = recipe.get("max_num_batched_tokens", 4096)
+    if re.search(r"(?:^|[^a-z0-9])27b(?:$|[^a-z0-9])", model, re.I):
+        batch = 4096
+    return {
+        "dtype": "half" if any(d.get("compute_capability") == [7, 0] for d in devices) else recipe.get("dtype", "auto"),
+        "max_num_batched_tokens": batch, "attention_backend": backend,
+        "quantization": recipe.get("quantization"), "enable_prefix_caching": True,
+        "enforce_eager": False, "tool_calling": bool(tool_parser),
+        "tool_parser": tool_parser, "vision_enabled": bool(vision),
+    }
 
 
 def launch_defaults(repo, model_id=None, *, devices=None):
@@ -300,18 +321,23 @@ def launch_defaults(repo, model_id=None, *, devices=None):
         from .sm70_profiles import MODEL_IDS, default_speculation, qualified_draft, recommendation
 
         speculative = copy.deepcopy(item.get("default_speculative_config"))
+        family_spec = family_mtp(runtime, model["path"], repo) if model else None
         if repo in MODEL_IDS:
             recommended = recommendation(runtime)
             values.update(recommended)
-            draft_path = qualified_draft(runtime)
+            draft_path = qualified_draft(runtime) if not family_spec else None
             if draft_path:
                 speculative = default_speculation(runtime, draft_path)
-            else:
+            elif not family_spec:
                 notes.append(
                     "DFlash2 未启用：请下载发布配置对应的草稿模型；当前仅目标模型推理，"
                     "速度不等同于 DFlash2 发布配置 / DFlash2 is disabled: download the "
                     "release draft; target-only speed differs from the DFlash2 profile"
                 )
+        if family_spec:
+            speculative = family_spec
+            if repo in MODEL_IDS:
+                values["served_model_name"] = "qwen3.8-27b"
         values.update(
             {
                 "catalog_id": repo,
@@ -325,6 +351,11 @@ def launch_defaults(repo, model_id=None, *, devices=None):
                 "speculative_config": speculative,
             }
         )
+        managed = managed_settings(recommended, item.get("tool_parser"), item.get("vision"), selected, repo)
+        if managed["vision_enabled"]:
+            managed["max_images"] = min(values["max_images"], item.get("max_images", 4))
+        values.update(managed)
+        recommended = {**recommended, **managed}
         profile = values
     return {
         "catalog_id": repo,
@@ -416,6 +447,41 @@ def model_entry(path):
 
 def capabilities(path, runtime_id):
     runtime = db.get("runtimes", runtime_id, {})
+    details = _model_capabilities(path, runtime_id, runtime)
+    from .sm70_profiles import PROFILE_NAME
+
+    recipe = (runtime.get("capabilities") or {}).get("sm70_profiles", {}).get(PROFILE_NAME, {})
+    int8 = recipe.get("args", {}).get("kv_cache_dtype") == "int8_per_token_head"
+    preferred = (details.get("recommended") or {}).get("kv_cache_dtype")
+    if int8 and not preferred:
+        # Flash-Next QSA stores host KV separately; its main cache remains FP16.
+        config_file = Path(path).expanduser() / "config.json"
+        try:
+            model_type = json.loads(config_file.read_text()).get("model_type")
+        except (OSError, ValueError, AttributeError):
+            model_type = None
+        preferred = "float16" if model_type in {"qwen4_exp", "qwen4_exp_text"} else "int8_per_token_head"
+    spec = family_mtp(runtime, path)
+    if spec:
+        options = sorted(set(details.get("mtp_token_options", [])) | {1, 2, 3, 4, spec["num_speculative_tokens"]})
+        details = {**details, "default_speculative_config": spec, "mtp_token_options": options,
+                   "accelerators": list(dict.fromkeys([*details.get("accelerators", []), "mtp"]))}
+    if "dflash" in details.get("accelerators", []):
+        from .sm70_profiles import default_speculation, qualified_draft, release_profile
+
+        draft = release_profile(runtime)["draft"]
+        if details.get("draft_repo_id") == draft["repo"] or (
+            not details.get("draft_repo_id") and spec and spec["num_speculative_tokens"] == 4
+        ):
+            approved = entry(draft["repo"]) or {}
+            details = {**details, "draft_repo_id": draft["repo"], "draft_local_path": qualified_draft(runtime),
+                       "draft_speculative_config": default_speculation(runtime, ""),
+                       "draft_download_revision": draft["modelscope_revision"]
+                       if approved.get("revision") == draft["modelscope_revision"] else None}
+    return {**details, "default_kv_cache_dtype": preferred or "auto", "int8_kv_available": int8}
+
+
+def _model_capabilities(path, runtime_id, runtime):
     item = model_entry(path)
     if item and runtime_matches(item, runtime):
         from .sm70_profiles import MODEL_IDS, default_speculation, recommendation
@@ -527,19 +593,23 @@ def capabilities(path, runtime_id):
     }
 
 
-def validate_features(profile):
+def validate_features(profile, *, default_fields=()):
     from .portable_gpu import rebind_profile
 
     rebind_profile(profile)
     selected = gpu.selected_devices(profile["gpu_uuids"]) if profile["gpu_uuids"] else []
-    if profile["dtype"] == "bfloat16" and any(
+    caps = capabilities(profile["model_path"], profile["runtime_id"])
+    if default_fields:
+        settings = managed_settings(caps.get("recommended") or {}, caps.get("tool_parser"),
+                                    caps.get("vision"), selected,
+                                    profile.get("catalog_id") or Path(profile["model_path"]).name)
+        profile.update({key: value for key, value in settings.items() if key in default_fields})
+    if any(d.get("compute_capability") == [7, 0] for d in selected):
+        profile["dtype"] = "half"
+    elif profile["dtype"] == "bfloat16" and any(
         (d.get("compute_capability") or [0])[0] < 8 for d in selected
     ):
         raise ValueError("Selected GPUs do not support BF16; use FP16")
-    # auto must not inherit BF16 from a V100 checkpoint's config.
-    if profile["dtype"] == "auto" and any(d.get("compute_capability") == [7, 0] for d in selected):
-        profile["dtype"] = "half"
-    caps = capabilities(profile["model_path"], profile["runtime_id"])
     registered = next(
         (
             m
@@ -574,6 +644,8 @@ def validate_features(profile):
         if spec.get("method") not in caps.get("accelerators", []):
             raise ValueError("Acceleration is not validated for this checkpoint and runtime")
         if spec.get("method") == "dflash":
+            if not spec.get("model") and caps.get("draft_local_path"):
+                spec["model"] = caps["draft_local_path"]
             draft = Path(str(spec.get("model", ""))).expanduser()
             if (
                 not draft.is_absolute()
@@ -581,7 +653,7 @@ def validate_features(profile):
                 or not (list(draft.glob("*.safetensors")) or list(draft.glob("*.bin")))
             ):
                 raise ValueError(
-                    "Download the DFlash2 draft from ModelScope and select its local directory"
+                    "The matching DFlash2 draft must finish downloading and verification"
                 )
             expected = caps.get("draft_repo_id")
             registered = next(
@@ -610,5 +682,7 @@ def validate_features(profile):
         elif spec.get("method") == "mtp":
             count = spec.get("num_speculative_tokens")
             if isinstance(count, bool) or count not in caps.get("mtp_token_options", []):
-                raise ValueError("MTP speculative tokens must be one of 1, 2, 3 or 4")
+                options = [str(n) for n in caps.get("mtp_token_options", [])]
+                allowed = " or ".join([", ".join(options[:-1]), options[-1]]) if len(options) > 1 else ", ".join(options)
+                raise ValueError(f"MTP speculative tokens must be one of {allowed}")
     return profile
