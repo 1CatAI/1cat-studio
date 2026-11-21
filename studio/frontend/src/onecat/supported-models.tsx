@@ -42,6 +42,7 @@ type Support = {
     | (Job & { state: string; error?: string; cancel_requested?: boolean })
     | null;
   draft_download?: DraftDownload | null;
+  draft_ready?: boolean;
 };
 
 export type LaunchDefaults = {
@@ -269,7 +270,9 @@ export function SupportedModels({
                   {item.recommendations.map(reasonText).join(" · ")}
                 </p>
               )}
-              {draft && <DraftDownloadAction draft={draft} job={latestJob(draft.job)} />}
+              {draft ? <DraftDownloadAction draft={draft} job={latestJob(draft.job)} /> : item.draft_ready && (
+                <p role="status" className="oc-muted">{t("DFlash2 草稿已下载", "DFlash2 draft downloaded")}</p>
+              )}
               <p className="oc-muted">{item.gpu?.count} GPU · {item.quantization} · {item.recommended?.max_model_len ? `${item.recommended.max_model_len / 1024}K ${t("上下文", "context")}` : t("查看配置要求", "See requirements")}</p>
               <details className="oc-default-recipe">
                 <summary>

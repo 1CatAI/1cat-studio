@@ -210,9 +210,11 @@ def supported():
         )
         notes = recommendations(checkpoint, devices) if checkpoint else []
         draft_download = None
+        draft_ready = False
         if checkpoint and model and checkpoint["id"] in MODEL_IDS:
             defaults = launch_defaults(checkpoint["id"], model["id"], devices=devices)
             notes = defaults["recommendations"]
+            draft_ready = defaults["draft_ready"]
             draft = defaults["draft_download"]
             if draft:
                 draft_download = {**draft, "job": download_job(draft["repo_id"], draft["revision"])}
@@ -229,6 +231,7 @@ def supported():
                 "model_id": model["id"] if model else None,
                 "job": download_job(checkpoint["id"]) if checkpoint else None,
                 "draft_download": draft_download,
+                "draft_ready": draft_ready,
             }
         )
     return {
@@ -286,6 +289,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
     selected = recommended_devices(devices, topology)
     profile = None
     draft_download = None
+    draft_path = None
     recommended = item.get("recommended", {})
     if topology["pp"] == 1:
         values = Profile(
@@ -338,6 +342,7 @@ def launch_defaults(repo, model_id=None, *, devices=None):
         "reasons": reasons,
         "recommendations": notes,
         "draft_download": draft_download,
+        "draft_ready": bool(draft_path),
         "can_create": bool(model and profile and not reasons),
     }
 

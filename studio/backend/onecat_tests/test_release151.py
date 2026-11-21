@@ -371,6 +371,9 @@ def test_real_catalog_default_automatically_selects_qualified_draft(qualified_re
     defaults = catalog.launch_defaults(profile["catalog_id"], "target")
     assert not defaults["recommendations"]
     assert defaults["draft_download"] is None
+    assert defaults["draft_ready"]
+    card = next(row for row in catalog.supported()["items"] if row.get("catalog_id") == profile["catalog_id"])
+    assert card["draft_ready"] and card["draft_download"] is None
     args = _options(engine.build_argv(profile, runtime, 8000, None))
     assert json.loads(args["--speculative-config"])["revision"] == recipe["draft"]["revision"]
     for key in (
@@ -441,6 +444,7 @@ def test_model_card_tracks_the_release_draft_download(qualified_release_models):
         "bytes": sum(file["bytes"] for file in draft["files"]),
         "job": {"id": "matching", "state": "running"},
     }
+    assert not target_card()["draft_ready"]
     recipe["draft"]["weights_sha256"] = "0" * 64
     assert target_card()["draft_download"] is None
 
