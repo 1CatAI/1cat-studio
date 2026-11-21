@@ -410,7 +410,7 @@ def wheel_dependencies(
         pinned[name] = target
     if "torch" not in pinned:
         raise ValueError(
-            "Wheel metadata does not pin PyTorch; automatic installation cannot choose its ABI"
+            "Automatic installation needs a wheel with a pinned PyTorch version"
         )
     return pinned
 
@@ -462,7 +462,7 @@ def install(job: Job):
         for runtime in db.all_records("runtimes"):
             if Path(runtime["python_path"]).is_relative_to(folder):
                 raise ValueError(
-                    "This directory is already referenced by an environment; it will not be overwritten"
+                    "This directory already belongs to a runtime. Use that runtime or select a different release."
                 )
         if shutil.disk_usage(root).free < 20 * 1024**3:
             raise RuntimeError(
@@ -658,7 +658,7 @@ def export_runtime(job: Job):
     python_home = Path(runtime["capabilities"]["python_base"])
     if not python_home.is_relative_to(folder):
         raise ValueError(
-            "Runtime's base Python is external; it is not a self-contained installation"
+            "Choose a runtime with bundled Python to export"
         )
     manifest = {
         "format": "onecat-runtime-v1",

@@ -149,13 +149,13 @@ export function PerformancePage() {
         <span className="oc-status-warn">
           {history
             ? t(
-                "历史参考，不能直接视为当前配置的验证结果",
-                "Historical reference; not a validation of the current configuration",
+                "历史测试结果 · 参考",
+                "Historical test results",
               )
             : run?.matches_current_profile
               ? t(
-                  "运行配置匹配；适用范围以本次测试条件为准",
-                  "Runtime profile matches; workload conditions still apply",
+                  "配置与当前环境匹配，工作负载见下方",
+                  "Configuration matches. See workload below.",
                 )
               : t(
                   "与当前运行配置不匹配",
@@ -203,8 +203,8 @@ export function PerformancePage() {
       </div>
       <p className="oc-muted oc-chart-caption">
         {t(
-          "横轴为完整请求的 GPU 板卡平均功率，未计 CPU、内存及电源损耗。",
-          "The x-axis is average GPU board power over the full request; CPU, RAM, and PSU losses are excluded.",
+          "横轴为完整请求期间的平均 GPU 板卡功率。",
+          "The x-axis shows average GPU board power over the full request.",
         )}
       </p>
       <div className="oc-table-wrap">
@@ -375,15 +375,15 @@ export function PerformancePage() {
         </div>
         <p className="oc-muted">
           {t(
-            "默认使用确定性采样、关闭思考、避免前缀缓存命中。V100 会复测默认档及 900/930/975/1020 MHz 中支持的档位。",
-            "Uses deterministic sampling, thinking disabled, and unique prefix-cache salts. V100 tests the default and supported 900/930/975/1020 MHz settings.",
+            "测试使用确定性采样、关闭思考，并为每次请求使用独立的前缀缓存键。V100 测试默认档及支持的 900、930、975、1020 MHz 档位。",
+            "The test uses deterministic sampling, disables thinking and uses a unique prefix-cache key per request. V100 runs the default and supported settings at 900, 930, 975 and 1020 MHz.",
           )}
         </p>
         {pickedProfile?.speculative_config && (
           <ErrorNotice
             error={t(
-              "此预设开启了 DFlash2/MTP。请复制预设并关闭推测解码后测试。",
-              "This profile enables speculation. Duplicate it and disable DFlash2/MTP before calibration.",
+              "请复制预设，关闭 DFlash2/MTP 后开始校准。",
+              "Duplicate this profile and turn off DFlash2/MTP before calibrating.",
             )}
           />
         )}{" "}
@@ -411,8 +411,8 @@ export function PerformancePage() {
             setTestOpen(false);
           }}
           success={t(
-            "校准任务已创建，可在服务页查看进度",
-            "Calibration created. Follow progress on the Service page.",
+            "校准任务已排队。进度见服务页。",
+            "Calibration queued. View progress on the Service page.",
           )}
         >
           <Play />

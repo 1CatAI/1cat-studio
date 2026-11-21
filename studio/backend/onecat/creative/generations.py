@@ -157,7 +157,7 @@ class Intent(Strict):
     def valid(self):
         model = model_definition(self.model)
         if self.fast and self.model != fasth3.MODEL_ID:
-            raise ValueError("Fast VSA requires the FastH3 Data-Free model, not an INT8/LightX2V recipe")
+            raise ValueError("Select the FastH3 Data-Free model to use Fast VSA")
         if (model or {}).get("text_only") and self.references:
             raise ValueError("FastH3 Data-Free currently supports text to video only")
         partition = "ref2va" if any(r.role == "reference" for r in self.references) else "fl2va"

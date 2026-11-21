@@ -116,8 +116,8 @@ export function SupportedModels({
       return t("需要 ", "Requires ") + reason.slice("需要 / Requires ".length);
     if (reason.includes("Studio 尚不支持流水线并行"))
       return t(
-        "此配方需要流水线并行，暂不能在 Studio 一键启动",
-        "This recipe requires pipeline parallelism; one-click launch is not available",
+        "此配方需手动配置流水线并行（PP）",
+        "This recipe needs a manual pipeline-parallel deployment",
       );
     return translate(reason);
   };
@@ -339,7 +339,7 @@ export function SupportedModels({
       {data && !downloadable.length && (
         <div className="oc-library-empty">
           <Empty title={scope === "machine" && !downloadedOnly && machineCount === 0 ? t("当前硬件暂未匹配已验证配置", "No verified configuration matches this hardware yet") : t("没有符合筛选条件的配置", "No configurations match these filters")}
-            description={scope === "machine" && !downloadedOnly && machineCount === 0 ? t("模型目录仍可浏览和下载。查看全部配置可了解所需显存、显卡数量和运行环境。", "You can still browse and download models. View all configurations for memory, GPU and runtime requirements.") : t("试试清除搜索或切换模型系列。", "Try clearing search or changing the family filter.")} />
+            description={scope === "machine" && !downloadedOnly && machineCount === 0 ? t("切换到「全部支持」，查看显存、显卡数量和运行环境要求。", "Switch to All supported to see GPU, memory and runtime requirements.") : t("试试清除搜索或切换模型系列。", "Try clearing search or changing the family filter.")} />
           <div className="oc-actions">
             {!downloadedOnly && scope === "machine" && <Button variant="outline" onClick={() => { setScope("all"); setQuery(""); setFamily(""); setPublisher(""); }}>{t("查看全部支持配置", "View all supported configurations")}</Button>}
             {(query || family || publisher) && <Button variant="ghost" onClick={() => { setQuery(""); setFamily(""); setPublisher(""); }}>{t("清除筛选", "Clear filters")}</Button>}
@@ -356,8 +356,8 @@ export function SupportedModels({
           </summary>
           <p className="oc-muted">
             {t(
-              "这些记录尚未对应到可直接下载的完整检查点；可查看项目验证细节。",
-              "These records do not yet map to a complete downloadable checkpoint. See the project evidence.",
+              "打开验证记录查看适配条件。",
+              "Open a validation record to see its requirements.",
             )}
           </p>
           {references.map((item) => (

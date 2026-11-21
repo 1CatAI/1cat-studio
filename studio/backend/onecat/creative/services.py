@@ -137,7 +137,7 @@ def save(value: Service) -> dict:
         runtime = require("runtimes", value.runtime_id)
         if not runtime_support(runtime, record["kind"]):
             raise ValueError(
-                "This environment lacks the native H3 media API. The 1.5.0 wheel does not include H3; import a compatible development environment in Setup."
+                "Import a development runtime with the native H3 media API in Setup."
             )
         if value.kind == "image-local" and len(value.gpu_uuids) != 1:
             raise ValueError("Native Z-Image requires exactly one GPU")

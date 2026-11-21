@@ -140,13 +140,13 @@ export function ServicePage() {
         {engine?.maintenance && (
           <p className="oc-status-warn">
             {t(
-              "维护任务进行中，暂不接收新请求。",
-              "Maintenance is in progress; new requests are paused.",
+              "维护中，新请求已暂停。",
+              "Maintenance in progress. New requests are paused.",
             )}
           </p>
         )}
         {engine?.error && <div className="oc-service-failure" role="status">
-          <p>{t("模型未能启动。查看错误详情与加载日志后重试，或在模型库调整预设。", "The model could not start. Review the error and startup log, then retry or adjust its profile in the model library.")}</p>
+          <p>{t("模型启动失败。查看加载日志后重试，或在模型库调整预设。", "The model failed to start. Check the startup log before retrying, or adjust the profile in the model library.")}</p>
           <details><summary>{t("错误详情", "Error details")}</summary><pre className="oc-log">{engine.error}</pre></details>
         </div>}
         <ErrorNotice error={engine?.hardware_recovery?.error} />
@@ -187,7 +187,7 @@ export function ServicePage() {
                 {studioSettings.host === "127.0.0.1" ? (
                   <>{t("目前仅本机可访问。", "Local access only.")} <Link to="/settings">{t("在设置中开启局域网访问", "Enable LAN access in Settings")}</Link></>
                 ) : engine?.listen_host !== "0.0.0.0" ? (
-                  t("局域网访问已保存；重启 Studio 后生效。", "LAN access is saved; restart Studio to apply it.")
+                  t("重启 Studio 后应用局域网访问设置。", "Restart Studio to apply the LAN access settings.")
                 ) : (
                   t("没有检测到活动的局域网 IPv4 地址。", "No active LAN IPv4 address was found.")
                 )}
@@ -231,7 +231,7 @@ export function ServicePage() {
                   <div>
                     <strong>{k.name}</strong>
                     <p className="oc-muted">
-                      {k.prefix}… · {t("仅推理权限", "Inference only")}
+                      {k.prefix}… · {t("推理权限", "Inference access")}
                     </p>
                   </div>
                   <Action

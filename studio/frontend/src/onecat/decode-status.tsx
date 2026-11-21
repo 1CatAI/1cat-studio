@@ -41,7 +41,7 @@ export function DecodeStatus() {
           </p>
           {(error || data?.decode_tokens_s == null) && <small className="oc-muted">
             {error ? t("暂时无法获取实时数据", "Live data is temporarily unavailable")
-              : t("等待可靠速率数据", "Waiting for reliable speed data")}
+              : t("正在采集生成速率", "Measuring generation speed")}
           </small>}
         </Popover.Content>
       </Popover.Portal>

@@ -228,8 +228,8 @@ export function PreviewPanel({
             setStatus("error");
             setError(
               t(
-                "预览禁止跳转到其他文档，请使用上方重新运行。",
-                "Preview navigation is blocked. Use Run again above.",
+                "请用上方的「重新运行」载入预览。",
+                "Select Run again above to reload the preview.",
               ),
             );
             dispose();

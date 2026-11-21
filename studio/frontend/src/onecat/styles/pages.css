@@ -349,15 +349,6 @@
   color: var(--muted-foreground);
   margin-bottom: 18px;
 }
-.oc-welcome-mark {
-  font-size: 11px;
-  line-height: 1.5;
-  font-family: var(--font-mono);
-  letter-spacing: 0.14em;
-  color: var(--muted-foreground);
-  border-left: 3px solid var(--primary);
-  padding-left: 12px;
-}
 .oc-message-list {
   max-width: 850px;
   margin: 0 auto;
@@ -2261,15 +2252,6 @@ details[data-expanding="false"] > summary .lucide-chevron-down {
 .oc-agent-welcome {
   padding: 0;
   text-align: left;
-}
-.oc-agent-mark {
-  font-size: 11px;
-  line-height: 1.5;
-  font-family: var(--font-mono);
-  letter-spacing: 0.14em;
-  color: var(--muted-foreground);
-  border-left: 3px solid var(--primary);
-  padding-left: 12px;
 }
 .oc-agent-welcome h1 {
   font-size: clamp(38px, 4.6cqw, 60px);

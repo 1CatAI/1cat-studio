@@ -36,7 +36,7 @@ def validate_request(document: dict, node_id: str, service_override: dict | None
     inputs = [sources[e["source"]] for e in document["edges"] if e["target"] == node_id]
     if any(n["kind"] == "generate" for n in inputs):
         raise ValueError(
-            "Connect a generated result as the reference, rather than its generation node"
+            "Connect the generated result node as your reference"
         )
     prompt = "\n\n".join(
         [n["text"].strip() for n in inputs if n["kind"] == "text"] + [node["text"].strip()]

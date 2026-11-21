@@ -66,13 +66,13 @@ export function ServicesPanel({
 		>
 			<p className="oc-muted">
 				{t(
-					"加载会自动释放占用相同 GPU 的 Studio 模型。正在生成的任务请先完成或取消；外部程序单独提示。",
-					"Loading releases Studio models on the selected GPUs. Finish or cancel active generation first; external workloads are identified separately.",
+					"加载会先卸载所选 GPU 上的 Studio 模型。请先完成或取消正在生成的任务。",
+					"Loading unloads Studio models on the selected GPUs. Finish or cancel active generation first.",
 				)}
 			</p>
             {!editing && !!catalog.presets?.length && <section className="oc-h3-presets">
               <h3>{t("H3 启动预设", "H3 launch presets")}</h3>
-              <p className="oc-muted">{t("选择用途即可创建四卡预设，自动关联本地组件。创建后点击加载；GPU 被占用时会说明原因。H3 当前为开发适配。", "Choose a workflow to create a four-GPU preset using local components. Then select Load; occupied GPUs are reported. H3 is a development integration.")}</p>
+              <p className="oc-muted">{t("选择用途，创建使用本地组件的四卡预设，再点击加载。", "Choose a workflow to create a four-GPU preset with local components, then select Load.")}</p>
               {!compatibleRuntimes.length && <Button variant="outline" size="sm" asChild><Link to="/setup">{t("准备 H3 运行环境", "Prepare an H3 runtime")}</Link></Button>}
               {compatibleRuntimes.length > 0 && <Field label={t("运行环境", "Runtime")}><select value={selectedRuntime} onChange={e => setPresetRuntime(e.target.value)}>{compatibleRuntimes.map(r => <option value={r.id} key={r.id}>{r.name}</option>)}</select></Field>}
               <div className="oc-h3-preset-grid">{catalog.presets.map(p => <div className="oc-h3-preset" key={p.id}>
@@ -177,8 +177,8 @@ export function ServicesPanel({
 							<Field
 								label={t("权重分区", "Weight partition")}
 								hint={t(
-									"FL2VA：文字、首尾帧；Ref2VA：多素材参考。更换分区需要重新加载服务。",
-									"FL2VA: text/keyframes. Ref2VA: references. Changing partition requires loading a different service.",
+									"FL2VA 支持文字和首尾帧，Ref2VA 支持多种参考素材。切换分区后需重新加载服务。",
+									"FL2VA supports text and keyframes. Ref2VA supports multiple references. Switching partitions requires reloading the service.",
 								)}
 							>
 								<select
@@ -351,8 +351,8 @@ export function ServicesPanel({
 							</Button>
 							<p className="oc-muted">
 								{t(
-									"H3 仍在开发验证中，1.5.0 轮子暂不包含此接口。可在安装引导导入开发环境；不会自动升级或替换聊天环境。",
-									"H3 is under development and is not included in the 1.5.0 wheel. Import a compatible development runtime in Setup; chat environments are preserved.",
+									"H3 处于开发验证阶段。请在安装引导中导入支持原生 H3 接口的开发环境。",
+									"H3 is under development. Import a development runtime with native H3 support in Setup.",
 								)}
 							</p>
 						</>
@@ -360,8 +360,8 @@ export function ServicesPanel({
 					{form.kind === "image-api" && (
 						<p className="oc-muted">
 							{t(
-								"要求 /v1/models 和 OpenAI 兼容图片接口，返回 b64_json。图片能力取决于接入的服务；不是所有聊天模型都能生图。",
-								"Requires /v1/models and OpenAI-compatible image endpoints returning b64_json. Image capabilities depend on the configured service.",
+								"请选择提供 /v1/models 的图片服务。图片接口需兼容 OpenAI，并返回 b64_json。",
+								"Choose an image service with /v1/models and an OpenAI-compatible image endpoint that returns b64_json.",
 							)}
 						</p>
 					)}
@@ -398,8 +398,8 @@ export function ServicesPanel({
 				</summary>
 				<p className="oc-muted">
 					{t(
-						"公共组件只下载一次。以下为已核实来源的 H3 开发适配组件，正式质量验收尚未完成。下载后执行 SHA256 校验。",
-						"Shared components download once. These source-verified components target H3 development; production quality validation is pending. Downloads are SHA256 checked.",
+						"这些 H3 开发组件可在多个工作流中复用。下载后会校验 SHA-256。",
+						"These H3 development components can be shared across workflows. Studio checks SHA-256 after download.",
 					)}
 				</p>
 				{catalog.components.map((c) => {
