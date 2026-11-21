@@ -591,6 +591,7 @@ def create_app() -> FastAPI:
         from .catalog import require_download
 
         item = require_download(repo, payload.get("revision"), payload.get("runtime_id"))
+        revision = item["revision"]
         with _download_lock:
             # Runtime selection does not identify a weight download. Legacy jobs
             # may still carry runtime_id, so compare only checkpoint + revision.
@@ -599,10 +600,10 @@ def create_app() -> FastAPI:
                     job["kind"] == "download_model"
                     and job["state"] not in TERMINAL
                     and job.get("payload", {}).get("repo_id") == repo
-                    and job["payload"].get("revision", "master") == item["revision"]
+                    and (job["payload"].get("revision") or revision) == revision
                 ):
                     return {k: v for k, v in job.items() if k != "payload"}
-            return scheduled_job("download_model", {"repo_id": repo, "revision": item["revision"]})
+            return scheduled_job("download_model", {"repo_id": repo, "revision": revision})
 
     @admin.get("/models/launch-defaults")
     def model_launch_defaults(catalog_id: str, model_id: str | None = None):

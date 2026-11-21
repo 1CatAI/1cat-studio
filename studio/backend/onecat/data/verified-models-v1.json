@@ -8,8 +8,13 @@
       "name": "Qwen3.8-27B · NVFP4",
       "family": "Qwen3.8",
       "role": "target",
-      "revision": "master",
+      "revision": "201d0fc23b0d52703d25ff708b77c08ea2337de0",
       "files": [
+        {
+          "path": ".eval_results/gpqa.yaml",
+          "bytes": 233,
+          "sha256": "b2c53bc47cd1fb29cc1cd40d77bd8d7bd0cab8009353e92c2489fb01387b2405"
+        },
         {
           "path": ".gitattributes",
           "bytes": 2229,
@@ -77,8 +82,8 @@
         },
         {
           "path": "README.md",
-          "bytes": 3683,
-          "sha256": "19e4bfd2b5f3ad715e4c0b63d4a3be2ae7df49c4b9fd252134d9e0108f34205a"
+          "bytes": 5034,
+          "sha256": "d9b6e57df88f58dbf384ee07eda973bd0abf7543da7d315c4e43aa57c76e1427"
         },
         {
           "path": "tokenizer.json",
