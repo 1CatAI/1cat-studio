@@ -679,10 +679,11 @@ class Run:
                 }
                 self.record["items"].append(item)
                 self.emit({"type": "item", "item": dict(item)})
-            delta = params.get("delta", "")
-            room = max(0, 512000 - len(item.get(field, "")))
+            delta = params.get("delta") or ""
+            current = item.get(field) or ""
+            room = max(0, 512000 - len(current))
             delta = delta[:room]
-            item[field] = item.get(field, "") + delta
+            item[field] = current + delta
             if delta:
                 self.emit({"type": "delta", "id": id, "field": field, "delta": delta})
         elif method == "turn/started":
