@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import suppress
 from pathlib import Path
 
 import psutil
@@ -30,8 +31,16 @@ def snapshot() -> dict:
 
     gpus = []
     try:
-        for index in range(nv.nvmlDeviceGetCount()):
-            handle = nv.nvmlDeviceGetHandleByIndex(index)
+        count = read(nv.nvmlDeviceGetCount)
+        if count is None:
+            return {
+                "available": False, "gpus": [], "error": "NVML could not enumerate GPUs",
+                "timestamp": time.time(),
+            }
+        for index in range(count):
+            handle = read(nv.nvmlDeviceGetHandleByIndex, index)
+            if handle is None:
+                continue
             memory = read(nv.nvmlDeviceGetMemoryInfo, handle)
             util = read(nv.nvmlDeviceGetUtilizationRates, handle)
             constraints = read(nv.nvmlDeviceGetPowerManagementLimitConstraints, handle)
@@ -96,7 +105,8 @@ def snapshot() -> dict:
             "scope": "gpu_boards",
         }
     finally:
-        nv.nvmlShutdown()
+        with suppress(nv.NVMLError):
+            nv.nvmlShutdown()
 
 
 def helper_path() -> Path:

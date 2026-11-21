@@ -46,6 +46,23 @@ type Control = {
   can_authorize: boolean;
   desktop_authorization: boolean;
   stage: Stage;
+  diagnostic?: {
+    reason:
+      | "visible"
+      | "pci_not_visible"
+      | "driver_unbound"
+      | "other_driver"
+      | "access_denied"
+      | "driver_not_loaded"
+      | "nvml_error"
+      | "gpu_inaccessible"
+      | "driver_error"
+      | "probe_unavailable";
+    smi_gpu_count: number;
+    pci_gpu_count?: number | null;
+    gv100_count?: number;
+    pci_drivers?: string[];
+  };
   options: {
     all_gpus: number;
     compute_classes: { compute_capability: number[]; count: number; name: string }[];
@@ -83,10 +100,21 @@ export function GPUControls({
   const choosing = data ? BINDING_STAGES.includes(data.stage) : false;
   const mode: Choice = choice ?? (data?.binding_mode === "uuids" ? "class" : (data?.binding_mode as Choice)) ?? "class";
   const devices = data?.devices ?? [];
-  if (showWhen === "ready" && !data?.available) return null;
+  if (showWhen === "ready" && stage !== "ready") return null;
   // The setup page owns the guided flow until GPU control actually works, so
   // the wizard is never hidden behind a collapsed section when it is needed.
-  if (showWhen === "incomplete" && (!data || data.available)) return null;
+  if (showWhen === "incomplete" && (!data || stage === "ready")) return null;
+
+  const statusLabels: Record<Stage, string> = {
+    unsupported: t("缺少控制组件", "Control component missing"),
+    no_gpus: t("GPU 不可用", "GPUs unavailable"),
+    authorizing: t("等待系统授权", "Awaiting authorization"),
+    ready: t("已启用", "Enabled"),
+    upgrade: t("待更新", "Update needed"),
+    changed: t("绑定需检查", "Check GPU binding"),
+    unbound: t("待绑定", "Not bound"),
+    manual: t("需管理员授权", "Admin authorization needed"),
+  };
 
   // The binding is a machine-independent class by default, so the same package
   // installs on any host and re-binds itself when the cards are replaced.
@@ -112,12 +140,12 @@ export function GPUControls({
       {!compact && (
         <div className="oc-row">
           <h2>{t("GPU 控制", "GPU controls")}</h2>
-          <span className={data?.available ? "oc-status-good" : "oc-muted"}>
-            {data?.available
-              ? t("已启用", "Enabled")
-              : busy
-                ? t("等待系统授权", "Awaiting authorization")
-                : t("待绑定", "Not bound")}
+          <span className={stage === "ready" ? "oc-status-good" : "oc-muted"}>
+            {stage
+              ? statusLabels[stage]
+              : error
+                ? t("检测失败", "Detection failed")
+                : t("检测中…", "Checking…")}
           </span>
         </div>
       )}
@@ -132,7 +160,7 @@ export function GPUControls({
         </div>
       )}
       {renderBody()}
-      <ErrorNotice error={error || data?.error || undefined} />
+      <ErrorNotice error={error || (stage !== "no_gpus" ? data?.error : undefined) || undefined} />
     </section>
   );
 
@@ -147,15 +175,7 @@ export function GPUControls({
           )}
         </p>
       );
-    if (data.stage === "no_gpus")
-      return (
-        <p className="oc-muted">
-          {t(
-            "尚未检测到可用的 NVIDIA GPU。接入显卡后此处会自动出现绑定向导。",
-            "No NVIDIA GPU detected. The binding wizard appears here once a GPU is present.",
-          )}
-        </p>
-      );
+    if (data.stage === "no_gpus") return renderDiagnostic(data.diagnostic);
     if (data.stage === "ready")
       return (
         <div className="oc-spaced">
@@ -166,6 +186,7 @@ export function GPUControls({
               `${data.allowed_gpu_count} of ${data.gpu_count} GPUs bound`,
             )}
           </span>
+          {bindingWarning()}
           <p className="oc-muted">
             {t(
               "可在性能与能效页切换功耗模式；更换显卡后 Studio 会自动按同一范围重新绑定。",
@@ -194,8 +215,8 @@ export function GPUControls({
         <div className="oc-spaced">
           <p className="oc-status-warn">
             {t(
-              "此服务器没有可用的授权方式（sudo 无密码或桌面授权窗口）。请管理员在安装 Studio 时完成 GPU 控制授权。",
-              "No authorization path is available here (passwordless sudo or a desktop prompt). An administrator must authorize GPU control while installing Studio.",
+              `Studio 已识别 ${data.gpu_count} 张 GPU。请管理员在服务器上完成 GPU 控制授权。`,
+              `Studio sees ${data.gpu_count} NVIDIA GPU(s). Ask an administrator to authorize GPU control on the server.`,
             )}
           </p>
         </div>
@@ -204,13 +225,18 @@ export function GPUControls({
     // unbound / changed / upgrade: walk the operator through binding.
     return (
       <div className="oc-spaced">
-        {data.hardware_changed && (
-          <p className="oc-status-warn oc-row" style={{ justifyContent: "flex-start", gap: 7 }}>
-            <AlertTriangle size={15} />
-            {t(
-              `原绑定的 ${data.missing_gpu_count} 张显卡已不在本机，请重新绑定。`,
-              `${data.missing_gpu_count} previously bound GPUs are no longer present; re-bind to continue.`,
-            )}
+        {bindingWarning()}
+        {data.stage === "unbound" && (
+          <p className="oc-muted">
+            {data.diagnostic?.reason === "visible"
+              ? t(
+                  `nvidia-smi 识别到 ${data.diagnostic.smi_gpu_count} 张 GPU，Studio 尚需绑定和授权。`,
+                  `nvidia-smi lists ${data.diagnostic.smi_gpu_count} GPU(s). Bind and authorize them for Studio.`,
+                )
+              : t(
+                  `Studio 已识别 ${data.gpu_count} 张 GPU，请选择绑定范围并授权。`,
+                  `Studio sees ${data.gpu_count} GPU(s). Choose a binding and authorize it.`,
+                )}
           </p>
         )}
         {data.upgrade_required && (
@@ -308,6 +334,83 @@ export function GPUControls({
           </Action>
           <p className="oc-muted">{authorizationHint()}</p>
         </div>
+      </div>
+    );
+  }
+
+  function bindingWarning() {
+    const missing = data?.missing_gpu_count;
+    if (!missing) return null;
+    return (
+      <p className="oc-status-warn oc-row" style={{ justifyContent: "flex-start", gap: 7 }}>
+        <AlertTriangle size={15} />
+        {t(
+          `Studio 当前无法读取原绑定的 ${missing} 张 GPU。换卡后可重新绑定。若没有换卡，请先检查驱动和 PCIe 连接。`,
+          `Studio cannot read ${missing} previously bound GPU(s). Rebind after a card replacement. Otherwise, check the driver and PCIe connection first.`,
+        )}
+      </p>
+    );
+  }
+
+  function renderDiagnostic(diagnostic: Control["diagnostic"]) {
+    const pciCount = diagnostic?.pci_gpu_count ?? 0;
+    const gv100Count = diagnostic?.gv100_count ?? 0;
+    const drivers = diagnostic?.pci_drivers?.join(" / ") ?? "";
+    const messages = {
+      visible: t(
+        `nvidia-smi 列出了 ${diagnostic?.smi_gpu_count} 张 GPU，Studio 当前无法枚举可绑定设备。请检查 Studio 服务使用的 NVML 库和设备权限。`,
+        `nvidia-smi lists ${diagnostic?.smi_gpu_count} GPU(s), but Studio cannot enumerate them. Check the service's NVML library and device permissions.`,
+      ),
+      pci_not_visible: t(
+        "当前环境的 PCIe 列表里没有 NVIDIA GPU。请检查显卡供电、插槽连接或虚拟机的 GPU 直通配置。",
+        "No NVIDIA GPU is enumerated on PCIe in this environment. Check card power, slot connections, or GPU passthrough.",
+      ),
+      driver_unbound: t(
+        "这些 GPU 尚未绑定内核驱动。请检查 NVIDIA 驱动模块是否加载，以及设备是否初始化成功。",
+        "These GPUs have no kernel driver bound. Check whether the NVIDIA driver is loaded and the devices initialized.",
+      ),
+      other_driver: t(
+        `检测到由 ${drivers} 驱动接管的 GPU。请核对 GPU 直通配置和 NVIDIA 驱动绑定。`,
+        `PCIe shows GPUs bound to ${drivers}. Check passthrough and the NVIDIA driver binding.`,
+      ),
+      access_denied: t(
+        "nvidia-smi 报告访问受限。请检查 Studio 服务账号的设备权限或容器中的 GPU 设备映射。",
+        "nvidia-smi reports insufficient access. Check the service account's device permissions or container GPU mapping.",
+      ),
+      driver_not_loaded: t(
+        "nvidia-smi 报告 NVIDIA 驱动未加载。请检查驱动模块和初始化日志。",
+        "nvidia-smi reports that the NVIDIA driver is not loaded. Check the driver module and its initialization logs.",
+      ),
+      nvml_error: t(
+        "nvidia-smi 无法使用 NVML。请核对 Studio 服务加载的 NVML 库与 NVIDIA 内核驱动版本。",
+        "nvidia-smi cannot use NVML. Check that the service's NVML library matches the NVIDIA kernel driver.",
+      ),
+      gpu_inaccessible: t(
+        "nvidia-smi 报告 GPU 不可访问。请检查内核日志中的 NVIDIA Xid 和 PCIe 错误。",
+        "nvidia-smi reports an inaccessible GPU. Check kernel logs for NVIDIA Xid and PCIe errors.",
+      ),
+      driver_error: t(
+        "nvidia-smi 未列出 NVIDIA GPU。请核对驱动初始化日志和设备权限。",
+        "nvidia-smi did not list any NVIDIA GPUs. Check driver initialization logs and device permissions.",
+      ),
+      probe_unavailable: t(
+        "当前无法确认 GPU 可用性。请在 Studio 服务运行的环境检查 nvidia-smi -L 和 lspci -nnk。",
+        "GPU availability could not be determined. Check nvidia-smi -L and lspci -nnk in the Studio service environment.",
+      ),
+    };
+    return (
+      <div className="oc-spaced" role="status">
+        {!!pciCount && (
+          <p className="oc-muted">
+            {gv100Count
+              ? t(
+                  `PCIe 已识别 ${pciCount} 张 NVIDIA GPU，其中 ${gv100Count} 张为 GV100。`,
+                  `PCIe enumerated ${pciCount} NVIDIA GPU(s), including ${gv100Count} GV100 device(s).`,
+                )
+              : t(`PCIe 已识别 ${pciCount} 张 NVIDIA GPU。`, `PCIe enumerated ${pciCount} NVIDIA GPU(s).`)}
+          </p>
+        )}
+        <p className="oc-status-warn">{messages[diagnostic?.reason ?? "probe_unavailable"]}</p>
       </div>
     );
   }

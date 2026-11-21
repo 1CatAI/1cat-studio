@@ -13,6 +13,9 @@ def state(tmp_path, monkeypatch):
 
     # Unit tests never authorize or contact the host GPU control helper.
     monkeypatch.setattr(gpu_setup, "helper_check", lambda: {})
+    monkeypatch.setattr(gpu_setup, "diagnose", lambda: {
+        "reason": "probe_unavailable", "smi_gpu_count": 0,
+    })
     # Nor do they read the host's real binding policy.
     monkeypatch.setattr(gpu_setup, "POLICY", tmp_path / "gpu-helper.json")
     from onecat.config import initialize_paths
