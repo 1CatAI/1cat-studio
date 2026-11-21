@@ -22,6 +22,7 @@ import { Input } from "@/onecat/ui";
 import { Progress } from "@/onecat/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/onecat/ui";
 import { DownloadProgressBar } from "@/onecat/download-progress";
+import { RuntimeLogActions } from "./log-analysis";
 import {
   useQuery,
   copyText,
@@ -43,7 +44,6 @@ import {
   format,
   useText,
   jobLabel,
-  saveFile,
 } from "./common";
 
 export function ServicePage() {
@@ -278,10 +278,10 @@ export function ServicePage() {
                     <div className="oc-actions">
                       <Button
                         variant="ghost"
-                        onClick={() => setLogName("job-" + j.id)}
+                        onClick={() => setLogName(j.analysis_source ?? "job-" + j.id)}
                       >
                         <FileText />
-                        {t("日志", "Log")}
+                        {j.analysis_source ? t("原始日志", "Source log") : t("日志", "Log")}
                       </Button>
                       {!finished ? (
                         <Action
@@ -291,7 +291,7 @@ export function ServicePage() {
                           <X />
                           {t("取消", "Cancel")}
                         </Action>
-                      ) : j.state !== "completed" ? (
+                      ) : j.state !== "completed" && j.kind !== "analyze_log" ? (
                         <Action
                           variant="outline"
                           run={() => mutation("/api/jobs/" + j.id + "/retry")}
@@ -446,16 +446,7 @@ export function ServicePage() {
         }}
         title={t("运行日志", "Runtime log")}
       >
-        <Button
-          variant="outline"
-          disabled={!log.data?.text}
-          onClick={() =>
-            saveFile((logName || "engine") + ".log", log.data?.text || "")
-          }
-        >
-          <Download />
-          {t("导出日志", "Export log")}
-        </Button>
+        {logName && <RuntimeLogActions key={logName} source={logName} text={log.data?.text || ""} />}
         <ErrorNotice error={log.error} />
         <pre className="oc-log">
           {log.data?.text || t("暂时没有日志。", "No log output yet.")}

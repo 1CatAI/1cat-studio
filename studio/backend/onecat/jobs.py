@@ -51,6 +51,8 @@ def create_job(kind: str, payload: dict) -> dict:
                       runtime_version=release.get("version"))
     if kind == "creative_download":
         record["component_id"] = payload.get("component_id")
+    if kind == "analyze_log":
+        record["analysis_source"] = payload["source"]
     db.put("jobs", id, record)
     env = {
         **os.environ,
@@ -152,6 +154,7 @@ def request_cancel(id: str):
             "install_runtime",
             "import_offline",
             "export_runtime",
+            "analyze_log",
         }
         and record.get("state") == "running"
     ):

@@ -152,6 +152,7 @@ export type Job = {
   error?: string;
   runtime_release_id?: string;
   runtime_version?: string;
+  analysis_source?: string;
   asset_name?: string;
   asset_index?: number;
   asset_count?: number;
