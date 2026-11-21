@@ -183,6 +183,18 @@ def test_status_reports_the_step_the_wizard_must_show(monkeypatch):
     ]
 
 
+def test_gpu_control_reports_smi_visible_when_studio_cannot_enumerate(client, monkeypatch):
+    monkeypatch.setattr(gpu_setup.gpu, "snapshot", lambda: {"gpus": [{"uuid": None}]})
+    monkeypatch.setattr(gpu_setup, "diagnose", lambda: {"reason": "visible", "smi_gpu_count": 4})
+    response = client.get("/api/gpu/control")
+    assert response.status_code == 200
+    status = response.json()
+    assert status["stage"] == "no_gpus"
+    assert status["devices"] == []
+    assert status["diagnostic"] == {"reason": "visible", "smi_gpu_count": 4}
+    assert client.post("/api/gpu/control/setup", json={}).status_code == 400
+
+
 def test_binding_request_rejects_anything_the_helper_cannot_enforce(monkeypatch):
     monkeypatch.setattr(gpu_setup.gpu, "snapshot", lambda: {"gpus": [board(U1)]})
     assert gpu_setup.binding_request({}) == {"mode": "class"}

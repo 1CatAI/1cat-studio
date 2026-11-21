@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from . import db, gpu
+from .gpu_diagnostics import diagnose
 from .jobs import TERMINAL, Job
 
 # Bumped whenever the installed helper and Studio must agree on a new binding
@@ -86,7 +87,7 @@ def binding_options(devices):
 
 def status():
     helper = helper_check()
-    devices = gpu.snapshot().get("gpus", [])
+    devices = [device for device in gpu.snapshot().get("gpus", []) if device.get("uuid")]
     allowed = set(helper.get("allowed_uuids", []))
     jobs = [j for j in db.all_records("jobs") if j.get("kind") == "configure_gpu_helper"]
     latest = jobs[0] if jobs else None
@@ -134,6 +135,8 @@ def status():
         else None,
     }
     value["stage"] = setup_stage(value, helper)
+    if value["stage"] in {"no_gpus", "unbound", "changed", "manual"}:
+        value["diagnostic"] = diagnose()
     return value
 
 
