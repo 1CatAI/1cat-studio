@@ -1042,6 +1042,21 @@ async def test_readonly_outer_sandbox_cannot_be_bypassed(project, model):
 
 
 @pytest.mark.asyncio
+async def test_codex_streams_command_output_after_null_initial_value(project):
+    run = tasks.Run({"id": "output", "items": [], "thread_id": "thread"}, project, "test")
+    await run.ingest({
+        "method": "item/started",
+        "params": {"item": {"id": "tool", "type": "commandExecution", "aggregatedOutput": None}},
+    })
+    for delta in ("first\n", "second\n"):
+        await run.ingest({
+            "method": "item/commandExecution/outputDelta",
+            "params": {"itemId": "tool", "delta": delta},
+        })
+    assert run.item("tool")["aggregatedOutput"] == "first\nsecond\n"
+
+
+@pytest.mark.asyncio
 async def test_tool_timing_deduplicates_events_and_context_is_not_accumulated_usage(
     project, monkeypatch
 ):

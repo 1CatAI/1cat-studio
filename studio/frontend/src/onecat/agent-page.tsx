@@ -225,8 +225,8 @@ export function AgentPage() {
   const reason = statusError ? t("暂时无法确认 Agent 状态，请稍后重试。", "Agent status is unavailable. Please try again shortly.")
     : !status ? t("正在检查 Agent…", "Checking Agent…")
     : !engineReady ? selectedRuntime?.error || selectedRuntime?.sandbox_error || t(agentEngine === "pi" ? "PI（Oh My Pi）运行时不可用，请安装固定版本 omp。" : "Codex 运行环境不可用，请检查组件与沙箱。", agentEngine === "pi" ? "PI (Oh My Pi) requires the pinned omp runtime. Install it to continue." : "Codex is unavailable. Check the runtime and sandbox setup.")
-    : !status.model.ready ? t("请在输入框下方选择并启动模型。", "Choose and start a model below the input.")
-    : !status.model.tool_calling ? t("请在模型启动预设中启用工具调用。", "Enable tool calling in the model's launch profile.")
+    : !task?.repair_provider_revision && !status.model.ready ? t("请在输入框下方选择并启动模型。", "Choose and start a model below the input.")
+    : !task?.repair_provider_revision && !status.model.tool_calling ? t("请在模型启动预设中启用工具调用。", "Enable tool calling in the model's launch profile.")
     : source && !taskId && !sourceChat ? sourceError || t("正在读取背景对话…", "Loading conversation context…") : "";
   const startHint = running ? "" : reason || (!project ? t("请在顶部选择或创建项目。", "Choose or create a project at the top.") : "");
   async function submit(text = draft) {
@@ -420,7 +420,7 @@ export function AgentPage() {
             <input hidden type="file" multiple ref={element => { folderInput.current = element; element?.setAttribute("webkitdirectory", ""); }} onChange={e => void upload(e.target.files)} />
             <Button type="button" size="icon-sm" variant="ghost" aria-label={t("上传文件", "Upload files")} title={t("上传文件", "Upload files")} disabled={!project || running || busy} onClick={() => fileInput.current?.click()}><Plus size={18} /></Button>
             <button type="button" className="oc-agent-permission" disabled={running || busy} onClick={() => setInfoPanel("permissions")}><ShieldCheck size={14} /><span>{mode === "plan" ? t("计划 · 只读", "Plan · Read only") : (running ? task?.execution_permission : permission) === "read-only" ? t("只读", "Read only") : t("项目写入", "Workspace write")}</span><ChevronDown size={12} /></button>
-            <ThinkingToggle value={thinking ?? task?.thinking ?? false} effort={selectedEffort} onChange={(enabled, level) => { setThinking(enabled); setEffort(level || null); }} support={status?.model.thinking} disabled={running || busy} />
+            {!task?.repair_provider_revision && <ThinkingToggle value={thinking ?? task?.thinking ?? false} effort={selectedEffort} onChange={(enabled, level) => { setThinking(enabled); setEffort(level || null); }} support={status?.model.thinking} disabled={running || busy} />}
             <ModelPicker agent compact disabled={running || busy} opened={infoPanel === "model"} onOpenChange={open => setInfoPanel(open ? "model" : null)} />
             {running && canSteer && draft.trim() && <Button type="submit" size="icon" aria-label={t("补充要求", "Add instructions")} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}</Button>}
             {running ? <Button type="button" size="icon" aria-label={t("停止任务", "Stop task")} disabled={task?.state === "stopping"}
@@ -479,7 +479,7 @@ export function AgentPage() {
         {agentCommands.map(([name, zh, en]) => <button type="button" key={name} onClick={() => { setInfoPanel(null); chooseCommand(name); }}><code>/{name}</code><span>{t(zh, en)}</span></button>)}
           <p className="oc-agent-note">{t("PI 的配置决定蜂群规模、批次和并发数。可在 Studio 查看子任务进度和速度。", "PI settings determine swarm size, batching and concurrency. View subtask progress and speed in Studio.")}</p>
       </div> : <div className="oc-agent-details">
-        <dl><dt>{t("当前模型", "Current model")}</dt><dd>{status?.model.label || status?.model.name || "—"}</dd>
+        <dl><dt>{t("当前模型", "Current model")}</dt><dd>{task?.repair_provider_revision ? task.model : status?.model.label || status?.model.name || "—"}</dd>
           {task && <><dt>{t("本任务上次使用", "Last used for this task")}</dt><dd>{task.model_label || task.model}</dd></>}
           <dt>{agentEngine === "pi" ? "PI" : "Codex"}</dt><dd>{task?.runtime_version || task?.codex_version || selectedRuntime?.version || "—"}</dd>
           <dt>{task ? t("本轮执行权限", "Turn permissions") : t("权限", "Permissions")}</dt><dd>{(task ? task.execution_permission : mode === "plan" ? "read-only" : permission) === "read-only" ? t("只读项目 · 外网关闭", "Read-only project · Network off") : t("可写当前项目 · 外网关闭", "Writable project · Network off")}</dd>

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
+import asyncio
 import json
 import threading
 import time
@@ -14,6 +15,8 @@ RUN = "/api/logs/engine/analysis"
 API_KEY = "fake-provider-test-only-key"
 ENGINE_KEY = "fake-engine-credential"
 TOKEN = "fake-gated-model-token"
+START_ID = "4" * 32
+START_LOG = "/api/logs/job-" + START_ID
 
 
 def configure(client, url="https://provider.example/v1", key=API_KEY):
@@ -72,6 +75,99 @@ def test_capture_rejects_log_symlink_outside_log_root(state):
     (state / "logs" / "engine.log").symlink_to(private)
     with pytest.raises(ValueError, match="no log to analyze"):
         analysis.capture("engine", {"revision": "test"})
+
+
+def test_capture_links_the_historical_worker_trace_to_the_original_job(state):
+    profile = {"model_path": "/models/quasar", "runtime_id": "sm70", "gpu_uuids": ["GPU-fixture"]}
+    db.put("profiles", "preset", profile)
+    db.put("engine", "active", {"state": "ready", "profile": profile, "api_key": ENGINE_KEY})
+    db.put("jobs", START_ID, {"kind": "start_model", "state": "failed", "payload": {"profile_id": "preset"}})
+    logs = state / "logs"
+    (logs / f"job-{START_ID}.log").write_text("RuntimeError: Engine core initialization failed")
+    (logs / f"engine-{START_ID}.log").write_text(
+        "loading progress\r" * 7000 +
+        "\nTraceback (most recent call last):\n"
+        "    self._semlock = _multiprocessing.SemLock._rebuild(*state)\n"
+        f"    launch --api-key={ENGINE_KEY}\n"
+        "FileNotFoundError: [Errno 2] No such file or directory\n"
+        + "unrelated later output\n" * 6000, encoding="utf-8",
+    )
+    (logs / "engine.log").write_text("different launch", encoding="utf-8")
+    result = analysis.capture(f"job-{START_ID}")
+    assert "SemLock._rebuild" in result["launch_archive"]
+    assert "FileNotFoundError" in result["launch_archive"]
+    assert "initialization failed" in result["log_tail"]
+    assert result["current_service"] == {
+        "status": "ready", "same_model_path_and_runtime": True, "same_gpu_selection": True,
+    }
+    assert "different launch" not in json.dumps(result)
+    assert ENGINE_KEY not in json.dumps(result)
+
+
+def test_repair_starts_workspace_codex_once_and_stores_redacted_evidence(client, state, monkeypatch):
+    from onecat.agent import projects, runtime, tasks
+
+    assert configure(client).status_code == 200
+    (state / "logs" / "engine.log").write_text(
+        f"FileNotFoundError: missing semaphore\nAuthentication: Bearer {API_KEY}", encoding="utf-8",
+    )
+    monkeypatch.setattr(analysis, "inspect", lambda name, profile: {"reference": name})
+    def no_local_model():
+        pytest.fail("Configured repair should not need the inference engine")
+
+    async def hold_open(self):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(tasks, "model_state", no_local_model)
+    monkeypatch.setattr(tasks.Run, "execute", hold_open)
+    assert client.post("/api/logs/unlisted/repair").status_code == 404
+    monkeypatch.setattr(runtime, "info", lambda: {"installed": False})
+    assert client.post("/api/logs/engine/repair", json={}).status_code == 409
+    assert db.all_records("agent_projects") == []
+    monkeypatch.setattr(runtime, "info", lambda: {"installed": True, "sandbox_ready": True})
+    first = client.post("/api/logs/engine/repair", json={})
+    assert first.status_code == 200, first.text
+    task_id = first.json()["id"]
+    task = client.get(f"/api/agent/tasks/{task_id}").json()
+    assert task["engine"] == "codex"
+    assert task["execution_permission"] == "workspace-write"
+    assert task["model"] == "diagnostic-model"
+    assert task["repair_provider_revision"] == analysis.provider_settings()["revision"]
+    workspace = projects.root(task["project_id"])
+    evidence = (workspace / "incident.json").read_text(encoding="utf-8")
+    assert API_KEY not in evidence and API_KEY not in json.dumps(task)
+    incident = json.loads(evidence)
+    assert "missing semaphore" in incident["log_tail"]
+    assert "engine_configuration" in incident["current_diagnostics"]
+    assert client.post("/api/logs/engine/repair", json={}).json() == first.json()
+    assert client.get(RUN).json()["repair"] == first.json()
+    assert len(db.all_records("agent_tasks")) == 1
+    assert client.post("/api/auth/logout", json={}).status_code == 200
+    assert client.post("/api/logs/engine/repair", json={}).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_repair_relay_checks_provider_revision_and_streams_content(state, monkeypatch):
+    provider = {"base_url": "https://api.deepseek.com", "api_key": API_KEY,
+                "model": "deepseek-flash", "revision": "first"}
+    db.put("secrets", analysis.PROVIDER, provider)
+    real_client = httpx.AsyncClient
+
+    def stream(request):
+        assert request.url.path == "/chat/completions"
+        assert request.headers["authorization"] == "Bearer " + API_KEY
+        payload = json.loads(request.content)
+        assert payload["stream"] and payload["thinking"] == {"type": "disabled"}
+        return httpx.Response(200, text='data: {"choices": []}\n\ndata: [DONE]\n\n')
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_client(
+        transport=httpx.MockTransport(stream), **kwargs,
+    ))
+    payload = {"model": "deepseek-flash", "stream": True}
+    assert [event async for event in analysis.stream_repair_model("first", payload)] == [{"choices": []}]
+    with pytest.raises(ValueError, match="configuration changed"):
+        async for _ in analysis.stream_repair_model("second", payload):
+            pass
 
 
 def test_model_metadata_omits_unexpected_nested_values(tmp_path):

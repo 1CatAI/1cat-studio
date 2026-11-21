@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-1Cat-Community-1.0
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Copy, Download, Save, ScanSearch, Square } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Copy, Download, Save, ScanSearch, Square, Wrench } from "lucide-react";
 import { Button, Input } from "@/onecat/ui";
+import { activeAgent } from "./agent-state";
 import { copyText, mutation, useQuery } from "./api";
 import { Action, ErrorNotice, Field, saveFile, useText } from "./common";
 
@@ -83,11 +84,20 @@ export function LogAnalysisSettings() {
 
 export function RuntimeLogActions({ source, text }: { source: string; text: string }) {
   const t = useText();
-  const endpoint = `/api/logs/${encodeURIComponent(source)}/analysis`;
-  const { data, error } = useQuery<{ provider: Provider; job: Analysis | null }>(endpoint, 1500);
+  const navigate = useNavigate();
+  const logPath = `/api/logs/${encodeURIComponent(source)}`;
+  const endpoint = logPath + "/analysis";
+  const { data, error } = useQuery<{ provider: Provider; job: Analysis | null; repair?: Repair | null }>(endpoint, 1500);
   const job = data?.job;
   const active = job && ["queued", "running"].includes(job.state);
   const report = job?.result?.report;
+  const repair = data?.repair;
+  const processing = !!repair && (activeAgent(repair.state) || !repair.settled);
+
+  async function startRepair() {
+    const task = await mutation<Repair>(logPath + "/repair", {});
+    await navigate({ to: "/agent", search: { task: task.id } });
+  }
 
   return (
     <>
@@ -103,6 +113,16 @@ export function RuntimeLogActions({ source, text }: { source: string; text: stri
             <Square />{t("取消分析", "Cancel analysis")}
           </Action>
         )}
+        {!processing && (
+          <Action variant="outline" disabled={!data} run={startRepair}>
+            <Wrench />{t("让 Agent 处理（实验性）", "Repair with Agent (experimental)")}
+          </Action>
+        )}
+        {repair && (
+          <Button variant="outline" asChild>
+            <Link to="/agent" search={{ task: repair.id }}>{t("查看处理任务", "Open repair task")}</Link>
+          </Button>
+        )}
         {data && !data.provider.configured && (
           <Button variant="outline" asChild><Link to="/settings" hash="settings-log-analysis">{t("配置分析 API", "Configure analysis API")}</Link></Button>
         )}
@@ -110,6 +130,7 @@ export function RuntimeLogActions({ source, text }: { source: string; text: stri
       {data?.provider.configured && (
         <p className="oc-muted">{t("脱敏日志和诊断数据会发送到已配置的模型 API。", "Redacted logs and diagnostic data are sent to the configured model API.")}</p>
       )}
+      <p className="oc-muted">{t("处理任务在独立的 Codex 工作区运行。", "Repair tasks run in a separate Codex workspace.")}</p>
       {job && active && (
         <p className="oc-muted" role="status">{job.cancel_requested ? t("正在取消分析…", "Cancelling analysis…") : t("Agent 正在分析日志…", "The agent is analyzing the log…")}</p>
       )}
@@ -127,3 +148,5 @@ export function RuntimeLogActions({ source, text }: { source: string; text: stri
     </>
   );
 }
+
+type Repair = { id: string; state: string; settled: boolean };

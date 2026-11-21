@@ -31,6 +31,7 @@ export type AgentTask = {
   thinking?: boolean; thinking_effort?: "low" | "medium" | "high" | "xhigh" | null; current_turn?: string; operation?: string;
   execution_permission?: "workspace-write" | "read-only";
   engine?: "codex" | "pi";
+  repair_provider_revision?: string;
   collaboration?: "single" | "auto" | "swarm";
   runtime_version?: string;
   swarm_id?: string | null;
