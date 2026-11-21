@@ -32,6 +32,8 @@ journalctl --user -u onecat-studio.service -n 100
 3. 导入 Studio 导出的离线运行包。只有包含自身 Python 的受管理环境可导出；外部 Conda/source 环境应在目标机器按原始方法准备后导入。
 4. 接管正在运行的 1Cat systemd 用户服务。读取真实 argv、环境、GPU UUID 与 API，不重复加载权重。PR417 DFlash2 配置另外生成一个关闭推测解码的基础预设。
 
+运行环境的 wheel 默认经 `https://ghfast.top` 下载，安装前按 GitHub 官方发布提供的 SHA256 校验。版本列表与校验信息从 GitHub 读取。管理员可在 Studio 服务环境中设置 `ONECAT_RUNTIME_RELEASE_PROXY` 为兼容的 HTTPS 代理前缀，设为空值可直接下载，修改后重启 Studio。
+
 接管后第一次停止旧服务时，会禁用旧单元的开机自启并记录其原状态，避免它与 Studio 的自启预设竞争显存。恢复原部署可先在 Studio 停止模型，再执行 `systemctl --user enable --now ORIGINAL.service`。旧服务脚本和模型文件保留不变。
 
 模型库可导入 safetensors/PyTorch 模型目录，也可搜索版本化的已验证 ModelScope 目录。默认只显示匹配本机硬件及所选环境的检查点；“全部已验证”显示其他配置的要求。下载接口同样校验目录、版本、GPU 和固定文件清单，不接受任意仓库或 GGUF-only 权重。下载任务固定 revision 的 SHA256 文件清单，并在完成后逐文件校验，失败/取消后可从服务页重试续传。受限模型在设置中填写 ModelScope token。不同量化/架构的兼容性取决于实际导入的运行环境；启动失败会保留真实日志。

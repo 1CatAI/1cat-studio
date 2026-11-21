@@ -25,6 +25,7 @@ from . import db
 REPOSITORY = "1CatAI/1Cat-vLLM"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
 API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases"
+DEFAULT_RELEASE_PROXY = "https://ghfast.top"
 CACHE_SECONDS = 900
 RETRY_SECONDS = 60
 _refresh_lock = threading.Lock()
@@ -42,6 +43,26 @@ def asset_url(url: str, name: str) -> bool:
         and parsed.path.startswith(f"/{REPOSITORY}/releases/download/")
         and unquote(parsed.path.rsplit("/", 1)[-1]) == name
     )
+
+
+def wheel_download_url(url: str) -> str:
+    # Keep the official URL and SHA256 in the recipe. Only the transfer uses the proxy.
+    proxy = os.environ.get("ONECAT_RUNTIME_RELEASE_PROXY", DEFAULT_RELEASE_PROXY).strip().rstrip("/")
+    if not proxy:
+        return url
+    parsed = urlsplit(proxy)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or "?" in proxy
+        or "#" in proxy
+        or any(char.isspace() for char in proxy)
+    ):
+        raise ValueError(
+            "ONECAT_RUNTIME_RELEASE_PROXY must be an HTTPS URL without credentials, query, or fragment"
+        )
+    return f"{proxy}/{url}"
 
 
 def wheel_info(name: str) -> dict | None:

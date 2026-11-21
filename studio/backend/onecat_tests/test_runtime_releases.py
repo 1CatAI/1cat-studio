@@ -289,7 +289,21 @@ def test_metadata_drives_torch_abi_and_rejects_mismatches(tmp_path):
         runtimes.wheel_dependencies(paths, row["assets"], "3.12.14", "12.8")
 
 
-def test_install_uses_isolated_prefix_correct_torch_and_all_wheels(state, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("proxy", "prefix"),
+    [
+        (None, "https://ghfast.top/"),
+        ("", ""),
+        ("https://mirror.example/prefix/", "https://mirror.example/prefix/"),
+    ],
+)
+def test_install_uses_isolated_prefix_correct_torch_and_all_wheels(
+    state, tmp_path, monkeypatch, proxy, prefix
+):
+    if proxy is None:
+        monkeypatch.delenv("ONECAT_RUNTIME_RELEASE_PROXY", raising=False)
+    else:
+        monkeypatch.setenv("ONECAT_RUNTIME_RELEASE_PROXY", proxy)
     row = recipe(companion=True)
     for asset in row["assets"]:
         path = write_wheel(tmp_path / asset["name"], asset)
@@ -322,13 +336,13 @@ def test_install_uses_isolated_prefix_correct_torch_and_all_wheels(state, tmp_pa
             stdout="/test/python" if "find" in argv else "3.12.14"
         ),
     )
-    monkeypatch.setattr(
-        runtimes,
-        "download_file",
-        lambda job, url, path, sha: write_wheel(
-            path, next(a for a in row["assets"] if a["url"] == url)
-        ),
-    )
+    def download(job, url, path, sha):
+        asset = next(a for a in row["assets"] if a["name"] == path.name)
+        assert url == prefix + asset["url"]
+        assert sha == asset["sha256"]
+        write_wheel(path, asset)
+
+    monkeypatch.setattr(runtimes, "download_file", download)
     monkeypatch.setattr(
         runtimes,
         "inspect_runtime",
@@ -347,6 +361,7 @@ def test_install_uses_isolated_prefix_correct_torch_and_all_wheels(state, tmp_pa
     )
     result = runtimes.install(Job("j"))
     assert result["runtime_id"] == row["id"]
+    assert db.get("runtimes", row["id"])["release"]["assets"] == row["assets"]
     assert any(
         "torch==2.9.1+cu128" in cmd and "torchvision==0.24.1+cu128" in cmd for cmd in commands
     )
